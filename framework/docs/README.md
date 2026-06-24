@@ -60,6 +60,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - [`@zoijs/action`](../../action/README.md) — the write-side companion to resource: reactive `pending` / `error` / `done` for submits
 - [**Ecosystem guide**](ecosystem.md) — how the optional packages fit together, with one demo app (Task Board) that uses all of them
 - [**Deployment**](deployment.md) — ship a Zoijs app to GitHub Pages, Netlify, Vercel, Cloudflare, Nginx, or Apache (incl. router `base` + SPA fallback)
+  - [Recipe: Deploy the Task Board to GitHub Pages](recipes/deploy-task-board-github-pages.md) — concrete, copy-paste walkthrough
 
 ### Coming from another framework?
 - [From vanilla JavaScript](migration/from-vanilla.md)
