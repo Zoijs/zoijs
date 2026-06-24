@@ -88,9 +88,10 @@ npx serve -l 3500 .
 No install, no build — `index.html` uses an **import map** to point the
 `@zoijs/*` names at local source.
 
-> The demo is served at a sub-path here, so the first load matches the
-> Not-Found route — click **Home** to start. Deployed at your site's root, `/`
-> shows Home, as any single-page app expects.
+> The demo is served at a sub-path here, so it passes
+> `{ base: "/examples/task-board" }` to the router — that's why the first load
+> lands on Home and every link works under the sub-path. Deployed at your site's
+> root, drop the `base`.
 
 ## How this avoids React/Vue/Angular-style complexity
 

@@ -149,7 +149,39 @@ router.query(); // → { q: "hello", page: "2" }
 `query()` is reactive — read it inside a binding (`${() => router.query().q}`)
 and it updates when the URL changes.
 
+## Hosting under a sub-path (`base`)
+
+By default the router assumes your app owns the URL root (`/`). If it's served
+under a sub-path — `https://example.com/app/` or a project page like
+`https://you.github.io/repo/` — pass a `base`:
+
+```js
+const router = createRouter(routes, { base: "/app" });
+```
+
+Now everything stays clean and base-free in your code:
+
+| | Without `base` | With `base: "/app"` |
+|---|---|---|
+| Route pattern | `"/tasks"` | `"/tasks"` (unchanged) |
+| `link("/tasks", …)` href | `/tasks` | `/app/tasks` |
+| `go("/tasks")` pushes | `/tasks` | `/app/tasks` |
+| `router.path()` returns | `/tasks` | `/tasks` (still base-free) |
+| `query()` | works | works |
+
+The base is stripped before matching and prepended for links and navigation, so
+you never repeat it. A trailing slash is optional (`"/app"` and `"/app/"` behave
+the same).
+
+> **Heads up — server rewrites.** History-mode routing means a *hard reload* of a
+> deep link (e.g. `/app/tasks/42`) asks your server for that path. Configure your
+> host to serve `index.html` for unknown paths under the base (a "SPA fallback").
+> In-app navigation needs no server config; this only matters for full reloads.
+
 ## Common mistakes
+
+- **Hosting under a sub-path without `base`.** The first load matches `"*"`
+  (Not Found) because the URL has an extra prefix. Pass `{ base: "/your-path" }`.
 
 - **Calling `router.view()` more than once.** Place it a single time in your
   layout. It's the one spot where the current page renders.

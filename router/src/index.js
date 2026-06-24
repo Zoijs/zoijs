@@ -22,6 +22,9 @@
 //   }
 //   mount(App, "#app");
 //
+// If your app is hosted under a sub-path (e.g. https://site.com/app/), pass a
+// `base` so routes stay clean: createRouter(routes, { base: "/app" }).
+//
 // No JSX, no build step, no providers, no hooks, no nested-outlet system. It
 // builds entirely on the core's public API (html, mount, createState, onCleanup)
 // — the core package is unchanged.
@@ -31,9 +34,23 @@ import { html, mount, createState, onCleanup } from "@zoijs/core";
 /**
  * Create a router from a `{ pattern: component }` map.
  * @param {Record<string, (params: Record<string,string>) => any>} routes
+ * @param {{ base?: string }} [options]
  */
-export function createRouter(routes) {
+export function createRouter(routes, options = {}) {
   const { matchers, notFound } = compile(routes);
+  const base = normalizeBase(options.base); // "" when hosting at the root
+
+  // Browser pathname → app path (route patterns are written without the base).
+  const stripBase = (pathname) => {
+    if (!base) return pathname;
+    if (pathname === base) return "/";
+    if (pathname.startsWith(base + "/")) return pathname.slice(base.length);
+    return pathname; // outside the base → won't match app routes → "*"
+  };
+  // App path → browser URL (prepend the base for href / pushState).
+  const toBrowser = (appPath) => (base ? base + appPath : appPath) || "/";
+  const appPath = () => stripBase(window.location.pathname);
+  const readLocation = () => ({ path: appPath(), query: parseQuery(window.location.search) });
 
   // One reactive cell holds the current location. path(), query(), and the
   // active-link state read it, so they update when the URL changes.
@@ -47,7 +64,7 @@ export function createRouter(routes) {
   let unmountPage = null;
   const renderPage = () => {
     if (!outlet) return;
-    const { component, params } = match(window.location.pathname);
+    const { component, params } = match(appPath());
     if (unmountPage) unmountPage(); // dispose the previous page → its onCleanup runs
     unmountPage = mount(() => (component ? component(params) : null), outlet);
   };
@@ -88,7 +105,7 @@ export function createRouter(routes) {
   };
 
   const go = (to) => {
-    const target = String(to);
+    const target = toBrowser(String(to));
     if (target === currentUrl()) return; // already here — don't spam history
     window.history.pushState({}, "", target);
     apply();
@@ -105,7 +122,7 @@ export function createRouter(routes) {
       go(to);
     };
     return html`<a
-      href=${to}
+      href=${toBrowser(to)}
       onclick=${onClick}
       aria-current=${() => (location.get().path === to ? "page" : false)}
       >${text}</a
@@ -149,16 +166,19 @@ function compile(routes) {
   return { matchers, notFound };
 }
 
+// Normalize a base path: ensure a leading slash, drop the trailing slash.
+// "" / "/" → "" (root); "app" → "/app"; "/examples/task-board/" → "/examples/task-board".
+function normalizeBase(base) {
+  if (!base) return "";
+  let b = String(base).trim();
+  if (!b.startsWith("/")) b = "/" + b;
+  if (b.endsWith("/")) b = b.slice(0, -1);
+  return b;
+}
+
 function segments(path) {
   // "/users/:id" -> ["users", ":id"]; "/" and "" -> []
   return String(path).split("?")[0].split("/").filter(Boolean);
-}
-
-function readLocation() {
-  return {
-    path: window.location.pathname,
-    query: parseQuery(window.location.search),
-  };
 }
 
 function currentUrl() {
