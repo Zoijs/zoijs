@@ -16,9 +16,9 @@ inside a broken orange accent ring on a deep-navy circle.
 | `logo-dark.svg` | Horizontal lockup for **dark** backgrounds |
 | `social-card.svg` | 1280×640 Open Graph / GitHub social card |
 
-> The wordmark in the logo/social SVGs uses a geometric system font (`Segoe UI`/
-> `system-ui`) as a placeholder. Convert the text to outlines before final use if
-> you want pixel-identical rendering on machines without that font.
+> The wordmark in the logo/social SVGs is **real vector outlines** (Poppins, OFL),
+> not live text — so it renders pixel-identically everywhere with no font
+> dependency. Regenerate it with `npm run build:logos` (see below).
 
 ## Embed (favicon)
 
@@ -34,15 +34,20 @@ For GitHub/Twitter/OG previews, export `social-card.svg` to PNG and reference it
 <meta property="og:image" content="https://zoijs.com/social-card.png" />
 ```
 
-## Rebuilding the rasters
-
-The PNG/ICO files are generated from `favicon.svg`:
+## Rebuilding
 
 ```bash
 cd assets
 npm install
-npm run build      # runs build-icons.mjs (sharp + png-to-ico)
+npm run build        # logos + icons
+npm run build:logos  # logo.svg, logo-dark.svg, social-card.svg (vector wordmark)
+npm run build:icons  # PNG/ICO fallbacks from favicon.svg
 ```
 
-Edit `favicon.svg` and re-run to regenerate every size. `node_modules/` here is
-local tooling only and is gitignored.
+- `generate-logos.mjs` (opentype.js + Poppins) converts the `zoijs` wordmark to
+  outlines and writes the two lockups and the social card. Tweak placement/colours
+  there, then re-run.
+- `build-icons.mjs` (sharp + png-to-ico) rasterizes `favicon.svg` into every PNG
+  size and the `.ico`. Edit `favicon.svg` and re-run.
+
+`node_modules/` here is local tooling only and is gitignored.
