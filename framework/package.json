@@ -49,8 +49,8 @@
     "spa"
   ],
   "scripts": {
-    "test": "node --test --import ./tests/setup-dom.js \"tests/**/*.test.js\"",
-    "test:unit": "node --test \"tests/**/*.test.js\"",
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:unit": "node --test",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
     "dev": "npx serve -l 3000 ."
