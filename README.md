@@ -163,6 +163,15 @@ Modern evergreen browsers — verified automatically on **Chromium, Firefox, and
 
 No IE, no transpilation, no polyfills. Relies on baseline platform APIs (ES modules, `<template>`, `Proxy`, `TreeWalker`, `queueMicrotask`, `replaceChildren`).
 
+## Ecosystem
+
+The core has no router, store, or SSR — those are **optional** packages you add only if you need them. The core stays small.
+
+| Package | What it is |
+|---|---|
+| [`@zoijs/core`](framework) | The framework (this package) |
+| [`@zoijs/router`](router) | A tiny client-side router for SPAs — routes are a plain object, links are plain anchors. |
+
 ## Project status
 
 Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/VERSIONING.md)). It's intentionally small: routing, SSR, and a forms/data layer are **not** in the core and may arrive later as optional packages (see the [roadmap](framework/ROADMAP.md)). It's a great fit for SPAs, internal tools, dashboards, prototypes, and teaching; for SEO-critical content sites you'll want SSR (not yet available).
@@ -172,12 +181,13 @@ Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/V
 This is a monorepo. The framework package lives in [`framework/`](framework):
 
 ```
-framework/
+framework/        @zoijs/core — the framework
   src/            runtime (no dependencies, no build)
   docs/           the documentation site
   examples/       runnable example apps
   tests/          unit/DOM tests (jsdom)
   browser-tests/  Playwright specs (real browsers)
+router/           @zoijs/router — optional tiny router (same layout)
 ```
 
 ## Contributing
