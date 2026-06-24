@@ -66,3 +66,7 @@ things — both already done here, but worth understanding:
 > shows your host's 404 page. See the
 > [deployment guide](../../framework/docs/deployment.md) for the one-liner for
 > GitHub Pages, Netlify, Vercel, Cloudflare Pages, Nginx, and Apache.
+
+**Want to put this exact app online?** Follow the copy-paste
+[Deploy the Task Board to GitHub Pages](../../framework/docs/recipes/deploy-task-board-github-pages.md)
+recipe.

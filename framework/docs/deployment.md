@@ -107,6 +107,10 @@ const router = createRouter(routes, { base: "/<repo>" });
 
 (A custom domain or a user/org page served at the root needs no base.)
 
+> 📖 **Step-by-step:** the [Deploy the Task Board to GitHub Pages](recipes/deploy-task-board-github-pages.md)
+> recipe walks through this end to end, with a verification checklist and
+> troubleshooting.
+
 ### Netlify
 
 Add a `_redirects` file at your publish root:
