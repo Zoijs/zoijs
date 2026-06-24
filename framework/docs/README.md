@@ -2,10 +2,10 @@
 
 Welcome to **Zoijs** — a frontend framework you don't have to learn before you use it. It's plain **HTML, CSS, and JavaScript**: no JSX, no build step, no Virtual DOM, and a seven-function API.
 
-**[zoijs.com](https://zoijs.com)** · **[GitHub](https://github.com/Zoijs)** · **[npm](https://www.npmjs.com/package/zoijs)**
+**[zoijs.com](https://zoijs.com)** · **[GitHub](https://github.com/Zoijs)** · **[npm](https://www.npmjs.com/package/@zoijs/core)**
 
 ```bash
-npm install zoijs
+npm install @zoijs/core
 ```
 
 > **Goal of these docs:** get you productive in **under 30 minutes.**

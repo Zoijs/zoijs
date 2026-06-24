@@ -3,7 +3,7 @@
 // Re-exports the entire public API surface for the MVP. Keep this list small:
 // the whole framework is meant to be learnable in one sitting.
 //
-//   import { html, mount, createState } from "zoijs";
+//   import { html, mount, createState } from "@zoijs/core";
 
 export { html } from "./core/html.js";
 export { mount } from "./core/mount.js";
