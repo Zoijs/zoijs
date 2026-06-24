@@ -29,20 +29,22 @@ jobs:
       - run: npm test
       - run: npm run test:types
 
-  # Real browsers are slower, so they run once (Node 20) in a separate job.
+  # Real browsers are slower, so they run once in a separate job. We run inside
+  # the official Playwright image, which already ships every browser and all
+  # system dependencies — so we never run `playwright install --with-deps`
+  # (whose apt step is flaky on the hosted runner's Microsoft repos). Node is
+  # included in the image. Pin the tag to the @playwright/test version we use.
   browser:
     name: Browser (Chromium / Firefox / WebKit)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: "**/package-lock.json"
       - run: npm run install:all
-      # Use the Playwright already installed in a package to fetch the browsers.
-      - name: Install Playwright browsers
+      # Ensure the browser binaries match the installed @playwright/test (no apt;
+      # the image already provides the system libraries). Usually a no-op.
+      - name: Ensure browser binaries
         working-directory: framework
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install chromium firefox webkit
       - run: npm run test:browser
