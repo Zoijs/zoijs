@@ -15,7 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
+        # Node 18 is EOL (2025-04) and modern jsdom needs require(ESM), which
+        # only exists in Node 20.19+/22.12+ — so we test 20, 22, and current 24.
+        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
