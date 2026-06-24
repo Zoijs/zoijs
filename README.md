@@ -173,6 +173,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/router`](router) | A tiny client-side router for SPAs — routes are a plain object, links are plain anchors. |
 | [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`. |
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). |
+| [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
 
 ## Project status
 
@@ -192,6 +193,7 @@ framework/        @zoijs/core — the framework
 router/           @zoijs/router — optional tiny router (same layout)
 resource/         @zoijs/resource — optional async-data helper (same layout)
 head/             @zoijs/head — optional title/meta helper (same layout)
+action/           @zoijs/action — optional write/mutation helper (same layout)
 ```
 
 ## Contributing
