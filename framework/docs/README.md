@@ -56,6 +56,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 ### Optional packages
 - [`@zoijs/router`](../../router/README.md) — a tiny client-side router for SPAs (routes are a plain object; not part of the core)
 - [`@zoijs/resource`](../../resource/README.md) — the simplest async-data helper: reactive `loading` / `data` / `error` / `refresh`
+- [`@zoijs/head`](../../head/README.md) — set the document title and meta description from a component
 
 ### Coming from another framework?
 - [From vanilla JavaScript](migration/from-vanilla.md)
