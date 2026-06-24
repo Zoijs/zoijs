@@ -39,6 +39,11 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-noble
+    # GitHub sets HOME=/github/home (owned by pwuser) for container jobs, but the
+    # job runs as root — Firefox refuses to launch unless $HOME is owned by the
+    # current user. Point HOME at root's own home.
+    env:
+      HOME: /root
     steps:
       - uses: actions/checkout@v5
       - run: npm run install:all
