@@ -5,7 +5,7 @@
 Everything in Zoijs is plain JavaScript, HTML, and CSS. The whole API is six things:
 
 ```js
-import { html, mount, createState, computed, each } from "zoijs";
+import { html, mount, createState, computed, each } from "@zoijs/core";
 ```
 
 - **`html`** — write your markup as a tagged template.
@@ -91,7 +91,7 @@ html`
 Zoijs runs in **development mode by default** and prints helpful warnings (duplicate `each` keys, self-triggering effects, runaway loops). For production, silence them:
 
 ```js
-import { configure } from "zoijs";
+import { configure } from "@zoijs/core";
 
 configure({ dev: false });
 ```
@@ -115,7 +115,7 @@ You usually don't manage cleanup yourself. Internally, everything a component cr
 Zoijs is written in plain JavaScript, but ships type definitions for autocomplete and optional type-checking. **You don't need TypeScript** — but if you use it, the API is fully typed with no build step required for the framework itself.
 
 ```ts
-import { html, mount, createState, computed, each } from "zoijs";
+import { html, mount, createState, computed, each } from "@zoijs/core";
 
 // Typed state — inferred or explicit
 const count = createState(0);          // State<number>
@@ -141,7 +141,7 @@ function TodoList() {
 }
 
 // Component typing
-import type { Component } from "zoijs";
+import type { Component } from "@zoijs/core";
 const App: Component = () => html`<div>${() => count.get()}</div>`;
 
 const unmount = mount(App, "#app"); // () => void

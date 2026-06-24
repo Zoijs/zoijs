@@ -1,0 +1,30 @@
+name: Publish
+
+on:
+  release:
+    types: [published] # cut a GitHub Release → this publishes to npm
+  workflow_dispatch: # or run it manually from the Actions tab
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # REQUIRED for npm provenance (OIDC)
+    defaults:
+      run:
+        working-directory: framework
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: framework/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:types
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

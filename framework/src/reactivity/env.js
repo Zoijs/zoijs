@@ -4,7 +4,7 @@
 // self-triggering effects, runaway loops. Production silences them for less
 // noise and a touch less work. No build step required — just call configure().
 //
-//   import { configure } from "zoijs";
+//   import { configure } from "@zoijs/core";
 //   configure({ dev: false }); // production
 
 let dev = true;

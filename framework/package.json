@@ -1,5 +1,5 @@
 {
-  "name": "zoijs",
+  "name": "@zoijs/core",
   "version": "1.0.0",
   "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
   "type": "module",

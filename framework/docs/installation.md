@@ -12,33 +12,33 @@ The fastest way to try Zoijs — import straight from a CDN in a module script:
   <body>
     <div id="app"></div>
     <script type="module">
-      import { html, mount, createState } from "https://esm.sh/zoijs";
+      import { html, mount, createState } from "https://esm.sh/@zoijs/core";
       // your app here
     </script>
   </body>
 </html>
 ```
 
-Pin a version for production: `https://esm.sh/zoijs@1`.
+Pin a version for production: `https://esm.sh/@zoijs/core@1`.
 
 ## Option 2 — npm + import map
 
-Install the package and map the bare specifier `zoijs` to it — still no build step:
+Install the package and map the specifier `@zoijs/core` to it — still no build step:
 
 ```bash
-npm install zoijs
+npm install @zoijs/core
 ```
 
 ```html
 <script type="importmap">
-  { "imports": { "zoijs": "/node_modules/zoijs/src/index.js" } }
+  { "imports": { "@zoijs/core": "/node_modules/@zoijs/core/src/index.js" } }
 </script>
 <script type="module">
-  import { html, mount, createState } from "zoijs";
+  import { html, mount, createState } from "@zoijs/core";
 </script>
 ```
 
-If you already use a bundler (Vite, esbuild, etc.), `import { html } from "zoijs"` just works — but Zoijs never *requires* one.
+If you already use a bundler (Vite, esbuild, etc.), `import { html } from "@zoijs/core"` just works — but Zoijs never *requires* one.
 
 ## Option 3 — copy the `src/` folder
 
