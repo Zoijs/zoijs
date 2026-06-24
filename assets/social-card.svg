@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="Zoijs — a beginner-friendly, no-build frontend framework">
+  <title>Zoijs</title>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1f3a"/>
+      <stop offset="1" stop-color="#050b18"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0e2a4d"/>
+      <stop offset="1" stop-color="#081226"/>
+    </linearGradient>
+    <linearGradient id="zblue" x1="20" y1="18" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5cc8ff"/>
+      <stop offset="1" stop-color="#2f8fe6"/>
+    </linearGradient>
+    <g id="mark">
+      <circle cx="32" cy="32" r="32" fill="url(#bg)"/>
+      <circle cx="32" cy="32" r="26" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-dasharray="30 11.3" transform="rotate(-58 32 32)"/>
+      <polygon fill="url(#zblue)" points="21,18 43,18 43,24 32,40 43,40 43,46 21,46 21,40 32,24 21,24"/>
+      <g fill="#dff1ff">
+        <circle cx="21" cy="18" r="2.4"/><circle cx="43" cy="18" r="2.4"/><circle cx="32" cy="32" r="2.4"/><circle cx="21" cy="46" r="2.4"/><circle cx="43" cy="46" r="2.4"/>
+      </g>
+    </g>
+  </defs>
+  <rect width="1280" height="640" fill="url(#page)"/>
+  <use href="#mark" transform="translate(120 188) scale(4)" opacity="0.2"/>
+  <use href="#mark" transform="translate(135 203) scale(3.6)"/>
+  <text x="470" y="300" font-family="Segoe UI, system-ui, -apple-system, Arial, sans-serif" font-weight="700" font-size="120" letter-spacing="-3" fill="#eaf2ff">zoi<tspan fill="#5cc8ff">j</tspan>s</text>
+  <text x="474" y="368" font-family="Segoe UI, system-ui, -apple-system, Arial, sans-serif" font-weight="400" font-size="40" fill="#9db4d6">A frontend framework you don&#8217;t</text>
+  <text x="474" y="420" font-family="Segoe UI, system-ui, -apple-system, Arial, sans-serif" font-weight="400" font-size="40" fill="#9db4d6">have to learn before you use it.</text>
+  <text x="474" y="500" font-family="Segoe UI, system-ui, -apple-system, Arial, sans-serif" font-weight="500" font-size="30" fill="#f59e0b">No JSX &#183; No build step &#183; No Virtual DOM</text>
+</svg>

@@ -1,0 +1,13 @@
+{
+  "name": "zoijs-assets",
+  "private": true,
+  "type": "module",
+  "description": "Brand asset tooling: rasterize favicon.svg into PNG/ICO fallbacks.",
+  "scripts": {
+    "build": "node build-icons.mjs"
+  },
+  "devDependencies": {
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5"
+  }
+}

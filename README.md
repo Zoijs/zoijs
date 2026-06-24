@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/icon-512.png" alt="Zoijs" width="128" height="128" />
+
 # Zoijs
 
 **A frontend framework you don't have to learn before you use it.**
