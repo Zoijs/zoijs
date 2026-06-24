@@ -1,0 +1,63 @@
+{
+  "name": "zoijs",
+  "version": "1.0.0",
+  "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.com)",
+  "license": "MIT",
+  "homepage": "https://zoijs.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "framework"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "framework",
+    "frontend",
+    "ui",
+    "reactive",
+    "reactivity",
+    "signals",
+    "no-build",
+    "no-jsx",
+    "no-virtual-dom",
+    "fine-grained",
+    "beginner-friendly",
+    "html",
+    "spa"
+  ],
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js \"tests/**/*.test.js\"",
+    "test:unit": "node --test \"tests/**/*.test.js\"",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "test:browser": "playwright test",
+    "dev": "npx serve -l 3000 ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}
