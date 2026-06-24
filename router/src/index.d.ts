@@ -17,6 +17,16 @@ export type RouteComponent = (params: RouteParams) => TemplateResult | null;
 /** A `{ pattern: component }` map. Use `"*"` for the not-found route. */
 export type Routes = Record<string, RouteComponent>;
 
+/** Options for {@link createRouter}. */
+export interface RouterOptions {
+  /**
+   * A sub-path the app is hosted under, e.g. `"/app"`. It is stripped before
+   * matching and prepended in `link`/`go`, so your route patterns and
+   * `router.path()` stay base-free. Trailing slash optional.
+   */
+  base?: string;
+}
+
 /** A router created by {@link createRouter}. */
 export interface Router {
   /** The outlet the current page renders into. Place it once: `${router.view()}`. */
@@ -43,5 +53,11 @@ export interface Router {
  *   "*": () => html`<h1>Not Found</h1>`,
  * });
  * ```
+ *
+ * Hosted under a sub-path? Pass a `base`:
+ *
+ * ```ts
+ * const router = createRouter(routes, { base: "/app" });
+ * ```
  */
-export function createRouter(routes: Routes): Router;
+export function createRouter(routes: Routes, options?: RouterOptions): Router;

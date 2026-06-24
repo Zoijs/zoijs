@@ -204,12 +204,23 @@ examples/
 
 Contributions that keep Zoijs small, clear, and beginner-friendly are very welcome. The API is frozen, so additions go through a short RFC. See **[CONTRIBUTING](framework/CONTRIBUTING.md)** and the [Code of Conduct](framework/CODE_OF_CONDUCT.md).
 
+Each package is self-contained (its own `package.json`, no workspaces). Work in one with the usual commands:
+
 ```bash
-cd framework
+cd framework        # or router / resource / head / action
 npm install
 npm test            # unit + DOM tests (jsdom)
 npm run test:types  # TypeScript checks
 npm run test:browser # real browsers (Playwright)
+```
+
+Or from the **repository root**, run every package's suite at once:
+
+```bash
+npm run install:all  # install dev deps in every package (first time)
+npm test             # all unit suites (core + 4 packages)
+npm run test:types   # all TypeScript checks
+npm run test:browser # all Playwright suites + the Task Board demo
 ```
 
 ## Security

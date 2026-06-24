@@ -195,14 +195,19 @@ function NotFound() {
 
 // ---- router + layout ---------------------------------------------------------
 
-const router = createRouter({
-  "/": Home,
-  "/tasks": Tasks,
-  "/tasks/new": NewTask, // static route — wins over "/tasks/:id"
-  "/tasks/:id": TaskDetails,
-  "/about": About,
-  "*": NotFound,
-});
+const router = createRouter(
+  {
+    "/": Home,
+    "/tasks": Tasks,
+    "/tasks/new": NewTask, // static route — wins over "/tasks/:id"
+    "/tasks/:id": TaskDetails,
+    "/about": About,
+    "*": NotFound,
+  },
+  // This demo is hosted under a sub-path in the repo. With `base`, the route
+  // patterns above stay clean ("/", "/tasks") and links/navigation still work.
+  { base: "/examples/task-board" }
+);
 
 function App() {
   return html`

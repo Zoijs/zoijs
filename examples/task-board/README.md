@@ -28,10 +28,15 @@ npx serve -l 3500 .
 It uses an **import map** (in `index.html`) to point the `@zoijs/*` names at the
 local package sources — so it runs straight from source with no install or build.
 
-> Note: in this repo the app is served at the sub-path `/examples/task-board/`,
-> so the very first load matches the `*` (Not Found) route — click **Home** to
-> start. Deployed at your site's root, `/` shows Home as expected. (History-mode
-> routing assumes the app owns the URL root, like any SPA.)
+This app is served under a sub-path in the repo, so it passes a **`base`** to the
+router:
+
+```js
+const router = createRouter(routes, { base: "/examples/task-board" });
+```
+
+That's why the first load lands on **Home** (not Not Found) and every link keeps
+working under the sub-path. Deployed at your site's root, drop the `base`.
 
 ## How it fits together
 

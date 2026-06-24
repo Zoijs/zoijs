@@ -7,12 +7,21 @@ import { html } from "@zoijs/core";
 import { createRouter } from "../src/index.js";
 import type { Router, RouteParams } from "../src/index.js";
 
-const router: Router = createRouter({
+const routes = {
   "/": () => html`<h1>Home</h1>`,
   "/about": () => html`<h1>About</h1>`,
-  "/users/:id": (params) => html`<h1>User ${params.id}</h1>`, // params is RouteParams
+  "/users/:id": (params: RouteParams) => html`<h1>User ${params.id}</h1>`,
   "*": () => html`<h1>Not Found</h1>`,
-});
+};
+
+const router: Router = createRouter(routes);
+
+// optional base path
+const based: Router = createRouter(routes, { base: "/app" });
+void based;
+
+// @ts-expect-error — base must be a string
+createRouter(routes, { base: 123 });
 
 const v: Element = router.view();
 const a = router.link("/", "Home");

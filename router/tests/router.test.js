@@ -159,3 +159,116 @@ test("destroy() removes the popstate listener", { skip }, async () => {
   await tick();
   assert.equal(app.router.path(), "/"); // stale on purpose — proves no sync ran
 });
+
+// ---- base path -------------------------------------------------------------
+
+const baseRoutes = {
+  "/": () => html`<h1>Home</h1>`,
+  "/tasks": () => html`<h1>Tasks</h1>`,
+  "/tasks/:id": (p) => html`<h1>Task ${p.id}</h1>`,
+  "*": () => html`<h1>NF</h1>`,
+};
+
+function setupBase(base, startAppPath = "/") {
+  const clean = String(base).replace(/\/$/, "");
+  window.history.replaceState({}, "", clean + startAppPath);
+  const router = createRouter(baseRoutes, { base });
+  const target = document.createElement("div");
+  const App = () => html`<nav>${router.link("/", "Home")}${router.link("/tasks", "Tasks")}</nav>
+    <main>${router.view()}</main>`;
+  const unmount = mount(App, target);
+  return {
+    router,
+    target,
+    links: () => target.querySelectorAll("nav a"),
+    text: () => target.querySelector("main").textContent.trim(),
+    teardown: () => {
+      unmount();
+      router.destroy();
+    },
+  };
+}
+
+test("base: renders the initial route under a sub-path", { skip }, () => {
+  const app = setupBase("/app", "/");
+  assert.equal(app.text(), "Home");
+  assert.equal(app.router.path(), "/"); // app-level path, not "/app"
+  app.teardown();
+});
+
+test("base: link href includes the base", { skip }, () => {
+  const app = setupBase("/app", "/");
+  const [home, tasks] = app.links();
+  assert.equal(home.getAttribute("href"), "/app/");
+  assert.equal(tasks.getAttribute("href"), "/app/tasks");
+  app.teardown();
+});
+
+test("base: programmatic navigation prepends the base", { skip }, async () => {
+  const app = setupBase("/app", "/");
+  app.router.go("/tasks");
+  await tick();
+  assert.equal(window.location.pathname, "/app/tasks");
+  assert.equal(app.router.path(), "/tasks");
+  assert.equal(app.text(), "Tasks");
+  app.teardown();
+});
+
+test("base: link click navigates under the base", { skip }, async () => {
+  const app = setupBase("/app", "/");
+  app.links()[1].click(); // Tasks
+  await tick();
+  assert.equal(window.location.pathname, "/app/tasks");
+  assert.equal(app.text(), "Tasks");
+  app.teardown();
+});
+
+test("base: dynamic params work under the base", { skip }, async () => {
+  const app = setupBase("/app", "/");
+  app.router.go("/tasks/42");
+  await tick();
+  assert.equal(window.location.pathname, "/app/tasks/42");
+  assert.equal(app.text(), "Task 42");
+  app.teardown();
+});
+
+test("base: query strings work and path() stays base-free", { skip }, async () => {
+  const app = setupBase("/app", "/");
+  app.router.go("/tasks?filter=active");
+  await tick();
+  assert.equal(window.location.pathname, "/app/tasks");
+  assert.equal(app.router.path(), "/tasks");
+  assert.deepEqual(app.router.query(), { filter: "active" });
+  app.teardown();
+});
+
+test("base: unknown path under the base hits the * route", { skip }, async () => {
+  const app = setupBase("/app", "/");
+  app.router.go("/nope");
+  await tick();
+  assert.equal(window.location.pathname, "/app/nope");
+  assert.equal(app.text(), "NF");
+  app.teardown();
+});
+
+test("base: a trailing slash in base is normalized", { skip }, () => {
+  const app = setupBase("/app/", "/"); // note the trailing slash
+  assert.equal(app.text(), "Home");
+  assert.equal(app.links()[1].getAttribute("href"), "/app/tasks"); // no double slash
+  app.teardown();
+});
+
+test("base: deep link directly to a sub-path route renders it", { skip }, () => {
+  const app = setupBase("/app", "/tasks"); // initial URL is /app/tasks
+  assert.equal(app.text(), "Tasks");
+  assert.equal(app.router.path(), "/tasks");
+  app.teardown();
+});
+
+test("no base: link href is unchanged (backward compatible)", { skip }, () => {
+  const app = setup(routes);
+  const [home, about] = app.target.querySelectorAll("nav a");
+  assert.equal(home.getAttribute("href"), "/");
+  assert.equal(about.getAttribute("href"), "/about");
+  app.teardown();
+});
