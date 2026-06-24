@@ -1,16 +1,24 @@
 name: Publish
 
+# Publishes @zoijs/core to npm when the version in framework/package.json is new.
+# Pushing without bumping the version is safe — the publish step is skipped
+# (npm versions are immutable, so re-publishing the same version isn't allowed).
+
 on:
+  push:
+    branches: [main]
+    paths:
+      - "framework/**"
   release:
-    types: [published] # cut a GitHub Release → this publishes to npm
-  workflow_dispatch: # or run it manually from the Actions tab
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # REQUIRED for npm provenance (OIDC)
+      id-token: write # required for npm provenance (OIDC)
     defaults:
       run:
         working-directory: framework
@@ -22,9 +30,28 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: framework/package-lock.json
+
       - run: npm ci
+
+      # Test gate — a broken push never publishes.
       - run: npm test
       - run: npm run test:types
-      - run: npm publish --access public --provenance
+
+      - name: Decide whether this version needs publishing
+        id: check
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already on npm — skipping publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$NAME@$VERSION is new — publishing."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm (with provenance)
+        if: steps.check.outputs.publish == 'true'
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
