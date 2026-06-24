@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/head` are documented here.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-06-24
 
 Initial release of the tiny optional head helper for Zoijs.
 

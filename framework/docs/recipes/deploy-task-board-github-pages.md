@@ -27,10 +27,11 @@ links**. This recipe takes care of both.
 - A **GitHub repository** for your app (it can be just the app's files).
 - **GitHub Pages** available (free on public repos).
 - The `@zoijs/*` packages reachable from the browser, via either:
-  - a **CDN** (simplest) — `https://esm.sh/@zoijs/core@1`, etc., once the
-    packages are published to npm; or
+  - a **CDN** (simplest) — all packages are published on npm, so
+    `https://esm.sh/@zoijs/core@1`, `https://esm.sh/@zoijs/router@0.1`, etc. work
+    out of the box; or
   - **vendored source** — copy each package's `src/` into your repo and point the
-    import map at the local files (works without publishing; see step 3's note).
+    import map at the local files (zero runtime dependencies; see step 5's note).
 
 ## 3. Why GitHub Pages needs special handling
 
@@ -89,7 +90,7 @@ In `docs/index.html`, map the package names to the CDN (pinned versions):
 Use **relative** paths for your own assets (`./app.js`, `./style.css`) — an
 absolute `/style.css` would point at the domain root, not your sub-path.
 
-> **No published packages yet?** Vendor instead: copy `framework/src` into
+> **Want zero runtime dependencies?** Vendor instead: copy `framework/src` into
 > `docs/zoijs/core/`, and each single-file package (`router`, `resource`,
 > `action`, `head`) into `docs/zoijs/`, then map
 > `"@zoijs/core": "./zoijs/core/index.js"`, `"@zoijs/router": "./zoijs/router.js"`,
