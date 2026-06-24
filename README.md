@@ -175,6 +175,8 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
 
+See them work together in the **[Task Board demo](examples/task-board)** — one small app using all five packages — and read the **[ecosystem guide](framework/docs/ecosystem.md)** for how they fit and why each is optional.
+
 ## Project status
 
 Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/VERSIONING.md)). It's intentionally small: routing, SSR, and a forms/data layer are **not** in the core and may arrive later as optional packages (see the [roadmap](framework/ROADMAP.md)). It's a great fit for SPAs, internal tools, dashboards, prototypes, and teaching; for SEO-critical content sites you'll want SSR (not yet available).
@@ -194,6 +196,8 @@ router/           @zoijs/router — optional tiny router (same layout)
 resource/         @zoijs/resource — optional async-data helper (same layout)
 head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
+examples/
+  task-board/     ecosystem demo — one app using all five packages
 ```
 
 ## Contributing

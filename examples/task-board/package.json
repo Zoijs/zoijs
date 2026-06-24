@@ -1,0 +1,13 @@
+{
+  "name": "task-board-example",
+  "private": true,
+  "type": "module",
+  "description": "Zoijs ecosystem demo app (runs from source; this package.json is only for the smoke tests).",
+  "scripts": {
+    "dev": "npx serve -l 3500 ../..",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
