@@ -176,6 +176,12 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
 
+Install the ones you need (each peer-depends on `@zoijs/core`):
+
+```bash
+npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head @zoijs/action
+```
+
 See them work together in the **[Task Board demo](examples/task-board)** — one small app using all five packages — and read the **[ecosystem guide](framework/docs/ecosystem.md)** for how they fit and why each is optional.
 
 ## Project status

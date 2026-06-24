@@ -18,6 +18,23 @@ through one app — the **Task Board** demo — that uses all of them.
 | [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
 
+Install only what you use:
+
+```bash
+npm install @zoijs/core
+npm install @zoijs/router      # routing
+npm install @zoijs/resource    # reading data
+npm install @zoijs/action      # writing data
+npm install @zoijs/head        # title & meta
+```
+
+Or load them with no install via an import map / CDN (pin the version):
+
+```js
+import { html, mount } from "https://esm.sh/@zoijs/core@1";
+import { createRouter } from "https://esm.sh/@zoijs/router@0.1";
+```
+
 Every package is:
 
 - **Optional** — install only what you use; the core never depends on them.
