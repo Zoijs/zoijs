@@ -1,0 +1,59 @@
+{
+  "name": "@zoijs/router",
+  "version": "0.1.0",
+  "description": "A tiny, beginner-friendly router for Zoijs single-page apps. No JSX, no build step, no Virtual DOM.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.com)",
+  "license": "MIT",
+  "homepage": "https://zoijs.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "router"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "router",
+    "spa",
+    "frontend",
+    "no-build",
+    "no-jsx",
+    "no-virtual-dom"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js \"tests/**/*.test.js\"",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "test:browser": "playwright test",
+    "dev": "npx serve -l 3100 .."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@zoijs/core": "file:../framework",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

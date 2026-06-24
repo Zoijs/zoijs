@@ -53,6 +53,9 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - [Troubleshooting](troubleshooting.md)
 - [FAQ](faq.md)
 
+### Optional packages
+- [`@zoijs/router`](../../router/README.md) — a tiny client-side router for SPAs (routes are a plain object; not part of the core)
+
 ### Coming from another framework?
 - [From vanilla JavaScript](migration/from-vanilla.md)
 - [From React](migration/from-react.md)
