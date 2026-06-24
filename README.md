@@ -205,6 +205,7 @@ head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
 examples/
   task-board/     ecosystem demo — one app using all five packages
+site/             the official docs website (zoijs.dev) — built with Zoijs
 ```
 
 ## Contributing
