@@ -59,6 +59,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - [`@zoijs/head`](../../head/README.md) — set the document title and meta description from a component
 - [`@zoijs/action`](../../action/README.md) — the write-side companion to resource: reactive `pending` / `error` / `done` for submits
 - [**Ecosystem guide**](ecosystem.md) — how the optional packages fit together, with one demo app (Task Board) that uses all of them
+- [**Deployment**](deployment.md) — ship a Zoijs app to GitHub Pages, Netlify, Vercel, Cloudflare, Nginx, or Apache (incl. router `base` + SPA fallback)
 
 ### Coming from another framework?
 - [From vanilla JavaScript](migration/from-vanilla.md)

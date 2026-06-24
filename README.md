@@ -137,6 +137,7 @@ Start at **[zoijs.dev](https://zoijs.dev)** — or browse the docs in this repo:
 - [Installation](framework/docs/installation.md) · [Your First App](framework/docs/first-app.md) · [Core Concepts](framework/docs/concepts/core-concepts.md)
 - Concepts: [State](framework/docs/concepts/state.md) · [Computed](framework/docs/concepts/computed.md) · [Bindings](framework/docs/concepts/bindings.md) · [Events](framework/docs/concepts/events.md) · [Lists](framework/docs/concepts/lists.md) · [Cleanup](framework/docs/concepts/cleanup.md)
 - [Tutorials](framework/docs/README.md#tutorials-build-something) · [API Reference](framework/docs/api-reference.md) · [Security](framework/docs/security.md) · [Troubleshooting](framework/docs/troubleshooting.md) · [FAQ](framework/docs/faq.md)
+- Going to production: [Ecosystem guide](framework/docs/ecosystem.md) · [Deployment](framework/docs/deployment.md) · [Task Board example](examples/task-board)
 - Coming from another framework? [React](framework/docs/migration/from-react.md) · [Vue](framework/docs/migration/from-vue.md) · [Solid](framework/docs/migration/from-solid.md) · [Lit](framework/docs/migration/from-lit.md) · [vanilla JS](framework/docs/migration/from-vanilla.md)
 
 ## Examples
