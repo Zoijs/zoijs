@@ -1,13 +1,15 @@
 import { html } from "@zoijs/core";
 
-// Parent → child communication: Header receives plain data (`title`) and a
-// reader function (`remaining`) as arguments. It owns no state of its own.
-export function Header({ title, remaining }) {
+// Parent -> child: the Header receives derived stats as reader functions and
+// renders the hero. It holds no state of its own.
+export function Header({ completed, total }) {
   return html`
-    <header>
-      <h1>${title}</h1>
-      <p class="count">
-        ${() => remaining()} task${() => (remaining() === 1 ? "" : "s")} left
+    <header class="hero">
+      <span class="badge">Built with Zoijs</span>
+      <h1>{{APP_TITLE}}</h1>
+      <p class="tagline">A tiny project dashboard — plain HTML, CSS, and JavaScript. No build step.</p>
+      <p class="summary">
+        <strong>${() => completed()}</strong> of <strong>${() => total()}</strong> tasks done
       </p>
     </header>
   `;

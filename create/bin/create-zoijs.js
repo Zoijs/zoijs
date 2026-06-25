@@ -75,7 +75,7 @@ export function ensureTargetAvailable(targetDir) {
   }
 }
 
-const TEXT_EXT = new Set([".js", ".html", ".css", ".json", ".md", ".txt", ".svg"]);
+const TEXT_EXT = new Set([".js", ".mjs", ".html", ".css", ".json", ".md", ".txt", ".svg"]);
 const isText = (file) => file === "_gitignore" || TEXT_EXT.has(path.extname(file));
 
 function applyTokens(content, tokens) {

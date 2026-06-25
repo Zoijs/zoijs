@@ -17,6 +17,14 @@ import {
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "create-zoijs-"));
 const read = (...p) => fs.readFileSync(path.join(...p), "utf8");
+const walk = (dir, files = []) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, files);
+    else files.push(p);
+  }
+  return files;
+};
 
 // ---- argument parsing --------------------------------------------------------
 
@@ -98,28 +106,59 @@ test("scaffold(basic) copies files and fills in the name + title", () => {
   assert.match(read(dir, "index.html"), /<title>Task Board<\/title>/);
   // no leftover placeholders anywhere in a text file
   assert.doesNotMatch(read(dir, "src", "app.js"), /\{\{APP_/);
+  // dev server (no npx serve / port 3000)
+  assert.equal(JSON.parse(read(dir, "package.json")).scripts.dev, "node dev-server.mjs");
+  assert.ok(fs.existsSync(path.join(dir, "dev-server.mjs")));
 });
 
-test("scaffold(app) generates the component-communication starter", () => {
+test("scaffold(app) generates the polished dashboard starter", () => {
   const dir = path.join(tmp(), "my-tasks");
   scaffold({ name: "My-Tasks", template: "app", targetDir: dir });
 
-  // structure
+  // component composition: Header, StatCard, TaskItem
   assert.ok(fs.existsSync(path.join(dir, "src", "components", "Header.js")));
+  assert.ok(fs.existsSync(path.join(dir, "src", "components", "StatCard.js")));
   assert.ok(fs.existsSync(path.join(dir, "src", "components", "TaskItem.js")));
 
-  // package name is lowercased from "My-Tasks"
+  // package name is lowercased from "My-Tasks"; title derived from the name
   assert.equal(JSON.parse(read(dir, "package.json")).name, "my-tasks");
   assert.match(read(dir, "index.html"), /<title>My Tasks<\/title>/);
 
-  // demonstrates the required core features + communication patterns
+  // demonstrates the required core features + composition + filtering
   const app = read(dir, "src", "app.js");
-  for (const token of ["createState", "computed", "each", "Header(", "TaskItem("]) {
+  for (const token of ["createState", "computed", "each", "Header(", "StatCard(", "TaskItem(", "filter"]) {
     assert.ok(app.includes(token), `app.js should use ${token}`);
   }
-  assert.match(read(dir, "src", "components", "TaskItem.js"), /onToggle|onDelete/); // child → parent
-  // only depends on @zoijs/core
+  // dashboard content (the "project dashboard" / "Built with Zoijs" hero)
+  assert.match(read(dir, "src", "components", "Header.js"), /Built with Zoijs/);
+  assert.match(read(dir, "src", "components", "Header.js"), /dashboard/i);
+
+  // child → parent callbacks
+  assert.match(read(dir, "src", "components", "TaskItem.js"), /onToggle|onDelete/);
+  // dev server on 7310 (not npx serve / 3000); only depends on @zoijs/core
+  assert.equal(JSON.parse(read(dir, "package.json")).scripts.dev, "node dev-server.mjs");
+  assert.ok(fs.existsSync(path.join(dir, "dev-server.mjs")));
   assert.deepEqual(Object.keys(JSON.parse(read(dir, "package.json")).dependencies), ["@zoijs/core"]);
+});
+
+test("the dev server uses port 7310 with 7311–7313 fallbacks and the right banner", () => {
+  for (const template of TEMPLATES) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "x", template, targetDir: dir });
+    const dev = read(dir, "dev-server.mjs");
+    assert.match(dev, /\[\s*7310\s*,\s*7311\s*,\s*7312\s*,\s*7313\s*\]/, `${template}: dev-server should list the port range`);
+    assert.match(dev, /ZoiJS dev server: http:\/\/localhost/, `${template}: dev-server should print the banner`);
+  }
+});
+
+test("no generated template file references port 3000", () => {
+  for (const template of TEMPLATES) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "x", template, targetDir: dir });
+    for (const file of walk(dir)) {
+      assert.ok(!read(file).includes("3000"), `${path.relative(dir, file)} should not reference port 3000`);
+    }
+  }
 });
 
 test("scaffold rejects an unknown template", () => {

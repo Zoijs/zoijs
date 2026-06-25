@@ -9,11 +9,17 @@ npm install
 npm run dev
 ```
 
-Then open the printed URL.
+```text
+ZoiJS dev server: http://localhost:7310
+If busy: 7311, 7312, 7313
+```
+
+Open the printed URL.
 
 ## How it works
 
 - **`index.html`** — an import map points `@zoijs/core` at `node_modules`, then loads `src/app.js`.
+- **`dev-server.mjs`** — a tiny zero-dependency static server (Node built-ins only) that `npm run dev` runs.
 - **`src/app.js`** — your app: `createState` for state, `html` for markup, `mount` to render.
 - **`src/style.css`** — plain CSS.
 
