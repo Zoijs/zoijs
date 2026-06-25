@@ -20,6 +20,10 @@ through one app — the **Task Board** demo — that uses all of them.
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
 
+> New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
+> (no build step). The optional packages below add capabilities to an app you
+> already have.
+
 Install only what you use:
 
 ```bash
