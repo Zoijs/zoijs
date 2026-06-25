@@ -57,6 +57,18 @@ html`<input type="checkbox" checked=${() => done.get()} />`;
 
 URL attributes (`href`, `src`, …) reject dangerous schemes like `javascript:` automatically.
 
+### Reaching the element: `ref`
+
+To get the real DOM element (to focus, scroll, measure, or use a canvas), add a
+`ref` — a function that receives the element after render:
+
+```js
+html`<input ref=${(el) => el.focus()} />`;
+```
+
+It runs once, isn't reactive, and can return a cleanup function. See
+[Element refs](refs.md).
+
 ## Static vs live — a quick reference
 
 | You write | Behavior |

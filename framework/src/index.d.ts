@@ -41,11 +41,28 @@ export interface EachResult {
 export type Component = () => TemplateResult;
 
 /**
+ * A callback ref. Place it on an element as `ref=${fn}`; it receives the real DOM
+ * element once the surrounding render has been inserted (deferred one microtask,
+ * so `focus()` / `scrollIntoView()` / `getBoundingClientRect()` work). It may
+ * return a cleanup function, which runs on unmount or list-item removal. It runs
+ * once and is not reactive.
+ *
+ * ```ts
+ * html`<input ref=${(el: HTMLInputElement) => el.focus()} />`
+ * html`<div ref=${(el) => { const c = chart(el); return () => c.destroy(); }}></div>`
+ * ```
+ */
+export type Ref<E extends Element = Element> = (element: E) => void | (() => void);
+
+/**
  * Tagged-template function — write your markup as HTML.
  *
  * ```js
  * html`<button onclick=${() => count.set(count.get() + 1)}>${() => count.get()}</button>`
  * ```
+ *
+ * To reach the rendered DOM element, add a callback `ref` (see {@link Ref}):
+ * `html\`<input ref=${(el) => el.focus()} />\``.
  */
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult;
 
