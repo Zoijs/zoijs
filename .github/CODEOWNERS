@@ -6,12 +6,12 @@
 #
 # Add more maintainers (or a @Zoijs/team) over time as the project grows.
 
-* @Brianjay2
+* @jay-m2
 
 # Especially sensitive areas — keep them owned explicitly too:
-/.github/          @Brianjay2
-/framework/src/    @Brianjay2
-/router/src/       @Brianjay2
-/resource/src/     @Brianjay2
-/head/src/         @Brianjay2
-/action/src/       @Brianjay2
+/.github/          @jay-m2
+/framework/src/    @jay-m2
+/router/src/       @jay-m2
+/resource/src/     @jay-m2
+/head/src/         @jay-m2
+/action/src/       @jay-m2
