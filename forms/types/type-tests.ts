@@ -13,12 +13,16 @@ interface Login {
 
 const login: Form<Login> = form<Login>({ email: "", password: "" });
 
-const all: Login = login.values.get();
+const all: Login = login.all();
+const allRaw: Login = login.values.get(); // raw state still works (backward compatible)
 const email: string = login.value("email");
 login.set("email", "a@b.com");
 const err: string | undefined = login.error("email");
+const allErrs: Partial<Record<keyof Login, string>> = login.allErrors();
 login.setError("password", "Too short");
 login.clearError("password");
+const touchedEmail: boolean = login.isTouched("email");
+const allTouched: Partial<Record<keyof Login, boolean>> = login.allTouched();
 login.touch("email");
 login.reset();
 
@@ -43,4 +47,4 @@ login.set("email", 123);
 // @ts-expect-error — value() only accepts known field names
 login.value("nope");
 
-void [all, email, err, valid, onSubmit, withOpts];
+void [all, allRaw, email, err, allErrs, touchedEmail, allTouched, valid, onSubmit, withOpts];

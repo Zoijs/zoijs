@@ -88,18 +88,35 @@ export function form(initialValues = {}, options = {}) {
     return fn(values.get(), event);
   };
 
+  // Reader-style accessors for whole-form state, matching the rest of the
+  // ecosystem (data(), loading(), value(name), …). Reactive inside a binding.
+  const all = () => values.get();
+  const allErrors = () => errors.get();
+  const allTouched = () => touched.get();
+  const isTouched = (name) => !!touched.get()[name];
+
   return {
-    values,
+    // values
+    all,
     value,
     set,
-    errors,
+    // errors
+    allErrors,
     error,
     setError,
     clearError,
-    touched,
+    // touched
+    allTouched,
+    isTouched,
     touch,
+    // lifecycle
     reset,
     validate,
     handleSubmit,
+    // raw reactive state — advanced / backward-compatible. Prefer all() /
+    // allErrors() / allTouched() above; these stay for direct state access.
+    values,
+    errors,
+    touched,
   };
 }

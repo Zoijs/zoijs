@@ -43,33 +43,47 @@ import { form } from "@zoijs/forms";
 
 const login = form({ email: "", password: "" });
 
-login.values.get();                 // { email: "", password: "" }
+login.all();                        // { email: "", password: "" } — all values (reactive)
 login.value("email");               // one field (reactive)
 login.set("email", "a@b.com");      // update one field
 login.error("email");               // one field's error (reactive)
 login.setError("email", "Required");
 login.clearError("email");
+login.isTouched("email");           // has this field been touched? (reactive)
 login.touch("email");               // mark touched (e.g. on blur)
 login.reset();                      // restore initial values, clear errors + touched
 ```
+
+These reader methods (`all()`, `value()`, `error()`, `isTouched()`, …) match the
+rest of the ecosystem — the same shape as `data()`, `loading()`, and `pending()` —
+so once you've learned one Zoijs package, the others read the same way.
 
 ## The API
 
 | Member | What it does |
 |---|---|
 | `form(initialValues, options?)` | Create a form helper |
-| `values` | Reactive state of all values — `values.get()` returns the object |
+| `all()` | Read all values (reactive) |
 | `value(name)` | Read one field's value (reactive) |
 | `set(name, value)` | Update one field |
-| `errors` | Reactive state of all errors |
+| `allErrors()` | Read all errors (reactive) |
 | `error(name)` | Read one field's error (reactive) |
 | `setError(name, message)` | Set one field's error |
 | `clearError(name)` | Clear one field's error |
-| `touched` | Reactive state of touched fields |
+| `allTouched()` | Read all touched flags (reactive) |
+| `isTouched(name)` | Has one field been touched? (reactive) |
 | `touch(name)` | Mark a field touched |
 | `reset()` | Restore initial values; clear errors + touched |
 | `validate(rules?)` | Run rules, set errors, return whether valid |
 | `handleSubmit(fn)` | Wrap a submit handler: prevents reload, calls `fn(values)` |
+
+### Advanced: raw state access
+
+The underlying reactive state is also exposed as `values`, `errors`, and `touched`
+(each a `createState`-shaped `{ get, set, peek }`). Prefer the reader methods above;
+reach for the raw state only when you need direct access — e.g. `login.values.peek()`
+to read without subscribing. These remain for backward compatibility and won't be
+removed in 0.x.
 
 ## Login form example
 
@@ -141,7 +155,7 @@ html`
   <form onsubmit=${async (e) => {
     e.preventDefault();
     if (!login.validate(rules)) return;
-    await submitLogin.run(login.values.get());
+    await submitLogin.run(login.all());
   }}>
     ...
     <button disabled=${() => submitLogin.pending()}>Sign in</button>
