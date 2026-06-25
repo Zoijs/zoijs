@@ -16,7 +16,7 @@ test("each() returns a marker carrying items/keyFn/renderFn", () => {
   const keyFn = (x) => x.id;
   const renderFn = (x) => x;
   const marker = each(itemsFn, keyFn, renderFn);
-  assert.equal(marker.__easyEach, true);
+  assert.equal(marker.__zoijsEach, true);
   assert.equal(marker.items, itemsFn);
   assert.equal(marker.keyFn, keyFn);
   assert.equal(marker.renderFn, renderFn);

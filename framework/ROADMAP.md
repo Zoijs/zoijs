@@ -11,23 +11,33 @@ release.**
 
 ## 1.x — Additive, non-breaking
 
-Shipped as MINOR/PATCH releases, no API breakage:
+Shipped as MINOR/PATCH releases, no API breakage. **Shipped so far:** the hosted
+docs site ([zoijs.dev](https://zoijs.dev)) and **element refs** (a `ref` binding,
+1.1.0 — no new export). Still on the table:
 
 - **Performance:** LIS move-minimization in `each`; automated perf thresholds in CI.
-- **DX:** hosted, interactive docs site; a recipes/patterns section; a small
-  devtools hook to inspect the reactive graph.
-- **Additive API (RFC-gated):** a public `effect`, an optional `svg` helper,
-  custom `equals` documented for `computed`.
+- **DX:** a small devtools hook to inspect the reactive graph.
+- **Additive API (RFC-gated):** a public `effect`, an optional `svg` helper.
 - **Hardening:** XSS-corpus fuzzing; optional error-boundary helper.
 - **Reach:** mobile browsers added to the CI matrix.
 
-## 2.0+ — Optional ecosystem (separate packages)
+## Optional ecosystem — shipped
+
+The optional packages launched as small, opt-in modules — each built entirely on
+the core's public API, with **no core changes**:
+
+- `@zoijs/router` — client-side routing (History API).
+- `@zoijs/resource` / `@zoijs/action` — reading / writing async data.
+- `@zoijs/head` — document title & meta.
+- `@zoijs/storage` — localStorage-backed state.
+- `@zoijs/forms` — form state & validation.
+- `create-zoijs` — the starter CLI (`npm create zoijs@latest`).
+
+## 2.0+ — still on the table (separate packages)
 
 Only as opt-in modules that never compromise the no-build, small-core identity:
 
-- `@easy/router` — client-side routing (History API).
-- `@easy/forms` — form helpers/validation.
-- `@easy/ssr` — server rendering + hydration.
+- `@zoijs/ssr` — server rendering + hydration.
 - An **optional** compiler that pre-compiles templates (must be behavior-identical
   and never required).
 
