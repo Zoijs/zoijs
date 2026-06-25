@@ -13,7 +13,7 @@ Plain HTML, CSS, and JavaScript — no JSX, no build step, no Virtual DOM, and a
 [![minzip](https://img.shields.io/bundlephobia/minzip/@zoijs/core)](https://bundlephobia.com/package/@zoijs/core)
 [![license](https://img.shields.io/npm/l/@zoijs/core.svg)](LICENSE)
 
-[Website](https://zoijs.com) · [Documentation](https://zoijs.dev) · [npm](https://www.npmjs.com/package/@zoijs/core) · [Examples](framework/examples)
+[Documentation](https://zoijs.dev) · [npm](https://www.npmjs.com/package/@zoijs/core) · [Examples](framework/examples)
 
 </div>
 
@@ -62,7 +62,7 @@ npm install @zoijs/core
 Or with zero install, straight from a CDN:
 
 ```js
-import { html, mount, createState } from "https://esm.sh/@zoijs/core";
+import { html, mount, createState } from "https://esm.sh/@zoijs/core@1";
 ```
 
 See the [Installation guide](framework/docs/installation.md) for import-map and vendoring options.
@@ -175,11 +175,13 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`. |
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
+| [`@zoijs/storage`](storage) | A localStorage-backed reactive value — a drop-in, persistent `createState` for themes, drafts, and preferences. |
+| [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 
 Install the ones you need (each peer-depends on `@zoijs/core`):
 
 ```bash
-npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head @zoijs/action
+npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head @zoijs/action @zoijs/storage @zoijs/forms
 ```
 
 See them work together in the **[Task Board demo](examples/task-board)** — one small app using all five packages — and read the **[ecosystem guide](framework/docs/ecosystem.md)** for how they fit and why each is optional.
@@ -203,6 +205,8 @@ router/           @zoijs/router — optional tiny router (same layout)
 resource/         @zoijs/resource — optional async-data helper (same layout)
 head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
+storage/          @zoijs/storage — optional localStorage persistence helper (same layout)
+forms/            @zoijs/forms — optional native-forms helper (same layout)
 examples/
   task-board/     ecosystem demo — one app using all five packages
 ```
@@ -216,7 +220,7 @@ Contributions that keep Zoijs small, clear, and beginner-friendly are very welco
 Each package is self-contained (its own `package.json`, no workspaces). Work in one with the usual commands:
 
 ```bash
-cd framework        # or router / resource / head / action
+cd framework        # or router / resource / head / action / storage / forms
 npm install
 npm test            # unit + DOM tests (jsdom)
 npm run test:types  # TypeScript checks
@@ -227,7 +231,7 @@ Or from the **repository root**, run every package's suite at once:
 
 ```bash
 npm run install:all  # install dev deps in every package (first time)
-npm test             # all unit suites (core + 4 packages)
+npm test             # all unit suites (core + 6 packages)
 npm run test:types   # all TypeScript checks
 npm run test:browser # all Playwright suites + the Task Board demo
 ```

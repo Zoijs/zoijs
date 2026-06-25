@@ -31,7 +31,7 @@ inside a broken orange accent ring on a deep-navy circle.
 For GitHub/Twitter/OG previews, export `social-card.svg` to PNG and reference it:
 
 ```html
-<meta property="og:image" content="https://zoijs.com/social-card.png" />
+<meta property="og:image" content="https://zoijs.dev/og/zoijs-og.png" />
 ```
 
 ## Rebuilding

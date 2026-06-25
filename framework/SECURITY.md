@@ -15,7 +15,7 @@ Security fixes land on the latest `1.x` line.
 
 Report privately via GitHub's [Security Advisories](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
 ("Report a vulnerability" on the repo's Security tab), or email the maintainers
-at `security@zoijs.com` (replace before launch).
+at `security@zoijs.dev`.
 
 We aim to acknowledge within **72 hours** and to ship a fix or mitigation for
 confirmed issues promptly, crediting reporters who wish to be named.
