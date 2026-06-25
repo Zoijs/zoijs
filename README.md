@@ -55,6 +55,14 @@ That's a complete, working app. No bundler, no JSX, no config.
 
 ## Install
 
+The fastest start is the scaffolder — it creates a named, ready-to-run app (no build step):
+
+```bash
+npm create zoijs@latest my-app
+```
+
+Or add the core package to an existing project:
+
 ```bash
 npm install @zoijs/core
 ```
@@ -207,6 +215,7 @@ head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
 storage/          @zoijs/storage — optional localStorage persistence helper (same layout)
 forms/            @zoijs/forms — optional native-forms helper (same layout)
+create/           create-zoijs — the starter CLI (npm create zoijs@latest)
 examples/
   task-board/     ecosystem demo — one app using all five packages
 ```
