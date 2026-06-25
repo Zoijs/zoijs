@@ -69,7 +69,7 @@ Zoijs is friendly to a strict Content Security Policy:
 
 - **No `eval` / `new Function`** anywhere → no `'unsafe-eval'` needed.
 - **No inline scripts or inline event handlers** are injected → no `'unsafe-inline'` needed for scripts.
-- **Trusted Types** (`require-trusted-types-for 'script'`): Zoijs uses `<template>.innerHTML` with framework-generated HTML built only from your *static* template strings (never data). Under Trusted Types it routes that through a pass-through policy named **`easy`**, which is safe by construction. Allow it in your CSP:
+- **Trusted Types** (`require-trusted-types-for 'script'`): Zoijs uses `<template>.innerHTML` with framework-generated HTML built only from your *static* template strings (never data). Under Trusted Types it routes that through a pass-through policy named **`zoijs`**, which is safe by construction. Allow it in your CSP:
 
   ```
   Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs;
