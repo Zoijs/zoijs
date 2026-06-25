@@ -142,3 +142,47 @@ test("supports fields not present in the initial values", () => {
   f.reset();
   assert.equal(f.value("newsletter"), undefined); // reset to the initial shape
 });
+
+test("reader methods mirror the raw state (all / allErrors / allTouched / isTouched)", () => {
+  const f = form({ email: "", password: "" });
+
+  // all() == values.get()
+  assert.deepEqual(f.all(), { email: "", password: "" });
+  assert.deepEqual(f.all(), f.values.get());
+  f.set("email", "a@b.com");
+  assert.deepEqual(f.all(), { email: "a@b.com", password: "" });
+
+  // allErrors() == errors.get()
+  assert.deepEqual(f.allErrors(), {});
+  f.setError("password", "Required");
+  assert.deepEqual(f.allErrors(), { password: "Required" });
+  assert.deepEqual(f.allErrors(), f.errors.get());
+
+  // isTouched(name) + allTouched() == touched.get()
+  assert.equal(f.isTouched("email"), false);
+  assert.deepEqual(f.allTouched(), {});
+  f.touch("email");
+  assert.equal(f.isTouched("email"), true);
+  assert.equal(f.isTouched("password"), false);
+  assert.deepEqual(f.allTouched(), { email: true });
+  assert.deepEqual(f.allTouched(), f.touched.get());
+});
+
+test("the raw state objects are still exposed (backward compatible)", () => {
+  const f = form({ email: "" });
+  assert.equal(typeof f.values.get, "function");
+  assert.equal(typeof f.errors.get, "function");
+  assert.equal(typeof f.touched.get, "function");
+  assert.equal(typeof f.values.peek, "function"); // direct state access still available
+});
+
+test("isTouched(name) is reactive inside an html binding", { skip: domSkip }, async () => {
+  const f = form({ email: "" });
+  const target = document.createElement("div");
+  mount(() => html`<span>${() => (f.isTouched("email") ? "yes" : "no")}</span>`, target);
+
+  assert.equal(target.querySelector("span").textContent, "no");
+  f.touch("email");
+  await tick();
+  assert.equal(target.querySelector("span").textContent, "yes");
+});

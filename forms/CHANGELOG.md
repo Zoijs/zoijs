@@ -2,6 +2,19 @@
 
 All notable changes to `@zoijs/forms` are documented here.
 
+## 0.1.1 — 2026-06-25
+
+Consistency hardening — **non-breaking, additive only.**
+
+- Added reader-style accessors that match the rest of the ecosystem
+  (`data()` / `loading()` / `value(name)` …): **`all()`** (all values),
+  **`allErrors()`** (all errors), **`allTouched()`** (all touched flags), and
+  **`isTouched(name)`** (one field's touched flag). All reactive inside a binding.
+- The raw reactive state `values` / `errors` / `touched` is **kept** for backward
+  compatibility (now documented as advanced/direct access). No existing code breaks.
+- Docs and the login example updated to prefer the reader methods.
+- No behavior changes, no new form features, no core changes.
+
 ## 0.1.0 — 2026-06-25
 
 Initial release of the tiny, native-forms-first helper for Zoijs.

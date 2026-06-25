@@ -22,11 +22,11 @@ function App() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!login.validate(rules)) return; // forms validates; action does the request
-    await submit.run(login.values.get());
+    await submit.run(login.all());
   };
 
   const field = (name, label, type = "text") => html`
-    <label class=${() => (login.touched.get()[name] ? "field touched" : "field")}>
+    <label class=${() => (login.isTouched(name) ? "field touched" : "field")}>
       <span>${label}</span>
       <input
         name=${name}
