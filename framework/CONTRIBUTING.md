@@ -18,10 +18,10 @@ a PR. We say no to most additions on purpose.
 
 ## Project setup
 
-No build step. You need Node 18+.
+No build step. You need Node 20+ (the test toolchain — jsdom — requires it).
 
 ```bash
-git clone <repo> && cd easy/framework
+git clone https://github.com/Zoijs/zoijs && cd zoijs/framework
 npm install
 npx playwright install chromium firefox webkit   # for browser tests (once)
 ```
@@ -56,6 +56,22 @@ A PR should keep **all** of `npm test`, `npm run test:types`, and
 4. Ensure all checks pass locally.
 5. PRs are reviewed for correctness, scope-fit (does it belong in the core?),
    and clarity.
+
+## How `main` is protected
+
+`main` is a protected branch — **nobody pushes to it directly**, including
+maintainers. Every change lands through a pull request:
+
+- A pull request is **required**; direct pushes to `main` are rejected.
+- At least **one approving maintainer review** is required (via CODEOWNERS).
+- **CI must pass** — unit + type checks (Node 20/22/24) and the browser tests.
+- All **review conversations must be resolved** before merge.
+- New commits **dismiss stale approvals**, so changes get re-reviewed.
+- **Force-pushes and branch deletion are disabled.**
+
+PRs are **squash-merged** and the head branch is deleted automatically after
+merge. For anything beyond a small fix, **open an issue or RFC first** (see
+Principles) — it saves everyone time if the scope isn't a fit.
 
 ## Commit messages
 
