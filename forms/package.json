@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/forms",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A tiny, native-forms-first helper for Zoijs: reactive values, errors, and touched state. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",
