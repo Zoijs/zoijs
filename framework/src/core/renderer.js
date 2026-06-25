@@ -239,7 +239,7 @@ function renderChild(value) {
 // ---- keyed list binding ------------------------------------------------------
 
 function isEach(v) {
-  return v != null && typeof v === "object" && v.__easyEach === true;
+  return v != null && typeof v === "object" && v.__zoijsEach === true;
 }
 
 function setupKeyedList(anchor, marker) {
