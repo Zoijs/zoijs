@@ -1,6 +1,6 @@
 # Zoijs public launch checklist
 
-Living status of the Zoijs public release. Last updated: 2026-06-24.
+Living status of the Zoijs public release. Last updated: 2026-06-25.
 
 Legend: ✅ done · ⚠️ needs attention · ⬜ not started · ❔ unverified here
 
@@ -26,20 +26,17 @@ configure, onCleanup`; `createRouter`; `resource`; `title, description, meta`;
 `core-v1.0.0`, `router-v0.1.0`, `resource-v0.1.0`, `head-v0.1.0`, `action-v0.1.0`
 — annotated, pushed to `origin`, all pointing at the finalized `main`.
 
-## GitHub releases — ⬜ pending (manual step)
+## GitHub releases — ✅ created
 
-Tags exist; the Releases themselves still need to be created. The CLI here has no
-`gh` and no GitHub token, so this is a manual step (web UI or `gh release create`).
-Draft notes are prepared per package (name, version, install, API, problem solved,
-limitations, npm + docs links).
+All five Releases are published from the tags with full notes (name, version,
+install, API, problem solved, limitations, npm + docs links). `core-v1.0.0` is
+marked **Latest**.
 
-## CI — ❔ confirm in the browser
+## CI — ✅ green
 
-The repo is private, so the GitHub Actions API can't be read without auth from
-this environment. Confirm the latest run on the Actions tab is green. Recent CI
-work (all pushed): Node 20/22/24 matrix, built-in test discovery, `actions/*@v5`,
-browser tests in the Playwright container with `HOME=/root` (Chromium + WebKit
-were already green; the last fix targets Firefox).
+The Actions workflow passes on `main`: Node 20/22/24 matrix (unit + types) and
+the browser job (Chromium / Firefox / WebKit in the Playwright container). The
+publish workflow correctly skips (versions already on npm).
 
 ## Documentation — ✅ links valid
 
@@ -48,18 +45,23 @@ deployment, GitHub Pages recipe, Task Board, and the four package READMEs resolv
 to real files (0 broken). Content covers install (npm + CDN), the ecosystem, the
 Task Board demo, deployment + SPA fallback, and the GitHub Pages recipe.
 
-## Website — ⚠️ not live yet
+## Website — ✅ docs live (zoijs.dev) · ⚠️ zoijs.com pending
 
-`https://zoijs.com` and `https://zoijs.dev` did not respond (no connection). The
-docs reference them throughout, so they 404/dead-link for visitors until the
-sites are up. Until then, point users at the npm pages and the in-repo docs.
+**[zoijs.dev](https://zoijs.dev)** is **live** — the documentation site, built
+with Zoijs itself (core + router + head), deployed on Cloudflare Pages with a
+light/dark theme and an SPA fallback for deep links. Verified end to end (DNS,
+serving, fallback, dark mode). Its source is a separate private repo
+(`Zoijs/zoijs-site`) that auto-redeploys on every push to `main`.
 
-## GitHub repository — ⚠️ private
+`https://zoijs.com` (the marketing landing) is **not live yet** (no connection).
 
-`https://github.com/Zoijs/zoijs` returns 404 to anonymous visitors (private repo).
-The npm packages' `repository`, `homepage`, and `bugs` links and the README CI
-badge therefore don't work for the public. **Make the repo public** to complete
-the launch.
+## GitHub repository — ✅ public & protected
+
+`https://github.com/Zoijs/zoijs` is public. `main` is protected by a ruleset
+(PR + 1 approving Code-Owner review, required CI checks, conversations resolved,
+no force-push/deletion; admins bypass for their own PRs). Squash-only merges with
+auto-deleted head branches; Dependabot, secret scanning + push protection, and
+private vulnerability reporting are enabled.
 
 ## Examples — ✅ working
 
@@ -74,16 +76,19 @@ real browsers (Chromium/Firefox/WebKit) and via the preview server.
 - resource/action: no cache, dedupe, retries, or optimistic updates.
 - head: client-side, `name`-based meta only.
 
-## Blockers before calling it "publicly launched"
+## Launched ✅
 
-1. ⚠️ **Make the GitHub repo public** (unblocks repo links + the CI badge).
-2. ⚠️ **Stand up zoijs.com / zoijs.dev** (or remove the references until ready).
-3. ⬜ **Create the GitHub Releases** for the five tags.
-4. ❔ **Confirm CI is green** on the latest commit.
+npm packages, GitHub Releases, public + protected repo, green CI, and the live
+docs site at **[zoijs.dev](https://zoijs.dev)** are all done. Zoijs is publicly
+launched.
+
+## Remaining (nice-to-have)
+
+1. ⚠️ **Stand up zoijs.com** — the marketing landing (zoijs.dev docs are live).
+2. ⬜ **`www → apex` redirect** so `zoijs.dev` is the single canonical URL.
 
 ## Next milestone
 
-A documentation website at **zoijs.dev** (the docs already exist as Markdown in
-`framework/docs/` — publish them with any static-site generator or even raw
-GitHub Pages) + a short "Getting started" landing on **zoijs.com**. That, plus
-flipping the repo public, is what turns "published on npm" into "launched."
+A short "Getting started" landing page at **zoijs.com** that funnels to the docs,
+plus growing the example gallery. The core launch is complete; from here it's
+content and polish.
