@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+main {
+  text-align: center;
+  padding: 2rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+button:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
