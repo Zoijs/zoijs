@@ -1,0 +1,20 @@
+# Code owners for Zoijs.
+#
+# Every pull request automatically requests a review from the owner(s) below.
+# Combined with "Require review from Code Owners" in the `main` branch ruleset,
+# this means a maintainer must approve before anything merges.
+#
+# ⚠️  REPLACE the owner below before this takes effect. Use either:
+#   - your GitHub username:                 *  @your-username
+#   - an org team you create under Zoijs:   *  @Zoijs/maintainers
+# A CODEOWNERS entry pointing at a non-existent user/team is ignored by GitHub.
+
+* @Zoijs/maintainers
+
+# Especially sensitive areas — keep them owned explicitly too:
+/.github/          @Zoijs/maintainers
+/framework/src/    @Zoijs/maintainers
+/router/src/       @Zoijs/maintainers
+/resource/src/     @Zoijs/maintainers
+/head/src/         @Zoijs/maintainers
+/action/src/       @Zoijs/maintainers
