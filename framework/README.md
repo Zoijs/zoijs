@@ -2,7 +2,7 @@
 
 A lightweight frontend framework you don't have to learn before you use it — **plain HTML, CSS, and JavaScript**, no JSX, no build step, no Virtual DOM.
 
-**[Website](https://zoijs.com)** · **[Documentation](https://zoijs.dev)** · **[GitHub](https://github.com/Zoijs)** · **[npm](https://www.npmjs.com/package/@zoijs/core)**
+**[Documentation](https://zoijs.dev)** · **[GitHub](https://github.com/Zoijs)** · **[npm](https://www.npmjs.com/package/@zoijs/core)**
 
 ```bash
 npm install @zoijs/core

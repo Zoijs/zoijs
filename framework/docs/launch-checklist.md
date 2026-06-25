@@ -45,7 +45,7 @@ deployment, GitHub Pages recipe, Task Board, and the four package READMEs resolv
 to real files (0 broken). Content covers install (npm + CDN), the ecosystem, the
 Task Board demo, deployment + SPA fallback, and the GitHub Pages recipe.
 
-## Website — ✅ docs live (zoijs.dev) · ⚠️ zoijs.com pending
+## Website — ✅ live (zoijs.dev)
 
 **[zoijs.dev](https://zoijs.dev)** is **live** — the documentation site, built
 with Zoijs itself (core + router + head), deployed on Cloudflare Pages with a
@@ -53,7 +53,7 @@ light/dark theme and an SPA fallback for deep links. Verified end to end (DNS,
 serving, fallback, dark mode). Its source is a separate private repo
 (`Zoijs/zoijs-site`) that auto-redeploys on every push to `main`.
 
-`https://zoijs.com` (the marketing landing) is **not live yet** (no connection).
+Zoijs uses a single canonical domain, **[zoijs.dev](https://zoijs.dev)**, for both the site and the docs; the previously planned `zoijs.com` marketing domain has been dropped.
 
 ## GitHub repository — ✅ public & protected
 
@@ -84,11 +84,11 @@ launched.
 
 ## Remaining (nice-to-have)
 
-1. ⚠️ **Stand up zoijs.com** — the marketing landing (zoijs.dev docs are live).
+1. ✅ **Single canonical domain** — consolidated on zoijs.dev (zoijs.com dropped).
 2. ⬜ **`www → apex` redirect** so `zoijs.dev` is the single canonical URL.
 
 ## Next milestone
 
-A short "Getting started" landing page at **zoijs.com** that funnels to the docs,
+A short "Getting started" path on **zoijs.dev** for newcomers,
 plus growing the example gallery. The core launch is complete; from here it's
 content and polish.

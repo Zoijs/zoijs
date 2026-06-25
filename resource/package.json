@@ -21,9 +21,9 @@
   "engines": {
     "node": ">=18"
   },
-  "author": "Zoijs contributors (https://zoijs.com)",
+  "author": "Zoijs contributors (https://zoijs.dev)",
   "license": "MIT",
-  "homepage": "https://zoijs.com",
+  "homepage": "https://zoijs.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Zoijs/zoijs.git",
