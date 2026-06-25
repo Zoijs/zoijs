@@ -2,12 +2,12 @@
 
 # @zoijs/head
 
-**Set the page title and description from a [Zoijs](https://zoijs.com) component.** Two functions, restore-on-cleanup, no head manager.
+**Set the page title and description from a [Zoijs](https://zoijs.dev) component.** Two functions, restore-on-cleanup, no head manager.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/head.svg)](https://www.npmjs.com/package/@zoijs/head)
 [![license](https://img.shields.io/npm/l/@zoijs/head.svg)](LICENSE)
 
-[Website](https://zoijs.com) · [Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
 
 </div>
 
@@ -35,7 +35,7 @@ npm install @zoijs/core @zoijs/head
 Or with no install, from a CDN:
 
 ```js
-import { title, description } from "https://esm.sh/@zoijs/head";
+import { title, description } from "https://esm.sh/@zoijs/head@0.1";
 ```
 
 ## Setting a title

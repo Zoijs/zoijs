@@ -1,7 +1,7 @@
 {
-  "name": "@zoijs/core",
-  "version": "1.0.0",
-  "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
+  "name": "@zoijs/storage",
+  "version": "0.1.0",
+  "description": "A tiny localStorage-backed reactive value for Zoijs — a drop-in, persistent createState. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -27,36 +27,33 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Zoijs/zoijs.git",
-    "directory": "framework"
+    "directory": "storage"
   },
   "bugs": {
     "url": "https://github.com/Zoijs/zoijs/issues"
   },
   "keywords": [
     "zoijs",
-    "framework",
-    "frontend",
-    "ui",
+    "storage",
+    "localstorage",
+    "persistence",
+    "state",
     "reactive",
-    "reactivity",
-    "signals",
     "no-build",
-    "no-jsx",
-    "no-virtual-dom",
-    "fine-grained",
-    "beginner-friendly",
-    "html",
-    "spa"
+    "no-jsx"
   ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.0.0"
+  },
   "scripts": {
     "test": "node --test --import ./tests/setup-dom.js",
-    "test:unit": "node --test",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
-    "dev": "npx serve -l 3000 ."
+    "dev": "npx serve -l 3600 .."
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@zoijs/core": "file:../framework",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3"
   }

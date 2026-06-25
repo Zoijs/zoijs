@@ -17,6 +17,8 @@ through one app — the **Task Board** demo — that uses all of them.
 | [`@zoijs/resource`](../../resource/README.md) | Reading async data | `resource(fetcher)` → `data`, `loading`, `error`, `refresh` |
 | [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
+| [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
+| [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
 
 Install only what you use:
 
@@ -26,6 +28,8 @@ npm install @zoijs/router      # routing
 npm install @zoijs/resource    # reading data
 npm install @zoijs/action      # writing data
 npm install @zoijs/head        # title & meta
+npm install @zoijs/storage     # persistence (localStorage)
+npm install @zoijs/forms       # form state + validation
 ```
 
 Or load them with no install via an import map / CDN (pin the version):

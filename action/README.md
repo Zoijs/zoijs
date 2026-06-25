@@ -2,12 +2,12 @@
 
 # @zoijs/action
 
-**The simplest way to handle writes in [Zoijs](https://zoijs.com)** — submits, saves, deletes — with reactive pending / error / done state.
+**The simplest way to handle writes in [Zoijs](https://zoijs.dev)** — submits, saves, deletes — with reactive pending / error / done state.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/action.svg)](https://www.npmjs.com/package/@zoijs/action)
 [![license](https://img.shields.io/npm/l/@zoijs/action.svg)](LICENSE)
 
-[Website](https://zoijs.com) · [Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
 
 </div>
 

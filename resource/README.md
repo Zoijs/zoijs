@@ -2,12 +2,12 @@
 
 # @zoijs/resource
 
-**The simplest async-data helper for [Zoijs](https://zoijs.com).** Loading, success, error, and refresh — without rebuilding the same pattern every time.
+**The simplest async-data helper for [Zoijs](https://zoijs.dev).** Loading, success, error, and refresh — without rebuilding the same pattern every time.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/resource.svg)](https://www.npmjs.com/package/@zoijs/resource)
 [![license](https://img.shields.io/npm/l/@zoijs/resource.svg)](LICENSE)
 
-[Website](https://zoijs.com) · [Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
 
 </div>
 
@@ -27,7 +27,7 @@ npm install @zoijs/core @zoijs/resource
 Or with no install, from a CDN:
 
 ```js
-import { resource } from "https://esm.sh/@zoijs/resource";
+import { resource } from "https://esm.sh/@zoijs/resource@0.1";
 ```
 
 ## What a resource is

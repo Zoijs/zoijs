@@ -1,0 +1,47 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d1d1f;
+  --muted: #6b7280;
+  --line: #c7c7cc;
+}
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --fg: #f1f5f9;
+  --muted: #93a1b5;
+  --line: #344056;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 40rem;
+  margin: 3rem auto;
+  padding: 0 1rem;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.status {
+  color: var(--muted);
+}
+.status strong {
+  color: var(--fg);
+}

@@ -2,12 +2,12 @@
 
 # @zoijs/router
 
-**A tiny router for [Zoijs](https://zoijs.com).** Routes are a plain object, links are plain anchors, and there's no build step.
+**A tiny router for [Zoijs](https://zoijs.dev).** Routes are a plain object, links are plain anchors, and there's no build step.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/router.svg)](https://www.npmjs.com/package/@zoijs/router)
 [![license](https://img.shields.io/npm/l/@zoijs/router.svg)](LICENSE)
 
-[Website](https://zoijs.com) · [Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core)
 
 </div>
 
@@ -28,8 +28,8 @@ npm install @zoijs/core @zoijs/router
 Or with no install, straight from a CDN:
 
 ```js
-import { html, mount } from "https://esm.sh/@zoijs/core";
-import { createRouter } from "https://esm.sh/@zoijs/router";
+import { html, mount } from "https://esm.sh/@zoijs/core@1";
+import { createRouter } from "https://esm.sh/@zoijs/router@0.1";
 ```
 
 ## The whole idea
