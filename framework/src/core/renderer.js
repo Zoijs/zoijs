@@ -82,6 +82,13 @@ function bindChild(anchor, value) {
 }
 
 function bindAttribute(el, attr, values) {
+  if (attr.name === "ref") {
+    // A callback ref. Only a single ${fn} is meaningful; anything else (a string,
+    // a number, a multi-part value) is rejected by bindRef without touching the DOM.
+    bindRef(el, attr.whole ? values[attr.holes[0]] : undefined);
+    return;
+  }
+
   if (attr.event) {
     const handler = values[attr.holes[0]];
     // Only real functions are accepted as handlers — a string/object is ignored,
@@ -117,6 +124,35 @@ function bindAttribute(el, attr, values) {
   const reactive = attr.holes.some((h) => typeof values[h] === "function");
   if (reactive) effect(() => applyAttribute(el, attr.name, compute()));
   else applyAttribute(el, attr.name, compute());
+}
+
+// A callback ref: hand the real element to user code AFTER the current render is
+// inserted, so focus/scroll/measure see a CONNECTED node. We defer one microtask
+// (render binds while the DOM is still a detached fragment; insertion happens
+// right after render returns, synchronously, so a microtask runs once it's live).
+// Not reactive — the function is read once. An optional returned function is an
+// owner-scoped cleanup, disposed on unmount or list-item removal, exactly like a
+// listener. A non-function value is ignored (with a dev warning) and never sets a
+// "ref" attribute — so an inert string can't be wired up.
+function bindRef(el, fn) {
+  if (typeof fn !== "function") {
+    if (isDev()) console.warn(`Zoijs: "ref" expects a function (el) => …; ignoring ${typeof fn} value`);
+    return;
+  }
+  let active = true;
+  let cleanup = null;
+  onCleanup(() => {
+    active = false;
+    if (cleanup) { cleanup(); cleanup = null; }
+  });
+  queueMicrotask(() => {
+    if (!active) return; // removed before the microtask fired
+    const c = fn(el);
+    if (typeof c === "function") {
+      if (active) cleanup = c;
+      else c(); // disposed during fn(): tear down immediately
+    }
+  });
 }
 
 // ---- text / content bindings -------------------------------------------------

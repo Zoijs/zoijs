@@ -4,6 +4,19 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.1.0] — Unreleased
+
+### Added
+- **Element refs.** A new `ref` binding gives you the rendered DOM element:
+  `html\`<input ref=${(el) => el.focus()} />\``. The callback runs once, just after
+  the element is inserted (so `focus`/`scroll`/`measure`/`canvas` work), is not
+  reactive, and may return a cleanup function that runs on unmount or list-item
+  removal. Works inside keyed `each` lists. Non-function values are ignored with a
+  dev-mode warning and never become a DOM attribute. No new export — `ref` is a
+  binding semantic, so the seven-function public surface is unchanged (additive
+  MINOR per `VERSIONING.md`). See [Element refs](docs/concepts/refs.md) and
+  [RFC 0001](docs/rfcs/0001-element-refs.md).
+
 ## [1.0.0] — Unreleased
 
 First stable release. The public API is frozen at seven functions.
