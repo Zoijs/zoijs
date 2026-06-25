@@ -1,7 +1,7 @@
 # {{APP_TITLE}}
 
-A small task dashboard built with [Zoijs](https://zoijs.dev) — plain HTML, CSS,
-and JavaScript. **No build step.**
+A small **project dashboard** built with [Zoijs](https://zoijs.dev) — plain HTML,
+CSS, and JavaScript. **No build step.**
 
 ## Develop
 
@@ -10,27 +10,36 @@ npm install
 npm run dev
 ```
 
-Then open the printed URL.
+```text
+ZoiJS dev server: http://localhost:7310
+If busy: 7311, 7312, 7313
+```
+
+Open the printed URL.
 
 ## Project layout
 
 ```
 {{APP_NAME}}/
   index.html              import map + #app mount point
+  dev-server.mjs          tiny zero-dependency static server (npm run dev)
   src/
-    app.js                owns the task list; renders the page
-    style.css             plain CSS
+    app.js                owns all state; composes the dashboard
+    style.css             plain CSS (light/dark, responsive)
     components/
-      Header.js           parent → child: receives title + count
+      Header.js           parent → child: hero + summary stats
+      StatCard.js         parent → child: a reusable stat card (used ×4)
       TaskItem.js         child → parent: reports toggle/delete via callbacks
 ```
 
 ## What it shows
 
-- **`createState`** — the task list and the input draft.
-- **`computed`** — the "tasks left" count, derived from the list.
-- **`each`** — keyed rendering of the task list.
-- **Parent → child** — `App` passes data down to `Header` as arguments.
+- **`createState`** — the task list, the active filter, and the input draft.
+- **`computed`** — total / completed / active counts and the filtered list.
+- **`each`** — keyed rendering of the visible tasks.
+- **Conditional rendering** — the empty state and the active-filter highlight.
+- **Component composition** — `Header`, `StatCard` (×4), and `TaskItem`.
+- **Parent → child** — `App` passes data down to its components as arguments.
 - **Child → parent** — `TaskItem` reports events up through callbacks; `App`
   owns the state and performs the changes.
 
