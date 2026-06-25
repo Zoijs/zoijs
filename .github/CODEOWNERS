@@ -4,17 +4,14 @@
 # Combined with "Require review from Code Owners" in the `main` branch ruleset,
 # this means a maintainer must approve before anything merges.
 #
-# ⚠️  REPLACE the owner below before this takes effect. Use either:
-#   - your GitHub username:                 *  @your-username
-#   - an org team you create under Zoijs:   *  @Zoijs/maintainers
-# A CODEOWNERS entry pointing at a non-existent user/team is ignored by GitHub.
+# Add more maintainers (or a @Zoijs/team) over time as the project grows.
 
-* @Zoijs/maintainers
+* @Brianjay2
 
 # Especially sensitive areas — keep them owned explicitly too:
-/.github/          @Zoijs/maintainers
-/framework/src/    @Zoijs/maintainers
-/router/src/       @Zoijs/maintainers
-/resource/src/     @Zoijs/maintainers
-/head/src/         @Zoijs/maintainers
-/action/src/       @Zoijs/maintainers
+/.github/          @Brianjay2
+/framework/src/    @Brianjay2
+/router/src/       @Brianjay2
+/resource/src/     @Brianjay2
+/head/src/         @Brianjay2
+/action/src/       @Brianjay2
