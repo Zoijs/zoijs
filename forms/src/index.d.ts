@@ -27,30 +27,49 @@ export interface FormOptions<V> {
 
 /** A tiny reactive form helper created by {@link form}. */
 export interface Form<V extends Record<string, any>> {
-  /** All values (reactive). `values.get()` returns the whole object. */
-  values: State<V>;
+  // --- values ---
+  /** All values (reactive). Reader-style, like `data()` / `loading()`. */
+  all(): V;
   /** Read one field's value (reactive). */
   value<K extends keyof V>(name: K): V[K];
   /** Update one field's value. */
   set<K extends keyof V>(name: K, value: V[K]): void;
+
+  // --- errors ---
   /** All errors keyed by field name (reactive). */
-  errors: State<Partial<Record<keyof V, string>>>;
+  allErrors(): Partial<Record<keyof V, string>>;
   /** Read one field's error (reactive), or `undefined`. */
   error(name: keyof V): string | undefined;
   /** Set one field's error message. */
   setError(name: keyof V, message: string): void;
   /** Clear one field's error. */
   clearError(name: keyof V): void;
-  /** Which fields have been touched (reactive). */
-  touched: State<Partial<Record<keyof V, boolean>>>;
+
+  // --- touched ---
+  /** All touched flags keyed by field name (reactive). */
+  allTouched(): Partial<Record<keyof V, boolean>>;
+  /** Whether one field has been touched (reactive). */
+  isTouched(name: keyof V): boolean;
   /** Mark a field touched (e.g. on blur). */
   touch(name: keyof V): void;
+
+  // --- lifecycle ---
   /** Restore initial values and clear errors + touched. */
   reset(): void;
   /** Run rules (or the option rules), set errors, and return whether valid. */
   validate(rules?: Rules<V>): boolean;
   /** Wrap a submit handler: prevents the default reload and calls `fn(values)`. */
   handleSubmit(fn: (values: V, event?: Event) => unknown): (event?: Event) => unknown;
+
+  // --- raw reactive state (advanced / backward-compatible) ---
+  // Prefer all() / allErrors() / allTouched() above. These remain for direct
+  // state access (e.g. `values.peek()`), and won't be removed in 0.x.
+  /** Raw values state. Advanced — prefer {@link Form.all}. */
+  values: State<V>;
+  /** Raw errors state. Advanced — prefer {@link Form.allErrors}. */
+  errors: State<Partial<Record<keyof V, string>>>;
+  /** Raw touched state. Advanced — prefer {@link Form.allTouched}. */
+  touched: State<Partial<Record<keyof V, boolean>>>;
 }
 
 /**
