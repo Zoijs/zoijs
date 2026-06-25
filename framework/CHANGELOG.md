@@ -4,7 +4,7 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
-## [1.1.0] — Unreleased
+## [1.1.0] — 2026-06-25
 
 ### Added
 - **Element refs.** A new `ref` binding gives you the rendered DOM element:
@@ -17,7 +17,7 @@ All notable changes to Zoijs are documented here. The format is based on
   MINOR per `VERSIONING.md`). See [Element refs](docs/concepts/refs.md) and
   [RFC 0001](docs/rfcs/0001-element-refs.md).
 
-## [1.0.0] — Unreleased
+## [1.0.0] — 2026-06-24
 
 First stable release. The public API is frozen at seven functions.
 
@@ -46,4 +46,5 @@ First stable release. The public API is frozen at seven functions.
   (Playwright), and TypeScript type tests.
 - No build step required at any point.
 
-[1.0.0]: https://github.com/Zoijs/zoijs/releases/tag/v1.0.0
+[1.1.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.1.0
+[1.0.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.0.0
