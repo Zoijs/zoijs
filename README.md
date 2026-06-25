@@ -224,7 +224,7 @@ The official documentation website ([zoijs.dev](https://zoijs.dev)) is maintaine
 
 ## Contributing
 
-Contributions that keep Zoijs small, clear, and beginner-friendly are very welcome. The API is frozen, so additions go through a short RFC. See **[CONTRIBUTING](framework/CONTRIBUTING.md)** and the [Code of Conduct](framework/CODE_OF_CONDUCT.md).
+Contributions that keep Zoijs small, clear, and beginner-friendly are very welcome. The API is frozen, so additions go through a short RFC. Start with **[PHILOSOPHY](framework/PHILOSOPHY.md)** (why Zoijs leaves things out, and the Rule of Three every feature must pass), then **[CONTRIBUTING](framework/CONTRIBUTING.md)** and the [Code of Conduct](framework/CODE_OF_CONDUCT.md).
 
 Each package is self-contained (its own `package.json`, no workspaces). Work in one with the usual commands:
 
