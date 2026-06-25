@@ -20,6 +20,14 @@ npm install
 npm run dev
 ```
 
+`npm run dev` starts a tiny zero-dependency static server (no `serve`, no
+bundler, no build step):
+
+```text
+ZoiJS dev server: http://localhost:7310
+If busy: 7311, 7312, 7313
+```
+
 Or with `npx`:
 
 ```bash
@@ -47,11 +55,12 @@ one.
 ```bash
 npm create zoijs@latest my-app                    # default: the "app" template
 npm create zoijs@latest my-app --template basic   # a minimal counter
-npm create zoijs@latest my-app --template app     # a small task dashboard
+npm create zoijs@latest my-app --template app     # a polished project dashboard
 ```
 
-- **`app`** (default) — a small task dashboard showing `html`, `mount`,
-  `createState`, `computed`, `each`, and parent⇄child component communication.
+- **`app`** (default) — a polished project dashboard (hero, stat cards, filters,
+  empty state) showing `html`, `mount`, `createState`, `computed`, `each`,
+  conditional rendering, and parent⇄child component communication.
 - **`basic`** — a minimal counter, the smallest possible Zoijs app.
 
 ## What it does
