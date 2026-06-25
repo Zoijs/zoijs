@@ -5,12 +5,22 @@ small, clear, and beginner-friendly are the most welcome.
 
 ## Principles (read first)
 
+**Required reading: [`PHILOSOPHY.md`](PHILOSOPHY.md)** — why Zoijs leaves things out
+(no Virtual DOM, JSX, build step, Context, Provider, Store, Query Client, SSR), and
+the **Rule of Three** every new feature must pass. For exact per-package boundaries,
+see [`docs/scope.md`](docs/scope.md).
+
 Zoijs has a deliberate identity. PRs are evaluated against it:
 
 - **No build step**, no JSX, no Virtual DOM.
 - **Small API** — the seven-function surface is frozen (see `VERSIONING.md`).
 - **Native HTML/CSS/JS** and **secure by default**.
 - **Readable source** — a junior developer should be able to follow it.
+
+**The Rule of Three** — a new capability must satisfy all three, or it doesn't go in
+the framework: (1) most developers can explain it in under two minutes; (2) it can be
+built without modifying the core (if so → an optional package); (3) 80–90% of Zoijs
+apps would benefit (if not → user code or a community package).
 
 If a change adds an export, changes a signature, or alters documented behavior,
 it needs an **RFC** (open an issue using the "API change / RFC" template) before
