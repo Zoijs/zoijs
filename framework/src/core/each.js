@@ -17,8 +17,8 @@
  * @param {Function|Array} items    a function returning the array, or an array
  * @param {Function} keyFn          item -> unique key
  * @param {Function} renderFn       item -> html() result
- * @returns {{ __easyEach: true, items: any, keyFn: Function, renderFn: Function }}
+ * @returns {{ __zoijsEach: true, items: any, keyFn: Function, renderFn: Function }}
  */
 export function each(items, keyFn, renderFn) {
-  return { __easyEach: true, items, keyFn, renderFn };
+  return { __zoijsEach: true, items, keyFn, renderFn };
 }
