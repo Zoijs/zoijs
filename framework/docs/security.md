@@ -81,6 +81,23 @@ A recommended baseline:
 Content-Security-Policy: default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs;
 ```
 
+## Enforcement (CI gates)
+
+These guarantees are tested on every change, not just asserted here:
+
+- **XSS-corpus fuzzing** (`tests/xss-corpus.test.js`) — a battery of known injection
+  vectors pushed through every dynamic channel (text, URL, attribute, event),
+  asserting none execute or inject.
+- **CSP / Trusted-Types** (`browser-tests/csp.spec.js`) — the app is rendered in a
+  real browser under the strict CSP above (`require-trusted-types-for 'script';
+  trusted-types zoijs`) and must produce **zero** policy violations.
+- **Targeted regressions** (`tests/security.test.js`, `browser-tests/security.spec.js`)
+  — scheme checks, blocked sinks, string-handler rejection, dev/prod parity.
+- **Supply-chain** (`scripts/check-deps.mjs`) — zero runtime dependencies and the
+  star topology (see [`scope.md`](scope.md) §4).
+
+A change that weakens any of these fails the build.
+
 ## Summary
 
 - Text → inert, escaped. URLs → scheme-checked. Handlers → functions only.
