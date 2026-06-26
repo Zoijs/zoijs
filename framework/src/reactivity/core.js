@@ -16,6 +16,7 @@
 
 import { onCleanup } from "./owner.js";
 import { isDev } from "./env.js";
+import { reportCreate, reportRun, reportWrite, reportDispose } from "./devtools.js";
 
 const CLEAN = 0;
 const CHECK = 1;
@@ -70,6 +71,7 @@ function readNode(node) {
 function writeNode(node, next) {
   if (node.equals(node.value, next)) return; // equality-gated
   node.value = next;
+  reportWrite(node); // devtools: only fires on an actual change (dev + attached)
   for (const observer of [...node.observers]) markStale(observer, DIRTY);
 }
 
@@ -120,6 +122,7 @@ function runComputation(node) {
   } finally {
     currentObserver = previousObserver;
   }
+  reportRun(node); // devtools: this node actually recomputed (dev + attached)
   if (node.isEffect) {
     // An effect may return a cleanup function (same convention as a ref): it runs
     // before the next run and on dispose. Anything else is ignored.
@@ -156,6 +159,7 @@ function disposeNode(node) {
   node.disposed = true;
   cleanupSources(node);
   if (node.isEffect) runEffectCleanup(node); // final cleanup on dispose
+  reportDispose(node); // devtools: node left the graph (dev + attached)
 }
 
 const warned = new WeakSet();
@@ -169,6 +173,7 @@ function warnOnce(node, message) {
 
 export function createState(initial, equals = Object.is) {
   const node = { value: initial, observers: new Set(), equals, fn: null };
+  reportCreate(node, "state");
   return {
     get: () => readNode(node),
     set: (next) => writeNode(node, next),
@@ -188,6 +193,7 @@ export function computed(fn, equals = Object.is) {
     equals,
   };
   onCleanup(() => disposeNode(node)); // disposed with its owner scope
+  reportCreate(node, "computed");
   return {
     get: () => readNode(node),
     peek: () => {
@@ -209,6 +215,7 @@ export function effect(fn) {
     cleanup: null,
   };
   onCleanup(() => disposeNode(node)); // disposed with its owner scope
+  reportCreate(node, "effect"); // before its first run, so the run is attributed
   runComputation(node);
   node.state = CLEAN;
   return { dispose: () => disposeNode(node) };
