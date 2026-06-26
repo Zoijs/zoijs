@@ -19,8 +19,8 @@ API; `app` stays the default.
   dependency on `@zoijs/core`, and a `node:test` suite — the shape the official
   optional packages use.
 - The scaffolder now treats `.ts`/`.d.ts` as text (token substitution), and the
-  CLI's own `npm test` is scoped to `tests/` so it no longer runs the templates'
-  bundled test files.
+  CLI's own `npm test` targets its own test file so it no longer runs the
+  templates' bundled test files.
 
 ## 0.1.2 — 2026-06-26
 
