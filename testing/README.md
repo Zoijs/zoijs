@@ -48,6 +48,7 @@ test("counts up on click", async () => {
 |---|---|
 | `render(component, options?)` | Mounts into a fresh container; returns `{ container, unmount, debug, ...queries }`. Tracked for `cleanup()`. |
 | `screen` | The same queries, bound to `document.body`. |
+| `bindQueries(root)` | Build the full set of `getBy*` / `queryBy*` / `getAllBy*` / `findBy*` queries scoped to any element you pass (what `render` and `screen` are built on). |
 | `getBy* / queryBy* / getAllBy* / findBy*` | Find elements by **Text**, **Role** (with `name`), **TestId** (`data-testid`), or **LabelText**. `getBy` throws if none / many; `queryBy` returns `null`; `findBy` retries (async). |
 | `fireEvent(el, type, init?)` + `.click/.input/.change/.submit/…` | Dispatch a real DOM event; `await` it to see the batched update. Pass `{ target: { value } }` to set a property first. |
 | `waitFor(fn, options?)` | Retry `fn` until it stops throwing (for async data / animations). |

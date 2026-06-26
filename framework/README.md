@@ -97,19 +97,36 @@ Relies on baseline-modern platform APIs: ES modules, `<template>`, `TreeWalker`,
 
 ## Public API
 
+The whole framework is **nine functions** — learnable in one sitting and frozen for 1.x:
+
 ```js
-import { html, mount, createState, computed, each, configure, onCleanup } from "@zoijs/core";
+import {
+  html, mount, each, boundary,
+  createState, computed, effect,
+  configure, onCleanup,
+} from "@zoijs/core";
 ```
 
 - `html` — tagged template; parsed once, cached.
 - `mount(component, target)` — render a component; returns `unmount()`.
+- `each(itemsFn, keyFn, renderFn)` — keyed list rendering (reuse / move / remove nodes).
+- `boundary(child, fallback)` — render-time error boundary: if `child` throws while building its markup, dispose the partial work and render `fallback`.
 - `createState(value)` — a reactive value (`get` / `set` / `peek`).
 - `computed(fn)` — a lazy, cached, **value-gated** derived value (`get` / `peek`).
-- `each(itemsFn, keyFn, renderFn)` — keyed list rendering (reuse / move / remove nodes).
+- `effect(fn)` — a side effect that re-runs when a value it reads changes; returns `{ dispose }` and may return a per-run cleanup.
 - `configure({ dev })` — toggle development warnings (default `dev: true`).
 - `onCleanup(fn)` — register teardown for a component or list item (timers, subscriptions).
 
-See the [Documentation site](docs/README.md) for the full guide, tutorials, and API reference.
+Plus the **`ref`** binding (`html\`<input ref=${(el) => el.focus()} />\``) — no export; it's a template
+attribute that hands you the rendered element.
+
+**Devtools (dev-only).** A separate subpath, `@zoijs/core/devtools`, exposes a read-only inspection
+hook — `attachInspector(inspector)` and `inspecting()` — that [`@zoijs/devtools`](https://www.npmjs.com/package/@zoijs/devtools)
+(or a browser extension) uses to observe the reactive graph. It's off by default, never instruments
+the hot read path, and is a no-op under `configure({ dev: false })`, so it costs production nothing and
+leaves the nine-function main surface unchanged.
+
+See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, and API reference.
 
 **TypeScript:** ships type definitions ([`src/index.d.ts`](src/index.d.ts)) for autocomplete and optional type-checking — JS-first, no build step required. `createState<T>`, `computed<T>`, and `each<T>` are generic. Type-check with `npm run test:types`.
 
@@ -118,7 +135,9 @@ See the [Documentation site](docs/README.md) for the full guide, tutorials, and 
 - Fine-grained text/attribute bindings — `${() => state.get()}` updates one node in place; setup runs once (no re-render).
 - Native events, secure-by-default rendering (inert text, URL-scheme guards, no `eval`).
 - `computed()` derived values — lazy, cached, nestable, and **value-gated** (unchanged results don't wake downstream).
-- `each()` keyed list reconciliation — preserves focus / input / scroll on reorder.
+- `effect()` side effects — re-run on change, with owner-scoped auto-disposal and a per-run cleanup.
+- `boundary()` render-time error boundary — a failing subtree shows a fallback instead of breaking `mount`.
+- `each()` keyed list reconciliation — minimal DOM moves; preserves focus / input / scroll on reorder.
 - Microtask batching, push-pull dependency tracking, **owner-scoped cleanup** (unmount and removed items dispose their subscriptions).
 - Production mode via `configure({ dev: false })` — no build step.
 - Safety: self-triggering effects are warned + stopped; a throwing binding doesn't break others.
