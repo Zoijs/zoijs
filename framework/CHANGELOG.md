@@ -4,6 +4,16 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.3.1] — 2026-06-26
+
+### Performance
+- **Minimal DOM moves in `each`.** Keyed-list reconciliation now uses a
+  longest-increasing-subsequence pass, so a reorder moves the **fewest nodes
+  possible** — moving one item across a list is a single DOM move (it could be up
+  to N before). No API or behavior change; the final order is identical and reused
+  nodes keep their identity (focus, input values, and scroll survive reorders).
+  Proven by move-count tests (`tests/lis.test.js`); numbers in `bench/`.
+
 ## [1.3.0] — 2026-06-26
 
 ### Added
