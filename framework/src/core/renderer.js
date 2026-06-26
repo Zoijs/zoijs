@@ -242,6 +242,34 @@ function isEach(v) {
   return v != null && typeof v === "object" && v.__zoijsEach === true;
 }
 
+// Longest strictly-increasing subsequence of the non-(-1) values; returns the SET
+// of indices that belong to it. Those items are already in increasing relative
+// order, so they need not move; -1 (new) items are excluded (always inserted).
+// Patience-sorting with predecessor links — O(n log n).
+function longestIncreasingSubsequence(arr) {
+  const piles = []; // piles[k] = index of the smallest tail of an LIS of length k+1
+  const prev = new Array(arr.length).fill(-1);
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === -1) continue;
+    let lo = 0;
+    let hi = piles.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[piles[mid]] < arr[i]) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = piles[lo - 1];
+    piles[lo] = i;
+  }
+  const keep = new Set();
+  let k = piles.length ? piles[piles.length - 1] : -1;
+  while (k >= 0) {
+    keep.add(k);
+    k = prev[k];
+  }
+  return keep;
+}
+
 function setupKeyedList(anchor, marker) {
   const { items, keyFn, renderFn } = marker;
   const listOwner = createOwner(); // item subtrees nest here
@@ -278,7 +306,13 @@ function setupKeyedList(anchor, marker) {
     const oldRecords = records;
     const newRecords = new Map();
     const ordered = [];
+    const sources = []; // each item's previous DOM position, or -1 if newly created
     const seen = isDev() ? new Set() : null;
+
+    // Previous DOM order, by key — lets us find which reused items are already in
+    // increasing relative order and can stay put.
+    const oldPos = new Map();
+    for (let i = 0; i < currentList.length; i++) oldPos.set(currentList[i].key, i);
 
     for (let i = 0; i < newItems.length; i++) {
       const item = newItems[i];
@@ -294,8 +328,10 @@ function setupKeyedList(anchor, marker) {
         oldRecords.delete(key);
         if (rec.itemCell) rec.itemCell.set(item); // refresh this item's bindings only
         rec.item = item;
+        sources.push(oldPos.has(key) ? oldPos.get(key) : -1);
       } else {
         rec = createRecord(key, item);
+        sources.push(-1); // new item — always (re)inserted
       }
       newRecords.set(key, rec);
       ordered.push(rec);
@@ -307,15 +343,21 @@ function setupKeyedList(anchor, marker) {
       for (const n of rec.nodes) n.remove();
     }
 
-    // Place nodes in order before the anchor, moving only those out of position.
+    // Items in the longest increasing subsequence of old positions are already in
+    // the right relative order — leave them put (minimal DOM moves). Everything
+    // else (moved or new) is inserted before the running cursor, walking from the
+    // end so each insertion's reference node is already correctly placed.
+    const keep = longestIncreasingSubsequence(sources);
     let cursor = anchor;
     for (let i = ordered.length - 1; i >= 0; i--) {
       const rec = ordered[i];
-      let ref = cursor;
-      for (let j = rec.nodes.length - 1; j >= 0; j--) {
-        const node = rec.nodes[j];
-        if (node.nextSibling !== ref) parent.insertBefore(node, ref);
-        ref = node;
+      if (sources[i] === -1 || !keep.has(i)) {
+        let ref = cursor;
+        for (let j = rec.nodes.length - 1; j >= 0; j--) {
+          const node = rec.nodes[j];
+          if (node.nextSibling !== ref) parent.insertBefore(node, ref);
+          ref = node;
+        }
       }
       cursor = rec.nodes[0] || cursor;
     }
