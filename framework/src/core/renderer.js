@@ -343,6 +343,23 @@ function setupKeyedList(anchor, marker) {
       for (const n of rec.nodes) n.remove();
     }
 
+    // Moving the subtree that holds the focused element blurs it in some browsers,
+    // so capture focus (and caret) before the moves and restore it after — a
+    // reorder must never steal focus or selection, whichever nodes happen to move.
+    const doc = anchor.ownerDocument;
+    const active = doc && doc.activeElement;
+    const refocus = active && active !== doc.body && parent.contains(active);
+    let selStart = null;
+    let selEnd = null;
+    if (refocus) {
+      try {
+        selStart = active.selectionStart;
+        selEnd = active.selectionEnd;
+      } catch {
+        selStart = null; // not a text field — focus only, no caret to restore
+      }
+    }
+
     // Items in the longest increasing subsequence of old positions are already in
     // the right relative order — leave them put (minimal DOM moves). Everything
     // else (moved or new) is inserted before the running cursor, walking from the
@@ -360,6 +377,17 @@ function setupKeyedList(anchor, marker) {
         }
       }
       cursor = rec.nodes[0] || cursor;
+    }
+
+    if (refocus && doc.activeElement !== active) {
+      active.focus();
+      if (selStart !== null && active.setSelectionRange) {
+        try {
+          active.setSelectionRange(selStart, selEnd);
+        } catch {
+          /* element no longer supports selection — focus alone is enough */
+        }
+      }
     }
 
     records = newRecords;

@@ -4,6 +4,16 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.3.2] — 2026-06-26
+
+### Fixed
+- **Focus is preserved across a keyed reorder.** The 1.3.1 minimal-move change can
+  move the subtree that holds the focused element, which blurs it in browsers.
+  `each` now captures focus + caret position before reordering and restores them
+  after, so reordering a list never steals focus or selection — whichever nodes
+  happen to move. Verified in Chromium, Firefox, and WebKit
+  (`browser-tests/regression.spec.js`).
+
 ## [1.3.1] — 2026-06-26
 
 ### Performance
