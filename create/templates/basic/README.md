@@ -10,11 +10,12 @@ npm run dev
 ```
 
 ```text
-ZoiJS dev server: http://localhost:7310
-If busy: 7311, 7312, 7313
+  Zoijs dev server
+
+  - Local:  http://localhost:7310
 ```
 
-Open the printed URL.
+Open the printed URL (it falls back to 7311–7313 if the port is busy).
 
 ## How it works
 

@@ -43,7 +43,7 @@ npm test            # unit + DOM tests (jsdom)
 npm run test:unit   # pure-logic tests only (no DOM)
 npm run test:types  # TypeScript type-check (tsc --noEmit)
 npm run test:browser # real browsers: Chromium, Firefox, WebKit (Playwright)
-npm run dev         # serve examples at http://localhost:3000/examples/<name>/
+npm run dev         # serve examples at http://localhost:7310/examples/<name>/
 ```
 
 A PR should keep **all** of `npm test`, `npm run test:types`, and

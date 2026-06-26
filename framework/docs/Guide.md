@@ -162,4 +162,4 @@ const unmount = mount(App, "#app"); // () => void
 
 ## Examples
 
-`examples/counter`, `examples/input`, `examples/todo`, `examples/computed`, `examples/reorder`, `examples/input-preservation`, `examples/benchmark`. Run `npm run dev`, then open `http://localhost:3000/examples/<name>/` (keep the trailing slash).
+`examples/counter`, `examples/input`, `examples/todo`, `examples/computed`, `examples/reorder`, `examples/input-preservation`, `examples/benchmark`. Run `npm run dev`, then open `http://localhost:7310/examples/<name>/` (keep the trailing slash).

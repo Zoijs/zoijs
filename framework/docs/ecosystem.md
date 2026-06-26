@@ -106,8 +106,8 @@ the platform and the core, don't build a system.
 From the repository root:
 
 ```bash
-npx serve -l 3500 .
-# open http://localhost:3500/examples/task-board/
+npx serve -l 7310 .
+# open http://localhost:7310/examples/task-board/
 ```
 
 No install, no build — `index.html` uses an **import map** to point the
