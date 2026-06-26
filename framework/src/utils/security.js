@@ -14,6 +14,27 @@ export function toText(value) {
   return value === null || value === undefined ? "" : String(value);
 }
 
+// HTML-escaping for SERVER string rendering (@zoijs/ssr). The client renderer
+// never needs these — it writes text via Text nodes and values via setAttribute,
+// both of which are inert/escaped by the platform. On a server there is no DOM, so
+// the same safety must be applied by escaping into the HTML string. Kept here so
+// escaping lives in one place alongside the other security predicates.
+
+/** Escape a value for insertion as HTML TEXT content. */
+export function escapeText(value) {
+  return toText(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Escape a value for insertion inside a double-quoted attribute value. */
+export function escapeAttr(value) {
+  return toText(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+// Attribute names that carry a URL — their values are scheme-checked (isSafeUrl).
+// Shared by the client renderer (DOM) and @zoijs/ssr (string) so both make the
+// exact same safety decision.
+export const URL_ATTRS = new Set(["href", "src", "action", "formaction", "poster", "ping", "xlink:href"]);
+
 // Allowlisted URL schemes for URL-bearing attributes (href, src, ...).
 const SAFE_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
 // data: is allowed only for raster image MIME types (never text/html, never SVG,

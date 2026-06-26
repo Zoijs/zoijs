@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/core",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
   "type": "module",
   "main": "src/index.js",
@@ -13,6 +13,10 @@
     "./devtools": {
       "types": "./src/devtools.d.ts",
       "default": "./src/reactivity/devtools.js"
+    },
+    "./server": {
+      "types": "./src/server.d.ts",
+      "default": "./src/server.js"
     }
   },
   "files": [

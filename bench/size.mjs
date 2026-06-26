@@ -18,11 +18,17 @@ const SRC = join(root, "framework", "src");
 // not to shave bytes.
 const BUDGET_GZIP = 16 * 1024; // 16 KB — ~20% headroom over today's ~13.3 KB
 
+// Server-only entry modules: shipped in the package, but never reachable from the
+// client entry (index.js), so a browser using @zoijs/core never fetches them. They
+// don't count against the CLIENT bundle budget. (server.js is only imported by
+// @zoijs/ssr, on the server.)
+const SERVER_ONLY = new Set(["server.js"]);
+
 function jsFiles(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) jsFiles(p, out);
-    else if (name.endsWith(".js")) out.push(p); // shipped runtime; .d.ts are types, not served
+    else if (name.endsWith(".js") && !SERVER_ONLY.has(name)) out.push(p); // shipped, browser-reachable runtime
   }
   return out;
 }
