@@ -56,15 +56,24 @@ one.
 ## Templates
 
 ```bash
-npm create zoijs@latest my-app                    # default: the "app" template
-npm create zoijs@latest my-app --template basic   # a minimal counter
-npm create zoijs@latest my-app --template app     # a polished project dashboard
+npm create zoijs@latest my-app                       # default: the "app" template
+npm create zoijs@latest my-app --template app        # a polished project dashboard
+npm create zoijs@latest my-app --template basic      # a basic counter
+npm create zoijs@latest my-app --template typescript # type-checked JS, no build step
+npm create zoijs@latest my-app --template minimal    # two flat files, CDN, no install
+npm create zoijs@latest my-app --template library    # author a Zoijs-based package
 ```
 
 - **`app`** (default) — a polished project dashboard (hero, stat cards, filters,
   empty state) showing `html`, `mount`, `createState`, `computed`, `each`,
   conditional rendering, and parent⇄child component communication.
-- **`basic`** — a minimal counter, the smallest possible Zoijs app.
+- **`basic`** — a basic counter, a small local app with a dev server.
+- **`typescript`** — the counter as type-checked JavaScript (`// @ts-check` +
+  strict `tsconfig.json` + `npm run typecheck`). Full TS safety, **no build step**.
+- **`minimal`** — the smallest scaffold: two flat files loading `@zoijs/core` from a
+  CDN. No install, no dev server — run with `npx serve . -l 7310`.
+- **`library`** — a starter for authoring a Zoijs-based package: `src` + `.d.ts`,
+  `exports`/`types`, a peer dep on `@zoijs/core`, and a `node:test` suite.
 
 ## What it does
 
