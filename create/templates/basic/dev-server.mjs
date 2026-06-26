@@ -61,7 +61,10 @@ function start(i = 0) {
   };
   const onListening = () => {
     server.removeListener("error", onError);
-    console.log(`\nZoiJS dev server: http://localhost:${PORTS[i]}\n`);
+    const lines = ["", "  Zoijs dev server", "", `  - Local:  http://localhost:${PORTS[i]}`];
+    if (i > 0) lines.push(`  (ports ${PORTS.slice(0, i).join(", ")} were busy)`);
+    lines.push("");
+    console.log(lines.join("\n"));
   };
   server.once("error", onError);
   server.once("listening", onListening);

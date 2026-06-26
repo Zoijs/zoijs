@@ -38,7 +38,7 @@ mount(Counter, document.querySelector("#app"));
 
 ```bash
 npm run dev
-# open http://localhost:3000/path-to-your-app/
+# open http://localhost:7310/path-to-your-app/
 ```
 
 ## How it works

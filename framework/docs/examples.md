@@ -4,7 +4,7 @@ All examples live in the [`examples/`](../examples/) folder. Run them with:
 
 ```bash
 npm run dev
-# then open http://localhost:3000/examples/<name>/   (keep the trailing slash)
+# then open http://localhost:7310/examples/<name>/   (keep the trailing slash)
 ```
 
 Each example is a single `index.html` + `app.js` + (optional) `style.css`. No build step.

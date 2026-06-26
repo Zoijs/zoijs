@@ -54,7 +54,7 @@ No build step is required — the framework is plain ES modules.
 
 # run the counter example (serves the project root over http so ES modules resolve)
 npm run dev
-# then open: http://localhost:3000/examples/counter/   (keep the trailing slash)
+# then open: http://localhost:7310/examples/counter/   (keep the trailing slash)
 
 # run the tests (DOM tests run automatically via jsdom)
 npm test
@@ -81,7 +81,7 @@ npx playwright install chromium firefox webkit
 npm run test:browser
 ```
 
-Playwright starts a static server automatically (`npx serve` on port 3000) — still no build step.
+Playwright starts a static server automatically (`npx serve` on port 7310) — still no build step.
 
 ## Browser support
 

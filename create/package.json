@@ -1,6 +1,6 @@
 {
   "name": "create-zoijs",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Create a new Zoijs app with one command. Plain HTML, CSS, and JavaScript — no build step.",
   "type": "module",
   "bin": {
