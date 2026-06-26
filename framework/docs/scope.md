@@ -141,6 +141,11 @@ structure.** Users are expected to delete, rename, and restructure freely.
   reactive graph, owner scopes, the `__zoijsEach` marker, the scanner) — those are
   explicitly non-public (`VERSIONING.md`).
 
+**Enforced, not just observed.** `scripts/check-deps.mjs` (run by the root
+`npm test`) fails the build if any package ships a runtime dependency, if an
+optional package peer-depends on anything but `@zoijs/core`, or if any package's
+source imports a sibling `@zoijs/*` package. The star is a CI gate.
+
 **Recommendation:** none required. The dependency graph is a star: everything points
 at the public core, nothing points sideways. Keep it that way — a package needing
 another package's internals is the signal to stop.

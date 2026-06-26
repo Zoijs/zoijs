@@ -3,7 +3,8 @@
   "private": true,
   "description": "Zoijs monorepo — convenience scripts to test every package from the root. Not published; not an npm workspace.",
   "scripts": {
-    "test": "npm run test:core && npm run test:router && npm run test:resource && npm run test:head && npm run test:action && npm run test:storage && npm run test:forms && npm run test:create",
+    "test": "npm run test:deps && npm run test:core && npm run test:router && npm run test:resource && npm run test:head && npm run test:action && npm run test:storage && npm run test:forms && npm run test:create",
+    "test:deps": "node scripts/check-deps.mjs",
     "test:core": "npm --prefix framework test",
     "test:router": "npm --prefix router test",
     "test:resource": "npm --prefix resource test",
