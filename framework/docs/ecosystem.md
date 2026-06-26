@@ -12,13 +12,14 @@ through one app — the **Task Board** demo — that uses all of them.
 
 | Package | Adds | Public API |
 |---|---|---|
-| [`@zoijs/core`](../README.md) | The framework | `html`, `mount`, `createState`, `computed`, `each`, `configure`, `onCleanup` |
+| [`@zoijs/core`](../README.md) | The framework | `html`, `mount`, `createState`, `computed`, `each`, `effect`, `boundary`, `configure`, `onCleanup` |
 | [`@zoijs/router`](../../router/README.md) | Client-side routing | `createRouter` → `view`, `link`, `go`, `path`, `query` |
 | [`@zoijs/resource`](../../resource/README.md) | Reading async data | `resource(fetcher)` → `data`, `loading`, `error`, `refresh` |
 | [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
+| [`@zoijs/testing`](../../testing/README.md) | DOM testing helpers (dev) | `render`, `screen`, `fireEvent`, `waitFor`, `cleanup`, `mockRouter` |
 
 > New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
 > (no build step). The optional packages below add capabilities to an app you
@@ -34,6 +35,7 @@ npm install @zoijs/action      # writing data
 npm install @zoijs/head        # title & meta
 npm install @zoijs/storage     # persistence (localStorage)
 npm install @zoijs/forms       # form state + validation
+npm install -D @zoijs/testing  # DOM testing helpers (dev dependency)
 ```
 
 Or load them with no install via an import map / CDN (pin the version):
