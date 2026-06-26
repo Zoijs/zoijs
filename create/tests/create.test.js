@@ -141,15 +141,58 @@ test("scaffold(app) generates the polished dashboard starter", () => {
   assert.deepEqual(Object.keys(JSON.parse(read(dir, "package.json")).dependencies), ["@zoijs/core"]);
 });
 
-test("the dev server uses port 7310 with 7311–7313 fallbacks and the right banner", () => {
+test("any generated dev server uses port 7310 with 7311–7313 fallbacks and the right banner", () => {
   for (const template of TEMPLATES) {
     const dir = path.join(tmp(), template);
     scaffold({ name: "x", template, targetDir: dir });
+    // minimal (CDN + npx serve) and library (a package) ship no dev server.
+    if (!fs.existsSync(path.join(dir, "dev-server.mjs"))) continue;
     const dev = read(dir, "dev-server.mjs");
     assert.match(dev, /\[\s*7310\s*,\s*7311\s*,\s*7312\s*,\s*7313\s*\]/, `${template}: dev-server should list the port range`);
     assert.match(dev, /Zoijs dev server/, `${template}: dev-server should print the banner`);
     assert.match(dev, /http:\/\/localhost:\$\{PORTS\[i\]\}/, `${template}: dev-server should print the local URL`);
   }
+});
+
+test("scaffold(typescript) is type-checked JS with no build step", () => {
+  const dir = path.join(tmp(), "ts-app");
+  scaffold({ name: "ts-app", template: "typescript", targetDir: dir });
+  const pkg = JSON.parse(read(dir, "package.json"));
+  assert.equal(pkg.scripts.typecheck, "tsc --noEmit");
+  assert.equal(pkg.scripts.dev, "node dev-server.mjs"); // still no build/compile step
+  assert.ok(fs.existsSync(path.join(dir, "tsconfig.json")));
+  assert.ok(JSON.parse(read(dir, "tsconfig.json")).compilerOptions.checkJs);
+  // type-checked JS — .js source, no .ts to compile
+  assert.ok(fs.existsSync(path.join(dir, "src", "app.js")));
+  assert.ok(!fs.existsSync(path.join(dir, "src", "app.ts")));
+  assert.match(read(dir, "src", "app.js"), /@ts-check/);
+  assert.match(read(dir, "index.html"), /<title>Ts App<\/title>/);
+});
+
+test("scaffold(minimal) is two flat files using the CDN, no install", () => {
+  const dir = path.join(tmp(), "tiny");
+  scaffold({ name: "tiny", template: "minimal", targetDir: dir });
+  assert.ok(fs.existsSync(path.join(dir, "index.html")));
+  assert.ok(fs.existsSync(path.join(dir, "app.js"))); // flat — no src/ folder
+  assert.ok(!fs.existsSync(path.join(dir, "package.json"))); // no install needed
+  assert.ok(!fs.existsSync(path.join(dir, "dev-server.mjs")));
+  assert.match(read(dir, "index.html"), /esm\.sh\/@zoijs\/core@1/); // CDN, major-pinned
+  assert.match(read(dir, "index.html"), /<title>Tiny<\/title>/);
+});
+
+test("scaffold(library) is a publishable @zoijs/core-based package", () => {
+  const dir = path.join(tmp(), "my-lib");
+  scaffold({ name: "my-lib", template: "library", targetDir: dir });
+  const pkg = JSON.parse(read(dir, "package.json"));
+  assert.equal(pkg.name, "my-lib");
+  assert.ok(!pkg.private); // meant to be published
+  assert.deepEqual(Object.keys(pkg.peerDependencies), ["@zoijs/core"]);
+  assert.ok(pkg.exports["."].types);
+  assert.ok(fs.existsSync(path.join(dir, "src", "index.js")));
+  assert.ok(fs.existsSync(path.join(dir, "src", "index.d.ts")));
+  assert.ok(fs.existsSync(path.join(dir, "tests", "index.test.js")));
+  // imports only the core's public API
+  assert.match(read(dir, "src", "index.js"), /from "@zoijs\/core"/);
 });
 
 test("no generated template file references port 3000", () => {

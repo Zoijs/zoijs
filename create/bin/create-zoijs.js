@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const TEMPLATES = ["basic", "app"];
+export const TEMPLATES = ["basic", "app", "typescript", "minimal", "library"];
 export const DEFAULT_TEMPLATE = "app";
 const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
 
@@ -75,7 +75,7 @@ export function ensureTargetAvailable(targetDir) {
   }
 }
 
-const TEXT_EXT = new Set([".js", ".mjs", ".html", ".css", ".json", ".md", ".txt", ".svg"]);
+const TEXT_EXT = new Set([".js", ".ts", ".mjs", ".html", ".css", ".json", ".md", ".txt", ".svg"]);
 const isText = (file) => file === "_gitignore" || TEXT_EXT.has(path.extname(file));
 
 function applyTokens(content, tokens) {
