@@ -13,7 +13,7 @@ see [`docs/scope.md`](docs/scope.md).
 Zoijs has a deliberate identity. PRs are evaluated against it:
 
 - **No build step**, no JSX, no Virtual DOM.
-- **Small API** — the eight-function surface is frozen (see `VERSIONING.md`).
+- **Small API** — the nine-function surface is frozen (see `VERSIONING.md`).
 - **Native HTML/CSS/JS** and **secure by default**.
 - **Readable source** — a junior developer should be able to follow it.
 

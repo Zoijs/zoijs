@@ -13,7 +13,7 @@ or it isn't Zoijs.
 ## 1. Executive summary
 
 The ecosystem is **highly cohesive and loosely coupled.** It is one frozen
-eight-function core plus six small optional packages and a zero-dependency starter
+nine-function core plus six small optional packages and a zero-dependency starter
 CLI. Verified facts behind that claim:
 
 - Every optional package's source imports **only** from `@zoijs/core`'s public API
@@ -214,8 +214,9 @@ doesn't relitigate them:
 - **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
   completion of the reactive trio. An optional **`svg`** helper — **deferred**
   (RFC 0003 §6: rooted `<svg>` already renders; only dynamic-SVG composition is
-  affected; documented workaround). An **error-boundary** helper — still deferred
-  (slated for the security-hardening phase).
+  affected; documented workaround). An **error-boundary** helper (`boundary`) —
+  **shipped in 1.3.0** (RFC 0004): catches a synchronous setup/render throw and
+  renders a fallback.
 - **A generic guarded-route helper in `@zoijs/router`** — only if the auth-guard
   pattern proves common (decision 0002); still not an auth package.
 - **`@zoijs/storage` sessionStorage variant** — borderline; only if real demand
@@ -287,7 +288,7 @@ and a sustainable long-term architecture.** Evidence:
 
 - **Clear boundaries:** every capability has one documented responsibility and an
   explicit non-responsibility list (§2). The hard rules (no build, no core growth,
-  no global machinery) are enforced by the frozen, RFC-gated core (eight functions).
+  no global machinery) are enforced by the frozen, RFC-gated core (nine functions).
 - **Low coupling:** grep-verified — all packages depend only on the core's public
   API; none imports another; `create-zoijs` has zero deps; no internal access (§4).
 - **High cohesion:** each package is one small file doing one thing, with a
