@@ -4,6 +4,19 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.3.0] — 2026-06-26
+
+### Added
+- **`boundary(child, fallback)`.** A render-time error boundary: it renders
+  `child`, and if `child` throws **synchronously while building its markup** (a
+  setup/render error that would otherwise break the whole `mount`), it disposes the
+  partial work — so an `effect` created before the throw can't leak — and renders
+  `fallback` (a value, or `(error) => value`) instead. Catches synchronous
+  setup/render throws only; errors in reactive *updates* are already contained per
+  binding, and *async* errors belong to `@zoijs/resource` / `@zoijs/action`'s
+  `error()` state. Logs in dev, silent in production. The public surface is now
+  **nine** functions (additive MINOR). See [RFC 0004](docs/rfcs/0004-error-boundary.md).
+
 ## [1.2.0] — 2026-06-26
 
 ### Added

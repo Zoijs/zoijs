@@ -144,6 +144,27 @@ export function each<T>(
   renderFn: (item: T) => TemplateResult
 ): EachResult;
 
+/**
+ * Render `child`; if it **throws synchronously while building its markup** (a
+ * setup/render error that would otherwise break the whole `mount`), tear down the
+ * partial work and render `fallback` instead. Place the call in a template slot.
+ *
+ * Catches synchronous setup/render throws only. Errors in reactive *updates* are
+ * already contained per binding by the core; *async* errors belong to
+ * `@zoijs/resource` / `@zoijs/action`'s `error()` state. It renders once (no reset
+ * — re-mount the subtree to retry), logs in dev, and is silent in production.
+ *
+ * ```ts
+ * html`<section>
+ *   ${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load this.</p>`)}
+ * </section>`
+ * ```
+ */
+export function boundary<C, F>(
+  child: (() => C) | C,
+  fallback: ((error: unknown) => F) | F
+): C | F;
+
 /** Toggle development warnings (default: `dev` is `true`). */
 export function configure(options: { dev?: boolean }): void;
 

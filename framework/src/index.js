@@ -8,6 +8,7 @@
 export { html } from "./core/html.js";
 export { mount } from "./core/mount.js";
 export { each } from "./core/each.js";
+export { boundary } from "./core/boundary.js";
 export { createState } from "./reactivity/state.js";
 export { computed } from "./reactivity/computed.js";
 export { effect } from "./reactivity/effect.js";

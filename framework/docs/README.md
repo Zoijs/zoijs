@@ -1,6 +1,6 @@
 # Zoijs Documentation
 
-Welcome to **Zoijs** — a frontend framework you don't have to learn before you use it. It's plain **HTML, CSS, and JavaScript**: no JSX, no build step, no Virtual DOM, and an eight-function API.
+Welcome to **Zoijs** — a frontend framework you don't have to learn before you use it. It's plain **HTML, CSS, and JavaScript**: no JSX, no build step, no Virtual DOM, and a nine-function API.
 
 **[zoijs.dev](https://zoijs.dev)** · **[GitHub](https://github.com/Zoijs)** · **[npm](https://www.npmjs.com/package/@zoijs/core)**
 
@@ -76,6 +76,6 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - **Native HTML/CSS/JS** — concepts you already know; nothing bespoke to memorize.
 - **Beginner-friendly mental model** — write a function that returns `html`, put state in it, `mount` it.
 - **Secure by default** — text is escaped, dangerous URLs are blocked, no `eval`.
-- **Small API** — eight functions: `html`, `mount`, `createState`, `computed`, `each`, `effect`, `configure`, `onCleanup`.
+- **Small API** — nine functions: `html`, `mount`, `createState`, `computed`, `each`, `effect`, `boundary`, `configure`, `onCleanup`.
 
 Ready? Start with **[Installation »](installation.md)**
