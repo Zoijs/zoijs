@@ -3,12 +3,11 @@
 // Authored in plain JavaScript; these declarations add editor autocomplete and
 // optional type-checking without requiring TypeScript.
 
-/** A reactive value (same shape as core's createState). */
-export interface State<T> {
-  get(): T;
-  set(value: T): void;
-  peek(): T;
-}
+// Source State from @zoijs/core (re-exported for convenience) so the raw
+// values/errors/touched shape can never drift from `createState`. Other packages
+// import core types the same way (e.g. @zoijs/router imports TemplateResult).
+import type { State } from "@zoijs/core";
+export type { State };
 
 /** A single field rule: return a message when invalid, or a falsy value when valid. */
 export type Rule<V = any, Values = Record<string, any>> = (

@@ -91,6 +91,40 @@ export function createState<T>(initial: T, equals?: (a: T, b: T) => boolean): St
  */
 export function computed<T>(fn: () => T, equals?: (a: T, b: T) => boolean): Computed<T>;
 
+/** A disposable handle returned by {@link effect}. */
+export interface EffectHandle {
+  /** Dispose the effect now. It also auto-disposes with its owner (component/list item). */
+  dispose(): void;
+}
+
+/**
+ * Run a side effect that re-runs whenever a reactive value it reads changes.
+ * Runs once immediately, then again (batched on a microtask) on any change.
+ * Dependencies are tracked automatically — there is no dependency array.
+ *
+ * The function may return a cleanup function (same convention as a `ref`); it
+ * runs **before the next run** and **on dispose**. Use the return value for
+ * per-run teardown — `onCleanup` is component-scoped (fires on unmount), not
+ * per-run.
+ *
+ * Created inside a component or list item, it auto-disposes with that scope;
+ * created at module top level, it lives until you call `dispose()`.
+ *
+ * ```ts
+ * // persist on change
+ * effect(() => localStorage.setItem("theme", theme.get()));
+ *
+ * // per-run cleanup
+ * effect(() => {
+ *   const id = setInterval(() => poll(query.get()), 1000);
+ *   return () => clearInterval(id);
+ * });
+ * ```
+ *
+ * For reactive *content on screen*, use a binding (`${() => …}`), not an effect.
+ */
+export function effect(fn: () => void | (() => void)): EffectHandle;
+
 /**
  * Keyed list rendering. `items` may be a reactive function or a plain array;
  * `keyFn` returns a stable unique key; `renderFn` returns the template for one item.

@@ -6,9 +6,9 @@ Zoijs follows [Semantic Versioning 2.0.0](https://semver.org/): `MAJOR.MINOR.PAT
 
 The stability guarantee covers **only**:
 
-1. The seven exports and their documented signatures:
-   `html`, `mount`, `createState`, `computed`, `each`, `configure`, `onCleanup`.
-2. The shapes they return (`{ get, set, peek }`, `{ get, peek }`, `unmount()`).
+1. The eight exports and their documented signatures:
+   `html`, `mount`, `createState`, `computed`, `each`, `effect`, `configure`, `onCleanup`.
+2. The shapes they return (`{ get, set, peek }`, `{ get, peek }`, `{ dispose }`, `unmount()`).
 3. The documented template syntax and binding semantics (the `() =>` rule,
    event/attribute/text rules, `each` keying).
 4. The documented secure-by-default behavior.

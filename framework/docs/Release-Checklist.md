@@ -46,7 +46,7 @@ Fine-grained updates; no Virtual DOM. Keyed `each` reuses/moves nodes. Measured 
 ## Documentation
 
 - Structured docs site (`docs/README.md`): 30-minute learning path, per-concept pages, five tutorials, API reference, security guide, troubleshooting, FAQ, five migration guides.
-- **Status:** ✅ reflects the current 7-function API and limitations. *Remaining:* not a hosted/interactive site; no screenshots; no recipes section.
+- **Status:** ✅ reflects the current 8-function API and limitations. *Remaining:* not a hosted/interactive site; no screenshots; no recipes section.
 
 ## Known limitations (current)
 

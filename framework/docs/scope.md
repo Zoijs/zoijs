@@ -13,7 +13,7 @@ or it isn't Zoijs.
 ## 1. Executive summary
 
 The ecosystem is **highly cohesive and loosely coupled.** It is one frozen
-seven-function core plus six small optional packages and a zero-dependency starter
+eight-function core plus six small optional packages and a zero-dependency starter
 CLI. Verified facts behind that claim:
 
 - Every optional package's source imports **only** from `@zoijs/core`'s public API
@@ -149,7 +149,7 @@ another package's internals is the signal to stop.
 
 | Area | The tempting feature | Why it's out |
 |---|---|---|
-| core | hooks, context/provider, a global store, a public scheduler, JSX/compiler | Recreates the abstractions Zoijs exists to avoid; the frozen seven-function API is the guardrail |
+| core | hooks, context/provider, a global store, a public scheduler, JSX/compiler | Recreates the abstractions Zoijs exists to avoid; the frozen, RFC-gated API is the guardrail |
 | router | loaders/route-actions, nested outlets, middleware/guards, transitions, layouts | This is the Remix/Next/Angular-router surface; routing is "URL → component," nothing more |
 | resource | cache + dedupe + invalidation | That's a query client (React Query); resource is a *reader*, not a cache |
 | action | optimistic updates + rollback + queues | That's a mutation engine; action is a *writer* |
@@ -181,7 +181,7 @@ Before accepting any addition, a maintainer should be able to answer **yes** to 
 
 1. **No build step.** It works with a `<script type="module">` and an import map;
    no bundler, compiler, or JSX transform is required.
-2. **No core API growth by default.** It does not add to the seven exports; any core
+2. **No core API growth by default.** It does not add to the public exports; any core
    change goes through an RFC and must be additive (the `ref` binding is the bar:
    real capability, zero new exports).
 3. **Optional and core-only.** If it can't be built as one small package on the
@@ -206,8 +206,11 @@ doesn't relitigate them:
 
 - **`@zoijs/ssr`** — server rendering + hydration (2.0+ candidate, separate package).
 - **An optional template compiler** — must be behavior-identical and never required.
-- **Public `effect`** export; an optional **`svg`** helper; an **error-boundary**
-  helper (all RFC-gated, additive only).
+- **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
+  completion of the reactive trio. An optional **`svg`** helper — **deferred**
+  (RFC 0003 §6: rooted `<svg>` already renders; only dynamic-SVG composition is
+  affected; documented workaround). An **error-boundary** helper — still deferred
+  (slated for the security-hardening phase).
 - **A generic guarded-route helper in `@zoijs/router`** — only if the auth-guard
   pattern proves common (decision 0002); still not an auth package.
 - **`@zoijs/storage` sessionStorage variant** — borderline; only if real demand
@@ -234,14 +237,52 @@ See `ROADMAP.md` and `docs/rfcs/` for the living versions of these.
 | head | docs, attribute coverage | reconciliation, SSR, a document manager |
 | create-zoijs | small template polish, a new template | generators, config, plugins, upgrades |
 
-## 8. Final recommendation
+## 8. Design language (cross-package naming conventions)
+
+The packages share one naming language so that learning one helper teaches the
+others. New packages **must** follow it.
+
+**Parentheses mean a reactive read.** Every value you read inside a binding is a
+*method call*, never a property or getter — `count.get()`, `user.data()`,
+`router.path()`, `form.value("email")`. Seeing `()` is the signal that the read
+subscribes. There are no reactive *properties* anywhere in Zoijs.
+
+**Two shapes, chosen by what the thing is:**
+
+- A single **reactive cell** exposes `get()` / `set()` / `peek()` — `createState`,
+  `@zoijs/storage` (which *is* a persistent cell), and `computed` (`get` / `peek`,
+  no `set`). `peek()` reads without subscribing. The `State<T>` type is declared
+  **once** in core and imported by packages that reuse it — never re-declared.
+- A **reactive helper** exposes named zero-arg (or single-key) reader methods for
+  what it holds — `data()`, `loading()`, `error()`, `pending()`, `done()`,
+  `result()`, `path()`, `query()`, `all()`, `value(name)`, `error(name)`,
+  `isTouched(name)`. Each subscribes when read in a binding.
+
+**Deliberate distinctions (not inconsistencies to "fix"):**
+
+- `@zoijs/resource` uses **`loading()`** while `@zoijs/action` uses **`pending()`**
+  for "in flight." Intentional: a resource *reads* (data is *loaded*); an action
+  *writes* (a mutation is *pending*). The read/write split mirrors the
+  query-vs-mutation distinction and keeps each helper's vocabulary honest.
+- `action` exposes a `done()` success flag and `result()`; `resource` does not —
+  success is simply `data() !== undefined`. `resource` stays minimal on purpose
+  (`loading` / `data` / `error` / `refresh`).
+- `forms` exposes reader methods (`all()` / `allErrors()` / `allTouched()`) *and*
+  the raw `values` / `errors` / `touched` cells. Collapsing `form.values.get()`
+  into `form.values()` is a breaking change held for a future major (§7).
+
+A new reader on a new helper should be named for *what it returns*, take no
+arguments (or one key), and read reactively. If you reach for a getter/property,
+stop — that is not how Zoijs reads state.
+
+## 9. Final recommendation
 
 The Zoijs ecosystem currently has **clear boundaries, low coupling, high cohesion,
 and a sustainable long-term architecture.** Evidence:
 
 - **Clear boundaries:** every capability has one documented responsibility and an
   explicit non-responsibility list (§2). The hard rules (no build, no core growth,
-  no global machinery) are enforced by the frozen seven-function core.
+  no global machinery) are enforced by the frozen, RFC-gated core (eight functions).
 - **Low coupling:** grep-verified — all packages depend only on the core's public
   API; none imports another; `create-zoijs` has zero deps; no internal access (§4).
 - **High cohesion:** each package is one small file doing one thing, with a

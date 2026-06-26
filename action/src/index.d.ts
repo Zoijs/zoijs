@@ -11,7 +11,12 @@ export interface Action<TArgs extends unknown[], TResult> {
    * with the result on success, or `undefined` on failure.
    */
   run(...args: TArgs): Promise<TResult | undefined>;
-  /** `true` while a run is in flight (reactive). */
+  /**
+   * `true` while a run is in flight (reactive). Named `pending` because an action
+   * *writes* (a mutation is pending); the read-side counterpart is
+   * `@zoijs/resource`'s `loading()`. (Intentional design language — read = load,
+   * write = pending.)
+   */
   pending(): boolean;
   /** The thrown/rejected error, or `null` when there is none (reactive). */
   error(): unknown;

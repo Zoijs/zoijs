@@ -7,7 +7,11 @@
 export interface Resource<T> {
   /** The latest loaded value, or `undefined` before the first success (reactive). */
   data(): T | undefined;
-  /** `true` while a load is in flight (reactive). */
+  /**
+   * `true` while a load is in flight (reactive). Named `loading` because a
+   * resource *reads* data; the write-side counterpart is `@zoijs/action`'s
+   * `pending()`. (Intentional design language — read = load, write = pending.)
+   */
   loading(): boolean;
   /** The thrown/rejected error, or `null` when there is none (reactive). */
   error(): unknown;
