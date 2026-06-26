@@ -13,7 +13,7 @@ or it isn't Zoijs.
 ## 1. Executive summary
 
 The ecosystem is **highly cohesive and loosely coupled.** It is one frozen
-nine-function core plus six small optional packages and a zero-dependency starter
+nine-function core plus seven small optional packages and a zero-dependency starter
 CLI. Verified facts behind that claim:
 
 - Every optional package's source imports **only** from `@zoijs/core`'s public API
@@ -42,6 +42,7 @@ throughout.
 | **@zoijs/storage** | Persist one simple reactive value | `createState`-shaped value backed by `localStorage` (JSON), graceful degrade to in-memory | Encryption, IndexedDB, cross-tab/session sync, schema validation, a persistence engine, custom serializers, TTL |
 | **@zoijs/forms** | Hold native-form state | Reactive `values`/`errors`/`touched`, per-field helpers, manual synchronous `validate`, `handleSubmit` (prevents reload) | Field registration, providers/context, schema validation, async validation, form builders, UI components, the network call |
 | **@zoijs/head** | Set document metadata from a component | `title`/`description`/`meta`, restore-on-cleanup | SSR, SEO engines, head reconciliation/dedup, a document-manager abstraction |
+| **@zoijs/testing** | Drive the real DOM in tests | `render` into a container, scoped queries (text/role/test-id/label), `fireEvent`, `waitFor`/`tick`, `cleanup`, `mockRouter` | A custom renderer, a virtual snapshot format, a test runner, assertion matchers, network mocking, a real browser |
 | **create-zoijs** | Copy a starter template | Copy a template, substitute the app name, validate the name, refuse a non-empty dir | Code generation, framework config, build setup, plugins, upgrades/migrations, interactive wizards |
 
 ## 3. Responsibility boundaries
