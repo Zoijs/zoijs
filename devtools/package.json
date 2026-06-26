@@ -1,7 +1,7 @@
 {
-  "name": "@zoijs/core",
-  "version": "1.4.0",
-  "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
+  "name": "@zoijs/devtools",
+  "version": "0.1.0",
+  "description": "A reactive-graph inspector for Zoijs: watch one state update exactly one DOM node. Dev-only, read-only, no build step.",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
-    },
-    "./devtools": {
-      "types": "./src/devtools.d.ts",
-      "default": "./src/reactivity/devtools.js"
     }
   },
   "files": [
@@ -31,36 +27,31 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Zoijs/zoijs.git",
-    "directory": "framework"
+    "directory": "devtools"
   },
   "bugs": {
     "url": "https://github.com/Zoijs/zoijs/issues"
   },
   "keywords": [
     "zoijs",
-    "framework",
-    "frontend",
-    "ui",
+    "devtools",
+    "inspector",
     "reactive",
     "reactivity",
     "signals",
+    "debug",
     "no-build",
-    "no-jsx",
-    "no-virtual-dom",
-    "fine-grained",
-    "beginner-friendly",
-    "html",
-    "spa"
+    "no-jsx"
   ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.4.0"
+  },
   "scripts": {
     "test": "node --test --import ./tests/setup-dom.js",
-    "test:unit": "node --test",
-    "test:types": "tsc --noEmit -p tsconfig.json",
-    "test:browser": "playwright test",
-    "dev": "npx serve -l 7310 ."
+    "test:types": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@zoijs/core": "file:../framework",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3"
   }

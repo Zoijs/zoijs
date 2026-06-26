@@ -4,6 +4,20 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.4.0] — 2026-06-26
+
+### Added
+- **Devtools inspection hook** (`@zoijs/core/devtools`). A new, dev-only, read-only
+  seam that lets an inspector — [`@zoijs/devtools`](https://www.npmjs.com/package/@zoijs/devtools)
+  or a browser extension — observe the reactive graph: states, computeds, effects,
+  the edges between them, and **which DOM node each binding updates**. It's reached
+  through a dedicated subpath (`import { attachInspector } from "@zoijs/core/devtools"`),
+  so the learnable **nine-function** main surface is unchanged. The hook is off by
+  default (a single null check until something attaches), never instruments the hot
+  read path (`.get()`), and is a no-op under `configure({ dev: false })` — so a
+  production app pays no measurable cost and exposes nothing. See
+  [RFC 0005](docs/rfcs/0005-devtools-hook.md).
+
 ## [1.3.2] — 2026-06-26
 
 ### Fixed

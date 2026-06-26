@@ -13,6 +13,7 @@
 // nested render registers into it, so disposing the owner tears everything down.
 
 import { effect, untrack } from "../reactivity/effect.js";
+import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
@@ -107,7 +108,8 @@ function bindAttribute(el, attr, values) {
     // A single ${} as the whole value → pass the raw value (preserves booleans,
     // numbers, property types for value/checked).
     const raw = values[attr.holes[0]];
-    if (typeof raw === "function") effect(() => applyAttribute(el, attr.name, raw()));
+    if (typeof raw === "function")
+      labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, raw())));
     else applyAttribute(el, attr.name, raw);
     return;
   }
@@ -122,7 +124,8 @@ function bindAttribute(el, attr, values) {
     return result;
   };
   const reactive = attr.holes.some((h) => typeof values[h] === "function");
-  if (reactive) effect(() => applyAttribute(el, attr.name, compute()));
+  if (reactive)
+    labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, compute())));
   else applyAttribute(el, attr.name, compute());
 }
 
@@ -176,7 +179,7 @@ function bindReactiveContent(anchor, getValue) {
     }
   };
 
-  effect(() => {
+  labelNext({ kind: "text", el: anchor }, () => effect(() => {
     const value = getValue();
     const t = typeof value;
     // null/undefined/booleans render NOTHING (matches the `cond && html\`...\``
@@ -196,7 +199,7 @@ function bindReactiveContent(anchor, getValue) {
       mode = "nodes";
       insertItems(anchor, value, items);
     }
-  });
+  }));
 
   onCleanup(() => {
     clearNodes();
@@ -394,10 +397,10 @@ function setupKeyedList(anchor, marker) {
     currentList = ordered;
   };
 
-  effect(() => {
+  labelNext({ kind: "list", el: anchor }, () => effect(() => {
     const newItems = readItems(); // tracked: subscribe to the list state
     runWithOwner(listOwner, () => reconcile(newItems));
-  });
+  }));
 
   onCleanup(() => {
     for (const rec of currentList) {
