@@ -15,7 +15,7 @@ Same for attributes and `each` items: `class=${() => x.get()}`, `each(() => list
 
 ## "The page is blank / nothing renders"
 
-- **Not served over http?** ES modules don't load from `file://`. Use `npm run dev` (or any static server) and open `http://localhost:3000/...`.
+- **Not served over http?** ES modules don't load from `file://`. Use `npm run dev` (or any static server) and open `http://localhost:7310/...`.
 - **Missing trailing slash?** Open `/examples/counter/`, not `/examples/counter`. Without it, relative `./app.js` resolves to the wrong folder.
 - **Check the console.** A thrown template error (see below) or a 404 on a module will appear there.
 

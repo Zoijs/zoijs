@@ -147,7 +147,8 @@ test("the dev server uses port 7310 with 7311–7313 fallbacks and the right ban
     scaffold({ name: "x", template, targetDir: dir });
     const dev = read(dir, "dev-server.mjs");
     assert.match(dev, /\[\s*7310\s*,\s*7311\s*,\s*7312\s*,\s*7313\s*\]/, `${template}: dev-server should list the port range`);
-    assert.match(dev, /ZoiJS dev server: http:\/\/localhost/, `${template}: dev-server should print the banner`);
+    assert.match(dev, /Zoijs dev server/, `${template}: dev-server should print the banner`);
+    assert.match(dev, /http:\/\/localhost:\$\{PORTS\[i\]\}/, `${template}: dev-server should print the local URL`);
   }
 });
 

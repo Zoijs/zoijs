@@ -24,9 +24,12 @@ npm run dev
 bundler, no build step):
 
 ```text
-ZoiJS dev server: http://localhost:7310
-If busy: 7311, 7312, 7313
+  Zoijs dev server
+
+  - Local:  http://localhost:7310
 ```
+
+(It falls back to 7311–7313 if the port is busy.)
 
 Or with `npx`:
 

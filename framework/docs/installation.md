@@ -53,7 +53,7 @@ import { html, mount, createState } from "./vendor/zoijs/index.js";
 ```bash
 git clone https://github.com/Zoijs/zoijs && cd zoijs/framework
 npm run dev
-# open http://localhost:3000/examples/counter/   ← keep the trailing slash
+# open http://localhost:7310/examples/counter/   ← keep the trailing slash
 ```
 
 `npm run dev` just serves the folder over http — there's nothing to compile.
