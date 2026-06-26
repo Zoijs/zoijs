@@ -2,6 +2,26 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## 0.1.3 — 2026-06-26
+
+Three new templates (now five total). No change to existing templates or the CLI
+API; `app` stays the default.
+
+- **`typescript`** — the counter as **type-checked JavaScript**: `// @ts-check` +
+  a strict `tsconfig.json` + `npm run typecheck` (`tsc --noEmit`) give full
+  TypeScript safety using `@zoijs/core`'s shipped types, with **no build step** (the
+  browser runs the `.js` as-is). Keeps the dev server on 7310.
+- **`minimal`** — the smallest scaffold: two flat files (`index.html` + `app.js`)
+  loading `@zoijs/core` from a CDN. No `package.json`, no install, no dev server —
+  run with `npx serve . -l 7310`.
+- **`library`** — a starter for authoring a Zoijs-based package: `src/index.js` +
+  hand-written `index.d.ts`, an `exports`/`types` `package.json` with a peer
+  dependency on `@zoijs/core`, and a `node:test` suite — the shape the official
+  optional packages use.
+- The scaffolder now treats `.ts`/`.d.ts` as text (token substitution), and the
+  CLI's own `npm test` is scoped to `tests/` so it no longer runs the templates'
+  bundled test files.
+
 ## 0.1.2 — 2026-06-26
 
 Dev-server output polish. No CLI API changes; same zero-dependency server on the

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{APP_TITLE}}</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <!-- No build step: an import map points the @zoijs/core name at the package
+         installed in node_modules. `npm install` puts it there. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "./node_modules/@zoijs/core/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
