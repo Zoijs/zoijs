@@ -17,8 +17,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write # required for npm provenance (OIDC)
+      contents: read # Securely scoped for private repository checkouts
     defaults:
       run:
         working-directory: framework
@@ -50,8 +49,8 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to npm (with provenance)
+      - name: Publish to npm
         if: steps.check.outputs.publish == 'true'
-        run: npm publish --access public --provenance
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
