@@ -1,6 +1,6 @@
 # The Zoijs ecosystem
 
-Zoijs core is deliberately tiny — eight functions, no router, no data layer, no
+Zoijs core is deliberately tiny — nine functions, no router, no data layer, no
 head manager. Everything else lives in **small, optional packages** you add only
 when you need them. Use none of them and you still have a complete framework;
 add them one at a time as your app grows.

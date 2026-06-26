@@ -1,9 +1,9 @@
 # API Reference
 
-The entire public API — eight functions (five you'll use constantly, plus `effect`, `configure`, and `onCleanup`).
+The entire public API — nine functions (five you'll use constantly, plus `effect`, `boundary`, `configure`, and `onCleanup`).
 
 ```js
-import { html, mount, createState, computed, each, effect, configure, onCleanup } from "./src/index.js";
+import { html, mount, createState, computed, each, effect, boundary, configure, onCleanup } from "./src/index.js";
 ```
 
 ---
@@ -104,6 +104,24 @@ Keyed list rendering. Place the result in a template's child position. See [List
 - `items` — `() => array` (reactive) or a plain `array`.
 - `keyFn` — `(item) => key` — a stable, unique key per item.
 - `renderFn` — `(item) => TemplateResult` — the template for one item.
+
+---
+
+## `boundary`
+
+```
+boundary(child, fallback) → child's result, or fallback's
+```
+
+Render `child`; if it **throws synchronously while building its markup** (a setup/render error that would otherwise break the whole `mount`), tear down the partial work and render `fallback` instead. Place it in a template slot. See [RFC 0004](rfcs/0004-error-boundary.md).
+
+- `child` — a component (or value) to render.
+- `fallback` — a value, or `(error) => value`, shown if `child` throws.
+- Catches synchronous setup/render throws only; reactive-update errors are already contained per binding, and async errors belong to `@zoijs/resource` / `@zoijs/action`.
+
+```js
+html`<section>${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load.</p>`)}</section>`
+```
 
 ---
 
