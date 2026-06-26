@@ -7,8 +7,10 @@
 // attribute value, an event, etc. Dynamic values are kept in a separate channel
 // from the static HTML; a value can never change the template's structure.
 //
-// Output of the parse (cached per `strings`):
-//   template : a <template> element with unique markers
+// Output of the parse (cached per `strings`) is DOM-free — a static HTML string
+// plus part descriptors. The <template> element is built lazily on first client
+// render; on a server, @zoijs/ssr reads the static HTML + parts directly.
+//   html     : the static HTML string, with unique markers (no DOM)
 //   parts    : ordered list of binding descriptors
 //      { type: "child" }                          ← a comment-marker anchor
 //      { type: "element", attrs: [AttrPart] }     ← element carrying data-zoijs-bind
@@ -29,10 +31,24 @@ const cache = new WeakMap();
 export function html(strings, ...values) {
   let compiled = cache.get(strings);
   if (!compiled) {
-    compiled = compile(strings);
+    compiled = compile(strings); // pure: a static HTML string + parts, NO DOM
     cache.set(strings, compiled);
   }
-  return { template: compiled.template, parts: compiled.parts, hasElements: compiled.hasElements, values };
+  // The <template> element is created lazily, on first client render — so html()
+  // itself touches no DOM and works on a server (where @zoijs/ssr reads the static
+  // HTML + parts instead). The brand lets consumers detect a result without
+  // tripping the getter.
+  return {
+    __zoijsTemplate: true,
+    parts: compiled.parts,
+    hasElements: compiled.hasElements,
+    __staticHTML: compiled.html,
+    get template() {
+      if (!compiled.template) compiled.template = createTemplate(compiled.html);
+      return compiled.template;
+    },
+    values,
+  };
 }
 
 // ---- scanner ----------------------------------------------------------------
@@ -239,5 +255,8 @@ function compile(strings) {
   }
 
   const hasElements = parts.some((p) => p.type === "element");
-  return { template: createTemplate(out), parts, hasElements };
+  // Pure output: the static HTML string and the part descriptors. The DOM
+  // <template> is built later, lazily (see html()), so compile() needs no DOM and
+  // its result can be serialized on a server.
+  return { html: out, parts, hasElements, template: null };
 }

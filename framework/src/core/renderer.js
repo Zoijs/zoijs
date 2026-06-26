@@ -17,10 +17,9 @@ import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
-import { toText, isSafeUrl, isSafeAttributeName } from "../utils/security.js";
+import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS } from "../utils/security.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
-const URL_ATTRS = new Set(["href", "src", "action", "formaction", "poster", "ping", "xlink:href"]);
 const noop = () => {};
 
 /**
@@ -469,5 +468,5 @@ function applyAttribute(el, name, value) {
 // ---- helpers -----------------------------------------------------------------
 
 function isHtmlResult(v) {
-  return v && typeof v === "object" && v.template && Array.isArray(v.parts);
+  return v && v.__zoijsTemplate === true;
 }

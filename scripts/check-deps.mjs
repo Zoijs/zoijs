@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const CORE = "framework"; // publishes @zoijs/core
-const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "testing", "devtools", "i18n"];
+const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "testing", "devtools", "i18n", "ssr"];
 const TOOLING = ["create"]; // create-zoijs — zero deps, no peers
 const ALL = [CORE, ...OPTIONAL, ...TOOLING];
 

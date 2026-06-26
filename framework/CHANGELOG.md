@@ -4,6 +4,21 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.5.0] — 2026-06-26
+
+### Added
+- **DOM-free template compiler + a `@zoijs/core/server` subpath.** `html\`…\`` now
+  compiles to a static HTML string + part descriptors **without touching the DOM**;
+  the `<template>` element is built lazily on first client render. This means a
+  component can be evaluated on a server (no DOM) so [`@zoijs/ssr`](https://www.npmjs.com/package/@zoijs/ssr)
+  can render it to a string. The new subpath exposes the building blocks a server
+  renderer needs — the static HTML/parts of a result, template/list markers, and the
+  **same** security predicates the client uses (`escapeText`, `escapeAttr`,
+  `isSafeUrl`, `isSafeAttributeName`, `URL_ATTRS`) so server and client make
+  identical safety decisions. Client rendering is byte-for-byte unchanged; the
+  learnable nine-function main surface is unchanged. See
+  [RFC 0008](docs/rfcs/0008-ssr.md).
+
 ## [1.4.0] — 2026-06-26
 
 ### Added
