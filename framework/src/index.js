@@ -10,5 +10,6 @@ export { mount } from "./core/mount.js";
 export { each } from "./core/each.js";
 export { createState } from "./reactivity/state.js";
 export { computed } from "./reactivity/computed.js";
+export { effect } from "./reactivity/effect.js";
 export { configure } from "./reactivity/env.js";
 export { onCleanup } from "./reactivity/owner.js";

@@ -105,6 +105,7 @@ function runComputation(node) {
     node.state = CLEAN;
     return;
   }
+  if (node.isEffect) runEffectCleanup(node); // per-run teardown before re-running
   cleanupSources(node);
   const previousObserver = currentObserver;
   currentObserver = node;
@@ -119,7 +120,13 @@ function runComputation(node) {
   } finally {
     currentObserver = previousObserver;
   }
-  if (threw || node.isEffect) return;
+  if (node.isEffect) {
+    // An effect may return a cleanup function (same convention as a ref): it runs
+    // before the next run and on dispose. Anything else is ignored.
+    if (!threw) node.cleanup = typeof result === "function" ? result : null;
+    return;
+  }
+  if (threw) return;
   if (!node.equals(node.value, result)) {
     node.value = result;
     // Value changed → promote observers (currently CHECK) to DIRTY so they update.
@@ -132,10 +139,23 @@ function cleanupSources(node) {
   node.sources.clear();
 }
 
+/** Run (and clear) an effect's returned cleanup — before a re-run and on dispose. */
+function runEffectCleanup(node) {
+  const cleanup = node.cleanup;
+  if (!cleanup) return;
+  node.cleanup = null;
+  try {
+    cleanup();
+  } catch (err) {
+    console.error("Zoijs: an effect cleanup threw (other bindings keep working):", err);
+  }
+}
+
 function disposeNode(node) {
   if (node.disposed) return;
   node.disposed = true;
   cleanupSources(node);
+  if (node.isEffect) runEffectCleanup(node); // final cleanup on dispose
 }
 
 const warned = new WeakSet();
@@ -186,6 +206,7 @@ export function effect(fn) {
     isEffect: true,
     disposed: false,
     equals: Object.is,
+    cleanup: null,
   };
   onCleanup(() => disposeNode(node)); // disposed with its owner scope
   runComputation(node);

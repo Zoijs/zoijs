@@ -4,6 +4,26 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.2.0] — 2026-06-26
+
+### Added
+- **`effect(fn)`.** A public reactive effect — runs a side effect immediately and
+  re-runs whenever a reactive value it reads changes (automatic dependency
+  tracking, microtask-batched). The function may return a cleanup that runs before
+  the next run and on dispose (same convention as a `ref`); `effect` auto-disposes
+  with its owner (component / list item) and returns `{ dispose }` for early
+  teardown. This is the public completion of the reactive trio (`createState` /
+  `computed` / `effect`) — the engine already used it internally for bindings. Use
+  it for side effects *outside* the view (persist on change, sync `document.title`,
+  drive a non-Zoijs widget); for on-screen content, keep using a binding
+  (`${() => …}`). The public surface is now **eight** functions (additive MINOR per
+  `VERSIONING.md`). See [RFC 0003](docs/rfcs/0003-effect-and-svg.md).
+
+### Notes
+- The **`svg`** helper considered alongside `effect` was **deferred**: templates
+  rooted at `<svg>` already render correctly, and only dynamic-SVG *composition* is
+  affected — a minority need. See [RFC 0003](docs/rfcs/0003-effect-and-svg.md) §6.
+
 ## [1.1.0] — 2026-06-25
 
 ### Added
