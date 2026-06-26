@@ -35,6 +35,7 @@ the core's public API, with **no core changes**:
 - `@zoijs/head` — document title & meta.
 - `@zoijs/storage` — localStorage-backed state.
 - `@zoijs/forms` — form state & validation.
+- `@zoijs/testing` — first-party DOM testing helpers (`render` / queries / `fireEvent`).
 - `create-zoijs` — the starter CLI (`npm create zoijs@latest`).
 
 ## 2.0+ — still on the table (separate packages)
