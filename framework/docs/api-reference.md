@@ -1,9 +1,9 @@
 # API Reference
 
-The entire public API — seven functions (five you'll use constantly, plus `configure` and `onCleanup`).
+The entire public API — eight functions (five you'll use constantly, plus `effect`, `configure`, and `onCleanup`).
 
 ```js
-import { html, mount, createState, computed, each, configure, onCleanup } from "./src/index.js";
+import { html, mount, createState, computed, each, effect, configure, onCleanup } from "./src/index.js";
 ```
 
 ---
@@ -69,6 +69,27 @@ A lazy, cached, value-gated derived value. See [Computed](concepts/computed.md).
 | `peek()` | Read without subscribing. |
 
 Read-only — there is no `set`.
+
+---
+
+## `effect`
+
+```
+effect(fn) → { dispose }
+```
+
+Run a side effect that re-runs whenever a reactive value it reads changes (auto-tracked, microtask-batched). Runs once immediately. `fn` may return a cleanup that runs **before the next run** and **on dispose** (same convention as a `ref`). Auto-disposes with its owner (component / list item); the returned `dispose()` tears it down early. See [RFC 0003](rfcs/0003-effect-and-svg.md).
+
+- Use it for side effects **outside** the view — persist on change, sync `document.title`, drive a non-Zoijs widget.
+- For reactive content **on screen**, use a binding (`${() => …}`), not an effect.
+
+```js
+const stop = effect(() => localStorage.setItem("theme", theme.get()));
+effect(() => {
+  const id = setInterval(() => poll(query.get()), 1000);
+  return () => clearInterval(id); // runs before the next run and on dispose
+});
+```
 
 ---
 

@@ -12,12 +12,14 @@ release.**
 ## 1.x — Additive, non-breaking
 
 Shipped as MINOR/PATCH releases, no API breakage. **Shipped so far:** the hosted
-docs site ([zoijs.dev](https://zoijs.dev)) and **element refs** (a `ref` binding,
-1.1.0 — no new export). Still on the table:
+docs site ([zoijs.dev](https://zoijs.dev)), **element refs** (a `ref` binding,
+1.1.0 — no new export), and a public **`effect`** (1.2.0 — RFC 0003; completes the
+reactive trio, taking the surface to **eight** functions). Still on the table:
 
 - **Performance:** LIS move-minimization in `each`; automated perf thresholds in CI.
 - **DX:** a small devtools hook to inspect the reactive graph.
-- **Additive API (RFC-gated):** a public `effect`, an optional `svg` helper.
+- **Additive API (RFC-gated):** an optional `svg` helper — **deferred** (RFC 0003 §6:
+  rooted `<svg>` already renders; only dynamic-SVG composition is affected).
 - **Hardening:** XSS-corpus fuzzing; optional error-boundary helper.
 - **Reach:** mobile browsers added to the CI matrix.
 

@@ -3,15 +3,15 @@
 // Authored in plain JavaScript; these declarations add editor autocomplete and
 // optional type-checking without requiring TypeScript.
 
-/** A persistent, reactive value created by {@link storage}. Same shape as core's state. */
-export interface PersistentState<T> {
-  /** Read the current value; subscribes the running binding (reactive). */
-  get(): T;
-  /** Set the value: updates the reactive value and writes JSON to localStorage. */
-  set(value: T): void;
-  /** Read the current value without subscribing. */
-  peek(): T;
-}
+import type { State } from "@zoijs/core";
+
+/**
+ * A persistent, reactive value created by {@link storage}. Structurally identical
+ * to core's {@link State} (`get` / `set` / `peek`) — sourced from @zoijs/core so
+ * the shape can never drift — the only behavioral difference being that `set()`
+ * also writes the value (as JSON) to localStorage.
+ */
+export interface PersistentState<T> extends State<T> {}
 
 /**
  * A localStorage-backed reactive value — a drop-in, persistent `createState`.
