@@ -1,6 +1,12 @@
 # Zoijs public launch checklist
 
-Living status of the Zoijs public release. Last updated: 2026-06-25.
+> **Historical snapshot — the 1.0 public launch (2026-06-25).** Kept for the record.
+> It describes the framework *as it launched* (five npm packages, the seven-function
+> core), not as it is today. For the current, authoritative status see
+> [`enterprise-readiness.md`](enterprise-readiness.md); for what shipped since, see
+> [`../CHANGELOG.md`](../CHANGELOG.md) and [`../ROADMAP.md`](../ROADMAP.md).
+
+Status at the Zoijs public release. Captured 2026-06-25.
 
 Legend: ✅ done · ⚠️ needs attention · ⬜ not started · ❔ unverified here
 

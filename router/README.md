@@ -29,7 +29,7 @@ Or with no install, straight from a CDN:
 
 ```js
 import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.1";
+import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
 ```
 
 ## The whole idea

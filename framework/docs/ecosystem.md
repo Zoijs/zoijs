@@ -6,7 +6,9 @@ when you need them. Use none of them and you still have a complete framework;
 add them one at a time as your app grows.
 
 This page explains what each package does, how they fit together, and walks
-through one app — the **Task Board** demo — that uses all of them.
+through one app — the **Task Board** demo — that uses five of them together.
+(For an app that exercises eight packages, see the
+[admin dashboard](../../examples/admin/).)
 
 ## The packages
 
@@ -19,7 +21,10 @@ through one app — the **Task Board** demo — that uses all of them.
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
+| [`@zoijs/i18n`](../../i18n/README.md) | Internationalization | `createI18n(options)` → `t`, `locale`, `setLocale`, `n`, `d`, `list`, `add` |
+| [`@zoijs/ssr`](../../ssr/README.md) | Server rendering | `renderToString(component)` → an HTML string (SSR + static prerender) |
 | [`@zoijs/testing`](../../testing/README.md) | DOM testing helpers (dev) | `render`, `screen`, `fireEvent`, `waitFor`, `cleanup`, `mockRouter` |
+| [`@zoijs/devtools`](../../devtools/README.md) | Reactive-graph inspector (dev) | `inspect()`, `createInspector()` |
 
 > New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
 > (no build step). The optional packages below add capabilities to an app you
@@ -35,14 +40,17 @@ npm install @zoijs/action      # writing data
 npm install @zoijs/head        # title & meta
 npm install @zoijs/storage     # persistence (localStorage)
 npm install @zoijs/forms       # form state + validation
+npm install @zoijs/i18n        # internationalization
+npm install @zoijs/ssr         # server-side rendering
 npm install -D @zoijs/testing  # DOM testing helpers (dev dependency)
+npm install -D @zoijs/devtools # reactive-graph inspector (dev dependency)
 ```
 
 Or load them with no install via an import map / CDN (pin the version):
 
 ```js
 import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.1";
+import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
 ```
 
 Every package is:
@@ -72,8 +80,8 @@ A page is a function; it sets up what it needs; the core cleans it up.
 
 ## The Task Board app
 
-A small task manager that uses **all five** packages. Find it at
-[`examples/task-board/`](../../examples/task-board/).
+A small task manager that uses **five** packages — core, router, resource, action,
+and head. Find it at [`examples/task-board/`](../../examples/task-board/).
 
 **Pages:** Home, Tasks (list + filter + counts), New task (form), Task details,
 About, and a Not-Found route.

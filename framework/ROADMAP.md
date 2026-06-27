@@ -20,12 +20,15 @@ functions. Still on the table:
 - **Performance: shipped** — LIS move-minimization in `each` (minimal DOM moves on
   reorder), a gzipped-size budget gate (`npm test`), and a DOM micro-benchmark
   suite. See [`bench/`](../bench/README.md).
-- **DX:** a small devtools hook to inspect the reactive graph.
+- **DX: shipped** — a dev-only devtools hook (`@zoijs/core/devtools`) to inspect the
+  reactive graph, consumed by `@zoijs/devtools` (RFC 0005).
+- **SSR support: shipped** — a DOM-free template compiler + a `@zoijs/core/server`
+  subpath (1.5.0, RFC 0008) that lets `@zoijs/ssr` render to a string with no DOM.
 - **Additive API (RFC-gated):** an optional `svg` helper — **deferred** (RFC 0003 §6:
   rooted `<svg>` already renders; only dynamic-SVG composition is affected).
 - **Hardening: shipped** — XSS-corpus fuzzing, a CSP/Trusted-Types CI gate, and a
   supply-chain (zero-dependency / star-topology) gate.
-- **Reach:** mobile browsers added to the CI matrix.
+- **Reach:** mobile browsers in the CI matrix — still on the table.
 
 ## Optional ecosystem — shipped
 
@@ -37,14 +40,19 @@ the core's public API, with **no core changes**:
 - `@zoijs/head` — document title & meta.
 - `@zoijs/storage` — localStorage-backed state.
 - `@zoijs/forms` — form state & validation.
+- `@zoijs/i18n` — reactive locale, plurals, and `Intl` formatting.
 - `@zoijs/testing` — first-party DOM testing helpers (`render` / queries / `fireEvent`).
+- `@zoijs/devtools` — a dev-only reactive-graph inspector.
+- `@zoijs/ssr` — render to an HTML string (SSR + static prerender), no DOM, zero deps.
 - `create-zoijs` — the starter CLI (`npm create zoijs@latest`).
 
 ## 2.0+ — still on the table (separate packages)
 
 Only as opt-in modules that never compromise the no-build, small-core identity:
 
-- `@zoijs/ssr` — server rendering + hydration.
+- **Seamless hydration** for `@zoijs/ssr` — the client adopting server-rendered DOM in
+  place (needs hydration-aware core bindings; RFC 0008 §4). The string renderer ships
+  today; this is the deferred next step.
 - An **optional** compiler that pre-compiles templates (must be behavior-identical
   and never required).
 

@@ -1,6 +1,12 @@
 # Zoijs ecosystem release checklist
 
-Living status of the published Zoijs ecosystem. Last updated: **2026-06-25**.
+> **Historical snapshot — the initial ecosystem launch (2026-06-25).** It describes the
+> ecosystem *as it launched* (core + six optional packages). The ecosystem has since
+> grown to ten optional packages plus `create-zoijs`; for the current list see
+> [`ecosystem.md`](ecosystem.md) and [`../ROADMAP.md`](../ROADMAP.md), and for the
+> authoritative status see [`enterprise-readiness.md`](enterprise-readiness.md).
+
+Status at the initial ecosystem launch. Captured **2026-06-25**.
 
 Legend: ✅ done · ⚠️ needs attention · ⬜ not started
 
