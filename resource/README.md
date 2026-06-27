@@ -118,10 +118,32 @@ recent result is applied — a slow request can't overwrite a newer one.
 - **Passing arguments to `refresh()`.** It just re-runs your fetcher; capture any
   inputs in the fetcher closure instead.
 
+## Server rendering (`{ initial }`)
+
+Pass `{ initial }` to start a resource **already-settled** with a value instead of
+auto-loading. This is how a server-rendered resource hands its data to the client
+without a refetch (or a loading flash): the server renders with the real value and
+serializes it (see [`@zoijs/ssr`](https://zoijs.dev/ssr)'s `serialize`); on hydration
+you create the resource with that same value.
+
+```js
+// client, hydrating server-rendered HTML
+const user = resource(() => fetch("/api/user").then((r) => r.json()),
+                      { initial: window.__DATA__.user });
+
+user.loading(); // false — already settled, no auto-load
+user.data();    // the server's value, immediately
+user.refresh(); // still loads on demand
+```
+
+The presence of the `initial` key (not its value) skips the load, so `{ initial: null }`
+is a valid "settled with null" state.
+
 ## What this is *not*
 
 By design, to stay tiny: no query client, cache, request dedupe, mutations,
-suspense, optimistic updates, infinite queries, or SSR. If you need those, reach
+suspense, optimistic updates, or infinite queries. (Basic SSR hand-off is supported
+via `{ initial }` above; per-request data loaders are not.) If you need those, reach
 for a dedicated data library — this is the 90%-case helper.
 
 ## License

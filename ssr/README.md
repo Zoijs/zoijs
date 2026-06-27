@@ -67,6 +67,37 @@ visible change and no flash**. It returns an `unmount()`, like `mount`.
 > Not hydrating (pure static output / SSG)? Omit `{ hydratable: true }` for clean,
 > marker-free HTML, and take over with a plain `mount(App, "#app")`.
 
+## Passing data to the client (`serialize`)
+
+`renderToString` is synchronous, so a [`@zoijs/resource`](https://zoijs.dev/resource)
+renders its loading state on the server. To skip the client-side refetch (and the
+flash), render with the data you already fetched, then hand it to the client with
+**`serialize`** — a JSON serializer that is safe to embed in a `<script>` (it escapes
+`<`, `>`, `&`, and the U+2028/U+2029 line terminators, so a `</script>` in your data
+can't break out):
+
+```js
+import { renderToString, serialize } from "@zoijs/ssr";
+
+// server: fetch, render with the value, embed it
+const data = { user: await getUser() };
+const body = renderToString(() => App(data), { hydratable: true });
+res.end(`<div id="app">${body}</div>
+  <script>window.__DATA__ = ${serialize(data)}</script>
+  <script type="module" src="/client.js"></script>`);
+```
+
+```js
+// client: seed the resource — it starts settled and does NOT refetch
+import { resource } from "@zoijs/resource";
+const user = resource(() => fetch("/api/user").then((r) => r.json()),
+                      { initial: window.__DATA__.user });
+```
+
+Because the server rendered with the same value the client seeds with, the markup
+matches and hydration is seamless. (Wiring this per-request automatically — loaders —
+is a separate, planned step; `serialize` + `{ initial }` are the primitive.)
+
 ## Static prerendering (SSG)
 
 Because `renderToString` needs no DOM and no server, you can run it at **build time**

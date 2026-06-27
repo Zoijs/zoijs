@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/resource",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The simplest async-data helper for Zoijs: reactive loading / data / error / refresh. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",

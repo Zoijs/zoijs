@@ -176,6 +176,41 @@ function serializeAttribute(name, value) {
   return ` ${name}="${escapeAttr(value)}"`;
 }
 
+// ---- data serialization -----------------------------------------------------
+
+/**
+ * Serialize a value to a JSON string that is SAFE to embed inside a `<script>` tag.
+ * Plain `JSON.stringify` is not: a `</script>` (or `<!--`) inside a string would close
+ * the tag early — an injection vector. This escapes `<`, `>`, `&`, and the two line
+ * terminators that are legal in JSON but break a JS string literal (U+2028/U+2029).
+ *
+ * Use it to hand server-fetched data to the client so a resource doesn't refetch:
+ *
+ * ```js
+ * // server: render with the data, then embed it
+ * const data = { user: await getUser() };
+ * const body = renderToString(() => App(data), { hydratable: true });
+ * const html = `<div id="app">${body}</div>
+ *   <script>window.__DATA__ = ${serialize(data)}</script>`;
+ *
+ * // client: seed the resource with it — no flash, no second fetch
+ * const user = resource(() => fetch("/api/user").then(r => r.json()),
+ *                       { initial: window.__DATA__.user });
+ * ```
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function serialize(value) {
+  const json = JSON.stringify(value);
+  if (json === undefined) return "null"; // undefined / function / symbol → null
+  return json
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 // ---- hydration (client) -----------------------------------------------------
 
 /**

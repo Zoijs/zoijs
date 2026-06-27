@@ -25,10 +25,21 @@ import { createState, onCleanup } from "@zoijs/core";
 /**
  * Wrap an async fetcher in reactive loading / data / error state.
  * Loads once immediately; call refresh() to load again.
+ *
+ * Pass `{ initial }` to start already-settled with a value instead of auto-loading —
+ * this is how a server-rendered resource hands its data to the client: the server
+ * renders with the real value, serializes it (see `@zoijs/ssr`'s `serialize`), and on
+ * hydration you create the resource with that same `initial`, so it keeps the data and
+ * does NOT refetch (no flash, no double-fetch). `refresh()` still loads on demand.
+ *
  * @param {() => any | Promise<any>} fetcher
+ * @param {{ initial?: any }} [options]
  */
-export function resource(fetcher) {
-  const data = createState(undefined);
+export function resource(fetcher, options) {
+  // Distinguish "no initial given" (auto-load) from `{ initial: undefined/null }`
+  // (start settled with that value) by checking for the property, not its value.
+  const hasInitial = options != null && Object.prototype.hasOwnProperty.call(options, "initial");
+  const data = createState(hasInitial ? options.initial : undefined);
   const error = createState(null);
   const loading = createState(false);
 
@@ -67,7 +78,9 @@ export function resource(fetcher) {
     disposed = true;
   });
 
-  load(); // automatic initial load
+  // Automatic initial load — skipped when `initial` was supplied, so a server-
+  // hydrated resource keeps that data and doesn't refetch.
+  if (!hasInitial) load();
 
   return {
     data: () => data.get(),

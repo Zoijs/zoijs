@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## 0.3.0 — 2026-06-27
+
+### Added
+- **`serialize(value)`.** Serialize a value to a JSON string that is safe to embed in a
+  `<script>` tag — escapes `<`, `>`, `&`, and the U+2028/U+2029 line terminators, so a
+  `</script>` inside your data can't break out. Use it to pass server-fetched data to
+  the client so a `@zoijs/resource` started with `{ initial }` doesn't refetch.
+
 ## 0.2.0 — 2026-06-27
 
 ### Added
