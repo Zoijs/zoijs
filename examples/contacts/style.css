@@ -1,0 +1,59 @@
+/* Contacts CRM styles — plain CSS, no framework, no build. */
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #fff;
+  --ink: #1b1f24;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --brand: #0d9488;
+  --danger: #dc2626;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 15px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+header { padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+main { max-width: 640px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 22px; margin: 0 0 16px; }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+}
+button:hover { opacity: 0.92; }
+button:disabled { opacity: 0.6; cursor: default; }
+button.danger { background: var(--danger); border-color: var(--danger); }
+
+.search { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin: 6px 0 16px; background: var(--panel); }
+
+ul.contacts { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+ul.contacts li { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+ul.contacts li:last-child { border-bottom: 0; }
+ul.contacts li a { font-weight: 600; }
+.fav { color: #f59e0b; width: 1em; }
+
+dl.detail { display: grid; grid-template-columns: 90px 1fr; gap: 8px 16px; margin: 16px 0; }
+dl.detail dt { color: var(--muted); }
+dl.detail dd { margin: 0; }
+
+form.contact-form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field span { font-size: 13px; color: var(--muted); }
+.field input { padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+.field input[aria-invalid="true"] { border-color: var(--danger); }
+.field small { color: var(--danger); }
+[role="alert"] { color: var(--danger); }
