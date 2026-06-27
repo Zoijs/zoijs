@@ -50,9 +50,11 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - [API Reference](api-reference.md)
 - [Security](security.md) — safe rendering rules & CSP
 - [Accessibility](accessibility.md) — the Zoijs way to accessible apps
+- [Editor Setup](editor-setup.md) — highlighting, IntelliSense, formatting, linting
 - [Examples index](examples.md)
 - [Troubleshooting](troubleshooting.md)
 - [FAQ](faq.md)
+- [Releasing](releasing.md) — publish order across packages + docs-site CDN-pin sync (maintainers)
 
 ### Optional packages
 - [`@zoijs/router`](../../router/README.md) — a tiny client-side router for SPAs (routes are a plain object; not part of the core)

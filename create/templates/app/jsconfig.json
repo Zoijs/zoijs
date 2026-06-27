@@ -1,0 +1,16 @@
+{
+  // jsconfig.json — gives your editor IntelliSense (autocomplete, hover, go-to-
+  // definition) for Zoijs and the DOM, from the types every package ships. No build
+  // step, no TypeScript migration. Flip "checkJs" to true to also TYPE-CHECK your
+  // JavaScript against those types (or add `// @ts-check` to a single file).
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "checkJs": false,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
