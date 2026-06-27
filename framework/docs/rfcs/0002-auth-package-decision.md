@@ -1,7 +1,7 @@
 # Decision 0002 — Does Zoijs need an official auth package?
 
 - Status: **Decided — No (Go on a guide recipe, No-Go on a package)**
-- Context: follows the [Authentication & Authorization guide](../../../docs/auth.md)
+- Context: follows the [Authentication & Authorization guide](https://zoijs.dev/auth)
   on zoijs.dev, which implements full auth with existing packages.
 
 ## 1. Can auth be handled cleanly with what exists today?

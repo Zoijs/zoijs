@@ -28,7 +28,7 @@ links**. This recipe takes care of both.
 - **GitHub Pages** available (free on public repos).
 - The `@zoijs/*` packages reachable from the browser, via either:
   - a **CDN** (simplest) — all packages are published on npm, so
-    `https://esm.sh/@zoijs/core@1`, `https://esm.sh/@zoijs/router@0.1`, etc. work
+    `https://esm.sh/@zoijs/core@1`, `https://esm.sh/@zoijs/router@0.2`, etc. work
     out of the box; or
   - **vendored source** — copy each package's `src/` into your repo and point the
     import map at the local files (zero runtime dependencies; see step 5's note).
@@ -78,7 +78,7 @@ In `docs/index.html`, map the package names to the CDN (pinned versions):
   {
     "imports": {
       "@zoijs/core": "https://esm.sh/@zoijs/core@1",
-      "@zoijs/router": "https://esm.sh/@zoijs/router@0.1",
+      "@zoijs/router": "https://esm.sh/@zoijs/router@0.2",
       "@zoijs/resource": "https://esm.sh/@zoijs/resource@0.1",
       "@zoijs/action": "https://esm.sh/@zoijs/action@0.1",
       "@zoijs/head": "https://esm.sh/@zoijs/head@0.1"
