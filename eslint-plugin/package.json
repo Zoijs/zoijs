@@ -1,0 +1,53 @@
+{
+  "name": "@zoijs/eslint-plugin",
+  "version": "0.1.0",
+  "description": "ESLint rules for Zoijs — catch the one reactivity footgun before it ships. Zero dependencies, no build step.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "eslint-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "eslint",
+    "eslintplugin",
+    "eslint-plugin",
+    "lint",
+    "reactivity",
+    "no-build",
+    "no-jsx"
+  ],
+  "scripts": {
+    "test": "node --test tests/require-reactive-binding.test.js",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "typescript": "^5.9.3"
+  }
+}
