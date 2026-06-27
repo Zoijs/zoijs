@@ -50,9 +50,11 @@ the core's public API, with **no core changes**:
 
 Only as opt-in modules that never compromise the no-build, small-core identity:
 
-- **Seamless hydration** for `@zoijs/ssr` — the client adopting server-rendered DOM in
-  place (needs hydration-aware core bindings; RFC 0008 §4). The string renderer ships
-  today; this is the deferred next step.
+- **Exact node-by-node hydration** for `@zoijs/ssr` — zero re-render of dynamic leaves
+  and keyed-list items. *In-place hydration already ships* (core 1.6.0 / ssr 0.2.0,
+  RFC 0008 §4): the client adopts the server's element structure, attributes, and events
+  in place and re-renders only dynamic content (no flash). Exact adoption (per-slot /
+  per-item markers) would build on that seam.
 - An **optional** compiler that pre-compiles templates (must be behavior-identical
   and never required).
 

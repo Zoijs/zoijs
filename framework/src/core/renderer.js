@@ -24,15 +24,21 @@ const noop = () => {};
 
 /**
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
- * @returns {{ node: DocumentFragment, dispose: Function }}
+ * @param {Element} [hydrateRoot]  when given, bind to this EXISTING server-rendered
+ *   subtree in place (no clone) instead of building fresh DOM — see hydration below.
+ * @returns {{ node: Node, dispose: Function }}
  */
-export function render(result) {
+export function render(result, hydrateRoot) {
   const owner = createOwner(); // nested under the active owner
-  const fragment = result.template.content.cloneNode(true);
+  // Hydration adopts the server DOM in place — elements, attributes, and events are
+  // reused, never re-created; each dynamic slot is cleared + re-rendered (same
+  // values → no visible change). Otherwise build a fresh clone.
+  const hydrating = hydrateRoot != null;
+  const fragment = hydrating ? hydrateRoot : result.template.content.cloneNode(true);
   const { parts, values } = result;
 
-  // Collect every part's target node on the PRISTINE clone first (document
-  // order), so a binding that inserts children can't shadow a later part.
+  // Collect every part's target node first (document order), so a binding that
+  // inserts children can't shadow a later part.
   const nodes = collectNodes(fragment, parts, result.hasElements);
 
   runWithOwner(owner, () => {
@@ -42,6 +48,7 @@ export function render(result) {
       if (!node) continue;
 
       if (part.type === "child") {
+        if (hydrating) clearHydratedSlot(node); // drop this slot's server content
         bindChild(node, values[part.hole]);
       } else {
         node.removeAttribute("data-zoijs-bind");
@@ -51,6 +58,20 @@ export function render(result) {
   });
 
   return { node: fragment, dispose: () => disposeOwner(owner) };
+}
+
+// Remove a hydrated slot's server content: the nodes before its anchor, back
+// through the slot's `<!--zoijs:[-->` start marker (emitted by @zoijs/ssr). Static
+// text outside the slot is preserved; the normal binding then renders fresh content
+// in the same place. No start marker → leave the DOM as-is (not a hydratable slot).
+const isSlotStart = (n) => n && n.nodeType === 8 && n.data === "zoijs:[";
+function clearHydratedSlot(anchor) {
+  let start = anchor.previousSibling;
+  while (start && !isSlotStart(start)) start = start.previousSibling;
+  if (!start) return;
+  let n;
+  while ((n = anchor.previousSibling) !== start) n.remove();
+  start.remove();
 }
 
 // Match parts to nodes by document order: a child part ↔ the next marker comment,

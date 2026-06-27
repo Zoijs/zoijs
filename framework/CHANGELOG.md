@@ -4,6 +4,22 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.6.0] — 2026-06-27
+
+### Added
+- **Hydration — `mount(component, target, { hydrate: true })`.** The client now
+  **adopts** server-rendered DOM in place instead of re-creating it: with `hydrate`,
+  `mount` reuses the existing elements inside `target` exactly — never cloning or
+  replacing them — and attaches event handlers and reactive attribute bindings to
+  those live nodes. Each dynamic child slot's server content is cleared (back to the
+  `<!--zoijs:[-->` start marker that [`@zoijs/ssr`](https://www.npmjs.com/package/@zoijs/ssr)
+  emits) and re-rendered in place; since the values match the server, there is no
+  visible change and no flash. This is the client half of full SSR — pair it with
+  `renderToString(component, { hydratable: true })`. The default `mount` path is
+  byte-for-byte unchanged (the option is additive), and the nine-function main surface
+  is the same. `@zoijs/ssr` re-exports this as `hydrate()`. See
+  [RFC 0008](docs/rfcs/0008-ssr.md).
+
 ## [1.5.0] — 2026-06-26
 
 ### Added
