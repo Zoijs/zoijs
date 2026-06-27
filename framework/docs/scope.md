@@ -215,7 +215,10 @@ doesn't relitigate them:
   RFC 0008): a DOM-free compiler + `@zoijs/core/server` (1.5.0) let it render to a
   string; in-place hydration landed in core 1.6.0 / ssr 0.2.0, and `serialize` +
   `resource({ initial })` (ssr 0.3.0 / resource 0.2.0) hand server data to the client.
-  `head` and `router` are SSR-safe. Per-request routed SSR (loaders) is still deferred.
+  `head` and `router` are SSR-safe, and **routed SSR** ships (router 0.3.0 — pass the
+  request URL as `{ location }`, resolve it with `match()`). An *automatic* loader API
+  stays out of scope by design: routed SSR is the `location` + `match()` primitive plus
+  the `serialize` / `{ initial }` data pattern, not a framework that runs your loaders.
 - **An optional template compiler** — must be behavior-identical and never required.
 - **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
   completion of the reactive trio. An optional **`svg`** helper — **deferred**

@@ -83,6 +83,8 @@ current URL and swaps it when you navigate.
 | `router.go(path)` | Navigate from code |
 | `router.path()` | The current path, e.g. `"/users/42"` (reactive) |
 | `router.query()` | The query string as a plain object (reactive) |
+| `router.match(path?)` | Resolve a path to `{ component, params }` without rendering (for routed SSR) |
+| `createRouter(routes, { location })` | Server-only: render the request's route (see [Routed SSR](#routed-ssr-rendering-the-requests-route)) |
 
 There's also `router.destroy()` to remove the back/forward listener — but you
 rarely call it: the router cleans itself up when the app unmounts.
@@ -209,8 +211,44 @@ matched route's template directly (and `link()` produces plain anchors), then th
 hydrates on the client where navigation, the History API, and `interceptLinks` take
 over.
 
-With no request URL available server-side, the server renders the `"/"` route. Feeding
-the actual request path in — per-request routed SSR — is a separate, planned step.
+### Routed SSR (rendering the request's route)
+
+Pass the request URL as **`location`** so the server renders the route for *that*
+request (it defaults to `"/"`). Use **`match()`** to learn the route + params first, so
+you can load that route's data before rendering — then hand it to the client with
+[`@zoijs/ssr`](../ssr/README.md)'s `serialize` and [`@zoijs/resource`](../resource/README.md)'s
+`{ initial }`:
+
+```js
+import { renderToString, serialize } from "@zoijs/ssr";
+import { createRouter } from "@zoijs/router";
+
+async function handler(req, res) {
+  const router = createRouter(routes, { location: req.url });
+  const { params } = router.match();          // { component, params } for req.url
+  const data = await loadData(params);        // your per-request data loading
+
+  const body = renderToString(() => App(router), { hydratable: true }); // renders the route
+  res.end(`<div id="app">${body}</div>
+    <script>window.__DATA__ = ${serialize(data)}</script>`);
+}
+```
+
+A route component seeds its resource from that data — the same expression works on the
+server (where you set a global before rendering) and the client (where the embedded
+`<script>` set `window.__DATA__`):
+
+```js
+const User = (params) => {
+  const seed = (typeof window === "undefined" ? globalThis : window).__DATA__;
+  const user = resource(() => fetchUser(params.id), { initial: seed?.user });
+  return html`<h1>${() => user.data().name}</h1>`;
+};
+```
+
+There is **no loader API** and no component-signature change — routed SSR is `location`
++ `match()` plus the existing data primitives. (Automatic loaders / nested data
+orchestration stay out of scope by design.)
 
 ## Common mistakes
 
