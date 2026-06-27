@@ -25,6 +25,35 @@ html[data-theme="dark"] {
   --sidebar-ink: #cdd5e3;
 }
 
+/* Accessibility utilities. .sr-only hides content visually but keeps it for
+   screen readers; .skip-link is a keyboard-only "skip to content" link that
+   appears on focus. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 8px; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
 * { box-sizing: border-box; }
 body {
   margin: 0;

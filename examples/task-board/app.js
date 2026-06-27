@@ -9,7 +9,7 @@
 // It's all plain functions returning html — no JSX, no build step, no store, no
 // providers. Read it top to bottom.
 
-import { html, mount, each, computed, createState } from "@zoijs/core";
+import { html, mount, each, computed, createState, effect } from "@zoijs/core";
 import { createRouter } from "@zoijs/router";
 import { resource } from "@zoijs/resource";
 import { action } from "@zoijs/action";
@@ -57,6 +57,7 @@ function Tasks() {
   const chip = (value, label) =>
     html`<button
       class=${() => (filter.get() === value ? "chip active" : "chip")}
+      aria-pressed=${() => (filter.get() === value ? "true" : "false")}
       onclick=${() => filter.set(value)}
     >
       ${label}
@@ -65,7 +66,7 @@ function Tasks() {
   return html`
     <h1>Tasks</h1>
 
-    ${() => (tasks.loading() ? html`<p class="muted">Loading tasks…</p>` : null)}
+    ${() => (tasks.loading() ? html`<p class="muted" role="status">Loading tasks…</p>` : null)}
     ${() => (tasks.error() ? html`<p role="alert">${tasks.error().message}</p>` : null)}
 
     <p class="counts">
@@ -145,7 +146,7 @@ function TaskDetails(params) {
   };
 
   return html`
-    ${() => (task.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (task.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() =>
       task.error()
         ? html`<div>
@@ -210,14 +211,24 @@ const router = createRouter(
 );
 
 function App() {
+  // Move focus to the main region after a client-side navigation so screen-reader
+  // and keyboard users land on the new page. Skipped on the very first render.
+  let firstPath = true;
+  effect(() => {
+    router.path();
+    if (firstPath) return void (firstPath = false);
+    document.getElementById("main")?.focus();
+  });
+
   return html`
+    <a class="skip-link" href="#main">Skip to content</a>
     <header>
-      <nav>
+      <nav aria-label="Primary">
         ${router.link("/", "Home")} ${router.link("/tasks", "Tasks")}
         ${router.link("/tasks/new", "New")} ${router.link("/about", "About")}
       </nav>
     </header>
-    <main>${router.view()}</main>
+    <main id="main" tabindex="-1">${router.view()}</main>
   `;
 }
 

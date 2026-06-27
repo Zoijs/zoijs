@@ -8,7 +8,7 @@
 //   @zoijs/forms     the contact form — values, errors, touched, validation
 //   @zoijs/head      per-page <title>
 
-import { html, mount, each, computed, createState } from "@zoijs/core";
+import { html, mount, each, computed, createState, effect } from "@zoijs/core";
 import { createRouter } from "@zoijs/router";
 import { resource } from "@zoijs/resource";
 import { action } from "@zoijs/action";
@@ -91,7 +91,7 @@ function List() {
       aria-label="Search contacts"
     />
 
-    ${() => (contacts.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (contacts.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => (contacts.error() ? html`<p role="alert">${contacts.error().message}</p>` : null)}
 
     <ul class="contacts">
@@ -100,6 +100,7 @@ function List() {
         (c) => c.id,
         (c) => html`<li>
           <span class="fav" aria-hidden="true">${() => (c.favorite ? "★" : "☆")}</span>
+          ${c.favorite ? html`<span class="sr-only">Favorite. </span>` : null}
           ${router.link("/" + c.id, c.name)}
           <span class="muted">${c.company}</span>
         </li>`
@@ -139,13 +140,13 @@ function ContactDetail(params) {
 
   return html`
     <p>${router.link("/", "← Contacts")}</p>
-    ${() => (contact.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (contact.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => (contact.error() ? html`<p role="alert">${contact.error().message}</p>` : null)}
     ${() => {
       const c = contact.data();
       if (!c) return null;
       return html`
-        <h1>${c.favorite ? "★ " : ""}${c.name}</h1>
+        <h1>${c.favorite ? html`<span aria-hidden="true">★ </span><span class="sr-only">Favorite. </span>` : ""}${c.name}</h1>
         <dl class="detail">
           <dt>Email</dt><dd><a href=${"mailto:" + c.email}>${c.email}</a></dd>
           <dt>Company</dt><dd>${c.company || "—"}</dd>
@@ -169,7 +170,7 @@ function EditContact(params) {
   return html`
     <p>${router.link("/" + params.id, "← Cancel")}</p>
     <h1>Edit contact</h1>
-    ${() => (contact.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (contact.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => (contact.error() ? html`<p role="alert">${contact.error().message}</p>` : null)}
     ${() => {
       const c = contact.data();
@@ -206,9 +207,18 @@ const router = createRouter(
 );
 
 function App() {
+  // Move focus to the main region after a client-side navigation (e.g. list → detail)
+  // so screen-reader / keyboard users land on the new page. Skipped on first render.
+  let firstPath = true;
+  effect(() => {
+    router.path();
+    if (firstPath) return void (firstPath = false);
+    document.getElementById("main")?.focus();
+  });
+
   return html`
     <header><strong>Contacts</strong> <span class="muted">· a Zoijs CRM demo</span></header>
-    <main>${router.view()}</main>
+    <main id="main" tabindex="-1">${router.view()}</main>
   `;
 }
 

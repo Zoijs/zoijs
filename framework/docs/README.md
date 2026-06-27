@@ -49,6 +49,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 ### Reference & help
 - [API Reference](api-reference.md)
 - [Security](security.md) — safe rendering rules & CSP
+- [Accessibility](accessibility.md) — the Zoijs way to accessible apps
 - [Examples index](examples.md)
 - [Troubleshooting](troubleshooting.md)
 - [FAQ](faq.md)
