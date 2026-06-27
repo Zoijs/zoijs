@@ -2,6 +2,23 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## 0.3.0 — 2026-06-27
+
+### Added — routed SSR
+- **`createRouter(routes, { location })`.** A server-rendering-only option: the request
+  URL path (e.g. `"/users/42?tab=posts"`, including any `base`) to render for, used
+  instead of `window.location` when there is no browser. `view()` then renders the
+  route for *this* request (previously SSR always rendered the `"/"` route). Ignored on
+  the client; defaults to `"/"`.
+- **`router.match(path?)`.** Resolve a path to its matched route without rendering —
+  `{ component, params }`. Lets a server learn which route (and params) a request hits so
+  it can load that route's data *before* `renderToString`. Defaults to the current
+  location; also accepts a URL path (handles `base` + query string).
+
+These are the primitives for per-request routed SSR + data loading. Pair them with
+`@zoijs/ssr`'s `serialize` and `@zoijs/resource`'s `{ initial }` — there is no loader
+API or component-signature change. No client behavior changes.
+
 ## 0.2.1 — 2026-06-26
 
 ### Fixed

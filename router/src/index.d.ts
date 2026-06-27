@@ -17,6 +17,12 @@ export type RouteComponent = (params: RouteParams) => TemplateResult | null;
 /** A `{ pattern: component }` map. Use `"*"` for the not-found route. */
 export type Routes = Record<string, RouteComponent>;
 
+/** The result of {@link Router.match}: the matched route component and its params. */
+export interface RouteMatch {
+  component: RouteComponent;
+  params: RouteParams;
+}
+
 /** Options for {@link createRouter}. */
 export interface RouterOptions {
   /**
@@ -33,6 +39,14 @@ export interface RouterOptions {
    * links outside `base`, and any `<a data-native>`. Default `false`.
    */
   interceptLinks?: boolean;
+  /**
+   * **Server-rendering only.** The request URL path (e.g. `"/users/42?tab=posts"`,
+   * including any `base`) to render for — used instead of `window.location` when there
+   * is no browser. This is what makes routed SSR render the route for *this* request;
+   * on the client it's ignored. Defaults to `"/"`. Pair with {@link Router.match} to
+   * load that route's data before rendering.
+   */
+  location?: string;
 }
 
 /** A router created by {@link createRouter}. */
@@ -47,6 +61,13 @@ export interface Router {
   path(): string;
   /** The current query string as a plain object (reactive). */
   query(): RouteParams;
+  /**
+   * Resolve a path to its matched route **without rendering** — `{ component, params }`.
+   * For routed SSR: learn which route (and params) a request hits so you can load that
+   * route's data before `renderToString`. Defaults to the current location; also
+   * accepts a URL path (the `base` and any query string are handled for you).
+   */
+  match(path?: string): RouteMatch;
   /** Remove the back/forward listener. Called automatically on app unmount. */
   destroy(): void;
 }
@@ -66,6 +87,15 @@ export interface Router {
  *
  * ```ts
  * const router = createRouter(routes, { base: "/app" });
+ * ```
+ *
+ * Routed SSR? Pass the request URL as `location`, and use `match()` to load its data:
+ *
+ * ```ts
+ * const router = createRouter(routes, { location: req.url });
+ * const { params } = router.match();        // route + params for this request
+ * const data = await loadData(params);      // your per-request data loading
+ * const body = renderToString(() => App(router)); // view() renders the right route
  * ```
  */
 export function createRouter(routes: Routes, options?: RouterOptions): Router;

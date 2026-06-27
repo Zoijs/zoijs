@@ -34,11 +34,20 @@ import { html, mount, createState, onCleanup } from "@zoijs/core";
 /**
  * Create a router from a `{ pattern: component }` map.
  * @param {Record<string, (params: Record<string,string>) => any>} routes
- * @param {{ base?: string }} [options]
+ * @param {{ base?: string, location?: string }} [options]
  */
 export function createRouter(routes, options = {}) {
   const { matchers, notFound } = compile(routes);
   const base = normalizeBase(options.base); // "" when hosting at the root
+
+  // Server-rendering only: a request URL path ("/users/42?tab=posts"), used instead
+  // of `window.location` when there is no browser. This is what makes routed SSR
+  // render the route for THIS request; on the client it's ignored. Defaults to "/"
+  // so an SSR render without it still works (and doesn't throw).
+  const serverUrl = options.location != null ? String(options.location) : "/";
+  const serverPathname = serverUrl.split("?")[0] || "/";
+  const qI = serverUrl.indexOf("?");
+  const serverSearch = qI >= 0 ? serverUrl.slice(qI) : "";
 
   // Browser pathname → app path (route patterns are written without the base).
   const stripBase = (pathname) => {
@@ -49,13 +58,14 @@ export function createRouter(routes, options = {}) {
   };
   // App path → browser URL (prepend the base for href / pushState).
   const toBrowser = (appPath) => (base ? base + appPath : appPath) || "/";
-  // Server-side there is no URL: default to the app root and an empty query, so
-  // createRouter() and a first render don't throw. (Per-request routed SSR — feeding
-  // the real request path in — is a separate, planned step.)
-  const appPath = () => (typeof window === "undefined" ? "/" : stripBase(window.location.pathname));
+  // The current app path: the browser URL on the client, or the server-provided
+  // `location` (default "/") when there is no window. Routed SSR works by passing
+  // the request URL as `location`, so `view()` renders the matching route.
+  const appPath = () =>
+    typeof window === "undefined" ? stripBase(serverPathname) : stripBase(window.location.pathname);
   const readLocation = () => ({
     path: appPath(),
-    query: typeof window === "undefined" ? {} : parseQuery(window.location.search),
+    query: parseQuery(typeof window === "undefined" ? serverSearch : window.location.search),
   });
 
   // One reactive cell holds the current location. path(), query(), and the
@@ -168,8 +178,8 @@ export function createRouter(routes, options = {}) {
   // router renders the current page into. Place it once in your layout.
   const view = () => {
     // SSR: no DOM to mount into — return the matched route's template directly so it
-    // serializes to HTML. With no request URL available server-side that's the "/"
-    // route; reactivity and client navigation attach when the page hydrates.
+    // serializes to HTML. With routed SSR (`location`) that's the request's route;
+    // otherwise the "/" route. Reactivity and client navigation attach on hydration.
     if (typeof document === "undefined") {
       const { component, params } = match(appPath());
       return component ? component(params) : null;
@@ -181,10 +191,16 @@ export function createRouter(routes, options = {}) {
     return outlet;
   };
 
+  // Resolve a path to its matched route WITHOUT rendering — `{ component, params }`.
+  // For routed SSR: learn which route (and params) a request hits, so you can load
+  // that route's data before renderToString. Defaults to the current location; also
+  // accepts a URL path (the base and any query string are handled for you).
+  const matched = (to) => match(to != null ? stripBase(String(to).split("?")[0]) : appPath());
+
   const path = () => location.get().path;
   const query = () => location.get().query;
 
-  return { view, link, go, path, query, destroy };
+  return { view, link, go, path, query, match: matched, destroy };
 }
 
 // ---- internals ---------------------------------------------------------------
