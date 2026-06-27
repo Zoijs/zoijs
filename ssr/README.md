@@ -42,15 +42,30 @@ function page() {
 }
 ```
 
-On the client, the same component takes over the page:
+On the client, **hydrate** — adopt the server DOM in place instead of re-creating it.
+Render the markup with `{ hydratable: true }` so the client can find and reuse it:
+
+```js
+// server
+const body = renderToString(App, { hydratable: true });
+```
 
 ```js
 // client.js
-import { mount } from "@zoijs/core";
+import { hydrate } from "@zoijs/ssr";
 import { App } from "./App.js";
 
-mount(App, "#app");
+hydrate(App, "#app"); // reuses the server elements; attaches events + reactivity
 ```
+
+`hydrate()` runs the component and **adopts** the existing elements inside the target:
+they're reused exactly (same nodes, never re-created), and their event handlers and
+reactive attributes are attached in place. Each dynamic content region is re-rendered
+into that existing structure — and because the values match the server, there's **no
+visible change and no flash**. It returns an `unmount()`, like `mount`.
+
+> Not hydrating (pure static output / SSG)? Omit `{ hydratable: true }` for clean,
+> marker-free HTML, and take over with a plain `mount(App, "#app")`.
 
 ## Static prerendering (SSG)
 
@@ -87,13 +102,17 @@ templates, and reactive values — i.e. the normal Zoijs view. It does **not** s
 a raw DOM `Node` returned from a component (there's no DOM on the server; it throws with
 a clear message — return `html\`…\`` instead).
 
-### A note on hydration
+### How hydration works (and its one trade-off)
 
-Today the recommended flow is **server-render for first paint + SEO, then `mount` on
-the client** (the client builds its own DOM and takes over). *Seamless* hydration — the
-client adopting the server's DOM nodes in place, without re-creating them — needs
-hydration-aware bindings in the core renderer, and is a planned future core capability.
-See [RFC 0008](https://github.com/Zoijs/zoijs/blob/main/framework/docs/rfcs/0008-ssr.md).
+`hydrate()` adopts the server DOM **in place** — the page's element structure (the
+expensive, layout-affecting part) is reused exactly, and events + reactive attributes
+attach to those live nodes. Dynamic *content* regions (a text slot, an `each` list, a
+nested template) are cleared and re-rendered into that structure; since the values match
+the server, this is invisible (no flash). So the static shell is adopted byte-for-byte,
+and only dynamic leaves re-render. If the server markup doesn't match what the component
+produces, hydration degrades gracefully (that region just isn't made reactive) rather
+than corrupting the page. See
+[RFC 0008](https://github.com/Zoijs/zoijs/blob/main/framework/docs/rfcs/0008-ssr.md).
 
 ## License
 

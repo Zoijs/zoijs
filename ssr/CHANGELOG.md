@@ -2,6 +2,21 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## 0.2.0 — 2026-06-27
+
+### Added
+- **Hydration — `hydrate(component, target)`.** Full SSR: the client now **adopts** the
+  server-rendered DOM in place instead of re-creating it. `hydrate()` reuses the existing
+  elements exactly and attaches their events + reactive attributes to those live nodes;
+  dynamic content regions re-render into the existing structure with no visible change
+  and no flash. It's a thin wrapper over the core's new
+  `mount(..., { hydrate: true })` (requires `@zoijs/core` ^1.6.0).
+- **`renderToString(component, { hydratable: true })`.** Keeps the markers the client
+  needs to hydrate (slot start/anchor comments + `data-zoijs-bind`). The default output
+  is unchanged — clean, marker-free HTML for static prerendering you don't hydrate.
+
+See [RFC 0008](https://github.com/Zoijs/zoijs/blob/main/framework/docs/rfcs/0008-ssr.md).
+
 ## 0.1.0 — 2026-06-26
 
 Initial release — render Zoijs components to an HTML string on the server.

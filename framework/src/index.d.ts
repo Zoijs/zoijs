@@ -66,11 +66,26 @@ export type Ref<E extends Element = Element> = (element: E) => void | (() => voi
  */
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult;
 
+/** Options for {@link mount}. */
+export interface MountOptions {
+  /**
+   * Adopt the server-rendered DOM already inside `target` (from `@zoijs/ssr`'s
+   * `renderToString(..., { hydratable: true })`) instead of replacing it: elements,
+   * attributes, and events are reused in place. Used by `@zoijs/ssr`'s `hydrate()`.
+   */
+  hydrate?: boolean;
+}
+
 /**
  * Render a component (or a template) into a DOM element or CSS selector.
  * Returns an `unmount()` that detaches the DOM and disposes all reactivity.
+ * With `{ hydrate: true }`, binds to the existing server-rendered DOM in place.
  */
-export function mount(component: Component | TemplateResult, target: Element | string): () => void;
+export function mount(
+  component: Component | TemplateResult,
+  target: Element | string,
+  options?: MountOptions
+): () => void;
 
 /**
  * Create a reactive value.

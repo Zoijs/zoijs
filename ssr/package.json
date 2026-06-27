@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/ssr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Render Zoijs components to an HTML string on the server — no DOM, no dependencies, same security as the client. For SSR and static prerendering.",
   "type": "module",
   "main": "src/index.js",
@@ -43,7 +43,7 @@
     "no-jsx"
   ],
   "peerDependencies": {
-    "@zoijs/core": "^1.5.0"
+    "@zoijs/core": "^1.6.0"
   },
   "scripts": {
     "test": "node --test",

@@ -11,9 +11,9 @@
 // identical safety decisions — no second, drifting implementation.
 //
 // The output is the component's own markup; you place it inside your HTML shell and
-// serve it. On the client, `mount(App, target)` takes over the page. (Seamless
-// hydration that adopts the server DOM in place is a future core capability — see
-// the package README and RFC 0008.)
+// serve it. On the client, `hydrate(App, target)` adopts that server DOM in place —
+// reusing its elements and attaching events/reactivity, with no full re-render and
+// no flash (render the markup with `{ hydratable: true }` so the markers are kept).
 
 import {
   isTemplateResult,
@@ -26,19 +26,43 @@ import {
   isSafeAttributeName,
   URL_ATTRS,
 } from "@zoijs/core/server";
+import { mount } from "@zoijs/core";
 
 const CHILD_MARKER = "<!--zoijs-->";
 const ELEMENT_MARKER = " data-zoijs-bind";
+const SLOT_START = "<!--zoijs:[-->"; // marks where a child slot's content begins
+
+// Set for the duration of a render. When true, the output keeps the markers a
+// client needs to hydrate (the slot start/anchor comments and `data-zoijs-bind`);
+// when false (the default), markers are stripped for clean static output.
+let hydratable = false;
+// Markers are only emitted for the OUTERMOST template. Hydration clears and
+// re-renders each dynamic slot's content, so nested markers would be discarded —
+// and worse, the client's node walk would mis-match them. renderDepth tracks the
+// outermost template so only its own slots/elements are marked.
+let renderDepth = 0;
 
 /**
  * Render a component (a function returning `html\`…\``, or a template result) to an
  * HTML string. Reactive values are read once.
+ *
+ * Pass `{ hydratable: true }` to keep the markers `mount(..., { hydrate: true })` /
+ * `hydrate()` needs to adopt this DOM on the client; omit it for clean static output
+ * (SSG) you don't hydrate.
  * @param {Function|object} component
+ * @param {{ hydratable?: boolean }} [options]
  * @returns {string}
  */
-export function renderToString(component) {
+export function renderToString(component, options) {
   const result = typeof component === "function" ? component() : component;
-  return renderValue(result);
+  hydratable = !!(options && options.hydratable);
+  try {
+    return renderValue(result);
+  } finally {
+    // Reset both, so a component that throws mid-render leaves no leaked state.
+    hydratable = false;
+    renderDepth = 0;
+  }
 }
 
 // A "value" is anything that can land in a text slot (or be the whole component):
@@ -71,6 +95,8 @@ function renderEach(marker) {
 // markers appear in document order, and `parts` is in the same order, so a single
 // linear pass with a part cursor stays aligned.
 function renderTemplate(result) {
+  renderDepth++;
+  const top = hydratable && renderDepth === 1; // only the outermost template is marked
   const skeleton = templateHTML(result);
   const { parts, values } = result;
   let out = "";
@@ -89,7 +115,10 @@ function renderTemplate(result) {
       out += skeleton.slice(pos, childAt);
       const part = parts[p++]; // { type: "child", hole }
       const raw = values[part.hole];
-      out += renderValue(typeof raw === "function" ? raw() : raw);
+      const content = renderValue(typeof raw === "function" ? raw() : raw);
+      // Hydratable (top level only): bracket the content with the slot start marker
+      // + keep the anchor, so the client can clear exactly this slot and re-render.
+      out += top ? SLOT_START + content + CHILD_MARKER : content;
       pos = childAt + CHILD_MARKER.length;
     } else {
       // Trailing whitespace here is the separator left where dynamic attributes
@@ -97,10 +126,14 @@ function renderTemplate(result) {
       // it so the emitted start tag is clean (e.g. `<input value="x"/>`).
       out += skeleton.slice(pos, elemAt).replace(/[ \t\n\r\f]+$/, "");
       const part = parts[p++]; // { type: "element", attrs }
+      // Hydratable (top level only): keep `data-zoijs-bind` so the client finds this
+      // element to adopt (attach its events / reactive attributes in place).
+      if (top) out += ELEMENT_MARKER;
       out += renderAttributes(part.attrs, values);
       pos = elemAt + ELEMENT_MARKER.length;
     }
   }
+  renderDepth--;
   return out;
 }
 
@@ -141,4 +174,20 @@ function serializeAttribute(name, value) {
   if (value === false || value == null) return "";
   if (value === true) return ` ${name}=""`;
   return ` ${name}="${escapeAttr(value)}"`;
+}
+
+// ---- hydration (client) -----------------------------------------------------
+
+/**
+ * Hydrate a server-rendered page: run `component` and ADOPT the existing DOM inside
+ * `target` (from `renderToString(component, { hydratable: true })`) instead of
+ * re-creating it. The server's elements are reused exactly and their events +
+ * reactive attributes are attached in place — no full re-render, no flash. Returns
+ * an `unmount()`. (Thin wrapper over the core's `mount(..., { hydrate: true })`.)
+ * @param {Function|object} component
+ * @param {Element|string} target
+ * @returns {() => void} unmount
+ */
+export function hydrate(component, target) {
+  return mount(component, target, { hydrate: true });
 }

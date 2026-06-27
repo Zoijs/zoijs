@@ -11,18 +11,25 @@ import { createOwner, runWithOwner, disposeOwner } from "../reactivity/owner.js"
 /**
  * @param {Function|object} component  a component function, or an html() result
  * @param {Element|string}  target     a DOM element or a CSS selector
+ * @param {{ hydrate?: boolean }} [options]  with `hydrate: true`, adopt the
+ *   server-rendered DOM already inside `target` instead of replacing it — the
+ *   elements/attributes/events are reused in place (used by @zoijs/ssr's
+ *   `hydrate()`). The returned unmount() disposes everything either way.
  * @returns {Function} unmount
  */
-export function mount(component, target) {
+export function mount(component, target, options) {
   const el = resolveTarget(target);
   const owner = createOwner();
+  const hydrate = !!(options && options.hydrate);
 
   let node;
   runWithOwner(owner, () => {
     const result = typeof component === "function" ? component() : component;
-    node = render(result).node;
+    // Hydration binds to el's existing children in place; a fresh mount builds a
+    // detached fragment we then swap in.
+    node = render(result, hydrate ? el : undefined).node;
   });
-  el.replaceChildren(node);
+  if (!hydrate) el.replaceChildren(node);
 
   return () => {
     disposeOwner(owner);

@@ -104,3 +104,35 @@ test("a raw DOM node throws a clear error", () => {
 test("accepts a result directly, not just a function", () => {
   assert.equal(renderToString(html`<p>hi</p>`), "<p>hi</p>");
 });
+
+// ---- hydratable output ------------------------------------------------------
+
+test("hydratable: child slots are bracketed with start + anchor markers", () => {
+  const out = renderToString(() => html`<p>Hi ${() => "Ada"}!</p>`, { hydratable: true });
+  assert.equal(out, "<p>Hi <!--zoijs:[-->Ada<!--zoijs-->!</p>");
+});
+
+test("hydratable: dynamic elements keep data-zoijs-bind for adoption", () => {
+  const out = renderToString(() => html`<button title=${() => "t"} onclick=${() => {}}>Go</button>`, {
+    hydratable: true,
+  });
+  // The marker is kept (so the client can find + adopt the element); the event is
+  // still dropped from the markup, but the element is bindable on hydrate.
+  assert.match(out, /<button data-zoijs-bind title="t">Go<\/button>/);
+});
+
+test("hydratable: each items render inside the slot brackets", () => {
+  const out = renderToString(
+    () => html`<ul>${each(() => [1, 2], (x) => x, (x) => html`<li>${() => x}</li>`)}</ul>`,
+    { hydratable: true }
+  );
+  // Only the OUTERMOST template is marked; the nested <li> content is clean (it's
+  // cleared + re-rendered on hydrate, so its markers would be useless).
+  assert.equal(out, "<ul><!--zoijs:[--><li>1</li><li>2</li><!--zoijs--></ul>");
+});
+
+test("default (non-hydratable) output has no markers", () => {
+  const out = renderToString(() => html`<p>Hi ${() => "Ada"}!</p>`);
+  assert.equal(out, "<p>Hi Ada!</p>");
+  assert.ok(!out.includes("zoijs"));
+});

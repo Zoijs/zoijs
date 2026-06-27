@@ -13,10 +13,13 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(root, "framework", "src");
 
-// Budget for the whole core, gzipped. Generous headroom over today's size; the
-// point is to catch a regression (a careless dependency or a big new feature),
-// not to shave bytes.
-const BUDGET_GZIP = 16 * 1024; // 16 KB — ~20% headroom over today's ~13.3 KB
+// Budget for the whole CLIENT core, gzipped. The point is to catch a regression (a
+// careless dependency, accidental bloat), not to shave bytes — so it keeps generous
+// headroom and is raised deliberately when a reviewed feature lands. The core has
+// grown through RFC-gated additions (ref, effect, boundary, the devtools hook, the
+// DOM-free server compiler, and in-place hydration) from ~13.3 KB to ~16 KB; raised
+// to 18 KB (2026-06-27) to restore ~10% headroom after hydration shipped.
+const BUDGET_GZIP = 18 * 1024; // 18 KB — ~10% headroom over today's ~16 KB
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They
