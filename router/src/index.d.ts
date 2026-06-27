@@ -25,6 +25,14 @@ export interface RouterOptions {
    * `router.path()` stay base-free. Trailing slash optional.
    */
   base?: string;
+  /**
+   * Intercept plain left-clicks on **any** internal `<a>` (not just `link()`s) and
+   * navigate client-side instead of reloading. Makes links inside rendered content
+   * (Markdown, a CMS body) behave like a SPA. Bows out for modifier/new-tab clicks,
+   * `target`, `download`, external origins, other schemes, same-page `#hash` links,
+   * links outside `base`, and any `<a data-native>`. Default `false`.
+   */
+  interceptLinks?: boolean;
 }
 
 /** A router created by {@link createRouter}. */

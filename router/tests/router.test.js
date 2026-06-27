@@ -272,3 +272,88 @@ test("no base: link href is unchanged (backward compatible)", { skip }, () => {
   assert.equal(about.getAttribute("href"), "/about");
   app.teardown();
 });
+
+// ---- interceptLinks --------------------------------------------------------
+// The interceptor listens on `window`, so the app must be CONNECTED to the
+// document for a click to bubble up. `content` is raw markup with plain <a>s —
+// exactly what rendered Markdown produces.
+
+function setupIntercept(content, options = { interceptLinks: true }) {
+  window.history.replaceState({}, "", "/");
+  const router = createRouter(routes, options);
+  const target = document.createElement("div");
+  document.body.appendChild(target); // connect → window receives bubbled clicks
+  const App = () => html`<main>${router.view()}</main><div id="content">${content}</div>`;
+  const unmount = mount(App, target);
+  return {
+    router,
+    a: (sel) => target.querySelector("#content " + sel),
+    teardown: () => {
+      unmount();
+      router.destroy();
+      target.remove();
+    },
+  };
+}
+
+const clickA = (a, init = {}) =>
+  a.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init }));
+
+test("interceptLinks: a plain internal <a> navigates client-side", { skip }, async () => {
+  const app = setupIntercept(html`<a href="/about">About</a>`);
+  clickA(app.a("a"));
+  await tick();
+  assert.equal(app.router.path(), "/about"); // routed, no reload
+  app.teardown();
+});
+
+test("interceptLinks: off by default (a plain <a> is left alone)", { skip }, async () => {
+  const app = setupIntercept(html`<a href="/about">About</a>`, {}); // no option
+  clickA(app.a("a"));
+  await tick();
+  assert.equal(app.router.path(), "/"); // not intercepted → router didn't navigate
+  app.teardown();
+});
+
+test("interceptLinks: bows out for modifier, external, hash, target, download, data-native", { skip }, async () => {
+  const app = setupIntercept(html`
+    <a id="ext" href="https://example.com/x">external</a>
+    <a id="hash" href="#section">hash</a>
+    <a id="blank" href="/about" target="_blank">new tab</a>
+    <a id="dl" href="/about" download>download</a>
+    <a id="native" href="/about" data-native>native</a>
+    <a id="mod" href="/about">modifier</a>
+  `);
+  clickA(app.a("#ext"));
+  clickA(app.a("#hash"));
+  clickA(app.a("#blank"));
+  clickA(app.a("#dl"));
+  clickA(app.a("#native"));
+  clickA(app.a("#mod"), { metaKey: true });
+  await tick();
+  assert.equal(app.router.path(), "/"); // none of these were intercepted
+  app.teardown();
+});
+
+test("interceptLinks: respects base (in-base routed, out-of-base ignored)", { skip }, async () => {
+  window.history.replaceState({}, "", "/app/");
+  const router = createRouter(baseRoutes, { base: "/app", interceptLinks: true });
+  const target = document.createElement("div");
+  document.body.appendChild(target);
+  const App = () => html`<main>${router.view()}</main>
+    <div id="c"><a id="in" href="/app/tasks">tasks</a><a id="out" href="/other">out</a></div>`;
+  const unmount = mount(App, target);
+
+  clickA(target.querySelector("#c #out")); // outside base → left for a full navigation
+  await tick();
+  assert.equal(router.path(), "/"); // unchanged
+
+  clickA(target.querySelector("#c #in")); // inside base → routed client-side, base-free
+  await tick();
+  assert.equal(router.path(), "/tasks");
+  assert.equal(window.location.pathname, "/app/tasks");
+
+  unmount();
+  router.destroy();
+  target.remove();
+});

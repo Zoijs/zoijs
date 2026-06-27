@@ -11,6 +11,9 @@ function Home() {
     <h1>Home</h1>
     <p>Welcome to the Zoijs router demo.</p>
     <p>Try a user page: ${router.link("/users/42", "User 42")}</p>
+    <!-- A PLAIN anchor (not router.link). With { interceptLinks: true } it still
+         navigates client-side — as a link inside rendered content would. -->
+    <p><a href="/about">About (plain link)</a></p>
   `;
 }
 
@@ -36,12 +39,15 @@ function NotFound() {
   `;
 }
 
-const router = createRouter({
-  "/": Home,
-  "/about": About,
-  "/users/:id": UserPage,
-  "*": NotFound,
-});
+const router = createRouter(
+  {
+    "/": Home,
+    "/about": About,
+    "/users/:id": UserPage,
+    "*": NotFound,
+  },
+  { interceptLinks: true } // plain internal <a> links navigate client-side too
+);
 
 function App() {
   return html`

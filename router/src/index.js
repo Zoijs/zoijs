@@ -77,11 +77,36 @@ export function createRouter(routes, options = {}) {
 
   // Back/forward buttons fire "popstate"; re-read the URL when they do.
   window.addEventListener("popstate", apply);
+
+  // Optional: intercept clicks on ANY internal <a> (not just router.link ones) so
+  // a plain left-click navigates client-side instead of doing a full page reload.
+  // This is what makes links inside rendered content — Markdown, a CMS body — feel
+  // like a single-page app without wrapping each one. Off by default; enable with
+  // createRouter(routes, { interceptLinks: true }). It bows out for everything a
+  // user would expect to behave normally (new-tab/modifier clicks, target,
+  // download, external origins, other schemes, same-page #hashes, links outside the
+  // app's base, and an explicit `data-native` opt-out).
+  const onLinkClick = (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download") || a.hasAttribute("data-native")) return;
+    if (a.origin !== window.location.origin) return; // external origin → real navigation
+    const href = a.getAttribute("href");
+    if (!href || href[0] === "#") return; // in-page anchor → let the browser scroll
+    if (a.pathname === window.location.pathname && a.search === window.location.search && a.hash) return; // same page #hash
+    const within = !base || a.pathname === base || a.pathname.startsWith(base + "/");
+    if (!within) return; // outside the app's base → not ours; let it navigate
+    e.preventDefault();
+    go(stripBase(a.pathname) + a.search + a.hash);
+  };
+  if (options.interceptLinks) window.addEventListener("click", onLinkClick);
+
   let destroyed = false;
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
     window.removeEventListener("popstate", apply);
+    if (options.interceptLinks) window.removeEventListener("click", onLinkClick);
     if (unmountPage) unmountPage();
   };
 
