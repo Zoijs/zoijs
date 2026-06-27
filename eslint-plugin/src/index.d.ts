@@ -25,6 +25,9 @@ export interface ZoijsEslintPlugin {
   meta: { name: string; version: string };
   rules: {
     "require-reactive-binding": ZoijsRuleModule;
+    "alt-text": ZoijsRuleModule;
+    "no-positive-tabindex": ZoijsRuleModule;
+    "no-static-element-interactions": ZoijsRuleModule;
   };
   configs: {
     /** Flat config (ESLint 9+): `export default [ zoijs.configs.recommended ]`. */

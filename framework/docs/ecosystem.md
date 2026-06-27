@@ -25,7 +25,7 @@ through one app — the **Task Board** demo — that uses five of them together.
 | [`@zoijs/ssr`](../../ssr/README.md) | Server rendering | `renderToString(component, { hydratable })`, `hydrate`, `serialize` (SSR + static prerender + data hand-off) |
 | [`@zoijs/testing`](../../testing/README.md) | DOM testing helpers (dev) | `render`, `screen`, `fireEvent`, `waitFor`, `cleanup`, `mockRouter` |
 | [`@zoijs/devtools`](../../devtools/README.md) | Reactive-graph inspector (dev) | `inspect()`, `createInspector()` |
-| [`@zoijs/eslint-plugin`](../../eslint-plugin/README.md) | Lint rule (dev) | `require-reactive-binding` (auto-fixable) + `recommended` config |
+| [`@zoijs/eslint-plugin`](../../eslint-plugin/README.md) | Lint rules (dev) | `require-reactive-binding` (auto-fixable) + a11y rules (`alt-text`, `no-positive-tabindex`, `no-static-element-interactions`) |
 
 > New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
 > (no build step). The optional packages below add capabilities to an app you

@@ -70,7 +70,7 @@ function Overview() {
 
   return html`
     <h1>${() => t("nav.overview")}</h1>
-    ${() => (stats.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (stats.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => (stats.error() ? html`<p role="alert">${stats.error().message}</p>` : null)}
     ${() => {
       const s = stats.data();
@@ -117,12 +117,15 @@ function Users() {
       aria-label=${() => t("users.search")}
     />
 
-    ${() => (users.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (users.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => (users.error() ? html`<p role="alert">${users.error().message}</p>` : null)}
 
     <table class="users">
       <thead>
-        <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr>
+        <tr>
+          <th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th>
+          <th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
       </thead>
       <tbody>
         ${each(
@@ -169,7 +172,7 @@ function UserDetail(params) {
   };
 
   return html`
-    ${() => (user.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (user.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() =>
       user.error()
         ? html`<div><p role="alert">${user.error().message}</p>${router.link("/users", "← Back")}</div>`
@@ -244,7 +247,7 @@ function Settings() {
 
   return html`
     <h1>${() => t("nav.settings")}</h1>
-    ${() => (initial.loading() ? html`<p class="muted">Loading…</p>` : null)}
+    ${() => (initial.loading() ? html`<p class="muted" role="status">Loading…</p>` : null)}
     ${() => {
       const values = initial.data();
       if (!values) return null;
@@ -296,10 +299,20 @@ const router = createRouter(
 );
 
 function Shell() {
+  // After a client-side navigation, move focus to the main region so screen-reader
+  // and keyboard users land on the new page (skipped on the very first render).
+  let firstPath = true;
+  effect(() => {
+    router.path(); // track navigation
+    if (firstPath) return void (firstPath = false);
+    document.getElementById("main")?.focus();
+  });
+
   const navItem = (path, labelKey) =>
     html`<a
       href=${"/examples/admin" + path}
       class=${() => (router.path() === path ? "nav-link active" : "nav-link")}
+      aria-current=${() => (router.path() === path ? "page" : false)}
       onclick=${(e) => {
         e.preventDefault();
         router.go(path);
@@ -308,9 +321,10 @@ function Shell() {
     >`;
 
   return html`
+    <a class="skip-link" href="#main">Skip to content</a>
     <aside class="sidebar">
       <div class="brand">${() => t("app")}</div>
-      <nav>
+      <nav aria-label="Primary">
         ${navItem("/", "nav.overview")} ${navItem("/users", "nav.users")} ${navItem("/settings", "nav.settings")}
       </nav>
     </aside>
@@ -324,7 +338,7 @@ function Shell() {
           ${() => (theme.get() === "dark" ? "☀ Light" : "☾ Dark")}
         </button>
       </header>
-      <main>${router.view()}</main>
+      <main id="main" tabindex="-1">${router.view()}</main>
     </div>
   `;
 }

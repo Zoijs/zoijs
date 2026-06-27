@@ -1,7 +1,7 @@
 # @zoijs/eslint-plugin
 
-ESLint rules for [Zoijs](https://zoijs.dev) — catch the one reactivity footgun
-before it ships. Zero dependencies, no build step.
+ESLint rules for [Zoijs](https://zoijs.dev) — catch the one reactivity footgun and a
+few common accessibility mistakes before they ship. Zero dependencies, no build step.
 
 Zoijs has a single rule you have to learn: **setup runs once, so wrap a reactive
 read in an arrow function** when it should update the DOM.
@@ -101,6 +101,31 @@ html`<p>${params.get("id")}</p>`                   // ✓ not a reactive read
 
 > The plugin matches the literal tag name `html`. If you alias or namespace it
 > (`lit.html`, `const h = html`), the rule won't recognize those calls.
+
+### Accessibility rules
+
+A small set of high-value a11y checks on the markup inside `html` templates. They
+reinforce the [accessibility guide](https://zoijs.dev/accessibility) — Zoijs writes real
+HTML, so most of accessibility is using the right element; these catch the common slips.
+
+| Rule | Flags | Level |
+|---|---|---|
+| `alt-text` | an `<img>` with no `alt` attribute (use `alt=""` for decorative images) | error |
+| `no-positive-tabindex` | a literal `tabindex` greater than `0` (use `0` or `-1`) | error |
+| `no-static-element-interactions` | an `onclick` on a `<div>`/`<span>` with no `role` — use a `<button>` | warn |
+
+```js
+html`<img src=${avatar} />`                          // ✗ alt-text: needs alt
+html`<img src=${avatar} alt=${name} />`              // ✓
+html`<div tabindex="2">…</div>`                      // ✗ no-positive-tabindex
+html`<div onclick=${open}>Open</div>`                // ✗ no-static-element-interactions
+html`<button onclick=${open}>Open</button>`          // ✓ native element
+```
+
+These are intentionally narrow (only literal positive `tabindex`, only `<div>`/`<span>`
+for the interaction rule, decorative `alt=""` always allowed) to keep false positives
+low. They aren't a replacement for an automated auditor (axe/Lighthouse) or testing with
+a real screen reader — they catch the mistakes that are cheap to catch at author time.
 
 ## Why a plugin and not a core feature
 
