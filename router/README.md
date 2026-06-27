@@ -178,6 +178,28 @@ the same).
 > host to serve `index.html` for unknown paths under the base (a "SPA fallback").
 > In-app navigation needs no server config; this only matters for full reloads.
 
+## Intercepting content links (`interceptLinks`)
+
+`link()` gives you an `<a>` that navigates client-side. But links you *don't* author
+by hand — the ones inside **rendered Markdown, a CMS body, or any HTML you didn't wrap**
+— are plain anchors, so clicking one triggers a full page reload (a visible flash, and
+the whole app re-boots). Turn that off with one option:
+
+```js
+const router = createRouter(routes, { interceptLinks: true });
+```
+
+Now a plain left-click on any **internal** `<a>` navigates client-side, just like a
+`link()`. It deliberately leaves alone everything that should behave normally:
+
+- modifier / middle clicks and `target="_blank"` (so "open in new tab" still works),
+- `download` links, external origins, and non-HTTP schemes (`mailto:`, `tel:`),
+- same-page `#hash` links (the browser scrolls natively),
+- links outside your `base`, and any link you opt out with `<a data-native href=…>`.
+
+It's off by default so nothing changes unless you ask. This is the piece that makes a
+content-heavy site (like docs) feel like a true SPA.
+
 ## Common mistakes
 
 - **Hosting under a sub-path without `base`.** The first load matches `"*"`

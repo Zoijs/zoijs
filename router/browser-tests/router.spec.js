@@ -51,3 +51,19 @@ test("active link gets aria-current after navigating", async ({ page }) => {
   await about.click();
   await expect(about).toHaveAttribute("aria-current", "page");
 });
+
+test("interceptLinks: a PLAIN <a> navigates client-side with no full reload", async ({ page }) => {
+  await page.goto(base);
+  // Reach Home first (the app is hosted at a sub-path with no base, so the initial
+  // URL is the "*" route until we navigate via a link).
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page.getByRole("link", { name: "About (plain link)", exact: true })).toBeVisible();
+
+  // Tag the live document. A full page reload would wipe this; client nav keeps it.
+  await page.evaluate(() => (window.__noReload = true));
+  await page.getByRole("link", { name: "About (plain link)", exact: true }).click();
+
+  await expect(page.locator("main h1")).toHaveText("About");
+  await expect(page).toHaveURL(/\/about$/);
+  expect(await page.evaluate(() => window.__noReload)).toBe(true); // never reloaded
+});
