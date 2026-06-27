@@ -154,6 +154,20 @@ test("any generated dev server uses port 7310 with 7311–7313 fallbacks and the
   }
 });
 
+test("scaffold writes editor config: .vscode recommendations + jsconfig (app/basic)", () => {
+  for (const template of ["app", "basic"]) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "ed", template, targetDir: dir });
+    // _vscode is restored to .vscode on copy (npm strips dot-prefixed names)
+    assert.ok(fs.existsSync(path.join(dir, ".vscode", "extensions.json")), `${template}: .vscode/extensions.json`);
+    assert.ok(!fs.existsSync(path.join(dir, "_vscode")), `${template}: no leftover _vscode`);
+    const ext = JSON.parse(read(dir, ".vscode", "extensions.json"));
+    assert.ok(ext.recommendations.includes("bierner.lit-html"), `${template}: recommends an html\`\` highlighter`);
+    // jsconfig gives IntelliSense from the bundled types without a build step
+    assert.ok(fs.existsSync(path.join(dir, "jsconfig.json")), `${template}: jsconfig.json`);
+  }
+});
+
 test("scaffold(typescript) is type-checked JS with no build step", () => {
   const dir = path.join(tmp(), "ts-app");
   scaffold({ name: "ts-app", template: "typescript", targetDir: dir });

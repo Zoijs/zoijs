@@ -2,6 +2,20 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## 0.1.4 — 2026-06-27
+
+Scaffolded apps now come with editor config for a great out-of-the-box experience —
+no toolchain required. The CLI API and the app code are unchanged.
+
+- **`.vscode/extensions.json`** (templates `app`, `basic`, `typescript`, `library`) —
+  recommends a highlighter for `` html`` `` templates (`bierner.lit-html`), the ESLint
+  extension, and Prettier. VS Code suggests them when you open the project.
+- **`jsconfig.json`** (templates `app`, `basic`) — IntelliSense (autocomplete, hover,
+  go-to-definition) from the types every Zoijs package ships, with no build step. Flip
+  `checkJs` on to also type-check your JavaScript. (The `typescript` and `library`
+  templates already carry a `tsconfig.json`.)
+- See the [Editor Setup guide](https://zoijs.dev/editor-setup).
+
 ## 0.1.3 — 2026-06-26
 
 Three new templates (now five total). No change to existing templates or the CLI

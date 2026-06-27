@@ -78,6 +78,10 @@ export function ensureTargetAvailable(targetDir) {
 const TEXT_EXT = new Set([".js", ".ts", ".mjs", ".html", ".css", ".json", ".md", ".txt", ".svg"]);
 const isText = (file) => file === "_gitignore" || TEXT_EXT.has(path.extname(file));
 
+// npm strips/renames files and dirs that start with a dot from a published package,
+// so templates ship them with a "_" prefix and we restore the dot name on copy.
+const RENAME = { _gitignore: ".gitignore", _vscode: ".vscode" };
+
 function applyTokens(content, tokens) {
   return content.replaceAll("{{APP_NAME}}", tokens.APP_NAME).replaceAll("{{APP_TITLE}}", tokens.APP_TITLE);
 }
@@ -86,9 +90,7 @@ function copyDir(srcDir, destDir, tokens, written) {
   fs.mkdirSync(destDir, { recursive: true });
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const srcPath = path.join(srcDir, entry.name);
-    // npm strips a literal ".gitignore" from published packages, so templates
-    // ship it as "_gitignore" and we rename it on copy.
-    const destName = entry.name === "_gitignore" ? ".gitignore" : entry.name;
+    const destName = RENAME[entry.name] ?? entry.name; // restore dot-prefixed names
     const destPath = path.join(destDir, destName);
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath, tokens, written);

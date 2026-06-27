@@ -83,6 +83,12 @@ PRs are **squash-merged** and the head branch is deleted automatically after
 merge. For anything beyond a small fix, **open an issue or RFC first** (see
 Principles) — it saves everyone time if the scope isn't a fit.
 
+## Releasing
+
+Maintainers: the core publishes itself when its version bumps on `main`; the optional
+packages and `create-zoijs` are published by hand, and then the docs-site CDN pins are
+synced. See [docs/releasing.md](docs/releasing.md) for the order and the exact steps.
+
 ## Commit messages
 
 Conventional-style prefixes are appreciated: `fix:`, `feat:`, `docs:`,
