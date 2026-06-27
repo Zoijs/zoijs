@@ -49,8 +49,14 @@ export function createRouter(routes, options = {}) {
   };
   // App path → browser URL (prepend the base for href / pushState).
   const toBrowser = (appPath) => (base ? base + appPath : appPath) || "/";
-  const appPath = () => stripBase(window.location.pathname);
-  const readLocation = () => ({ path: appPath(), query: parseQuery(window.location.search) });
+  // Server-side there is no URL: default to the app root and an empty query, so
+  // createRouter() and a first render don't throw. (Per-request routed SSR — feeding
+  // the real request path in — is a separate, planned step.)
+  const appPath = () => (typeof window === "undefined" ? "/" : stripBase(window.location.pathname));
+  const readLocation = () => ({
+    path: appPath(),
+    query: typeof window === "undefined" ? {} : parseQuery(window.location.search),
+  });
 
   // One reactive cell holds the current location. path(), query(), and the
   // active-link state read it, so they update when the URL changes.
@@ -75,8 +81,9 @@ export function createRouter(routes, options = {}) {
     renderPage();
   };
 
-  // Back/forward buttons fire "popstate"; re-read the URL when they do.
-  window.addEventListener("popstate", apply);
+  // Back/forward buttons fire "popstate"; re-read the URL when they do. (Skipped
+  // server-side, where there is no window to listen on.)
+  if (typeof window !== "undefined") window.addEventListener("popstate", apply);
 
   // Optional: intercept clicks on ANY internal <a> (not just router.link ones) so
   // a plain left-click navigates client-side instead of doing a full page reload.
@@ -99,14 +106,16 @@ export function createRouter(routes, options = {}) {
     e.preventDefault();
     go(stripBase(a.pathname) + a.search + a.hash);
   };
-  if (options.interceptLinks) window.addEventListener("click", onLinkClick);
+  if (options.interceptLinks && typeof window !== "undefined") window.addEventListener("click", onLinkClick);
 
   let destroyed = false;
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    window.removeEventListener("popstate", apply);
-    if (options.interceptLinks) window.removeEventListener("click", onLinkClick);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("popstate", apply);
+      if (options.interceptLinks) window.removeEventListener("click", onLinkClick);
+    }
     if (unmountPage) unmountPage();
   };
 
@@ -130,6 +139,7 @@ export function createRouter(routes, options = {}) {
   };
 
   const go = (to) => {
+    if (typeof window === "undefined") return; // navigation is a client-only action
     const target = toBrowser(String(to));
     if (target === currentUrl()) return; // already here — don't spam history
     window.history.pushState({}, "", target);
@@ -157,6 +167,13 @@ export function createRouter(routes, options = {}) {
   // view() returns the outlet: an invisible (display: contents) element the
   // router renders the current page into. Place it once in your layout.
   const view = () => {
+    // SSR: no DOM to mount into — return the matched route's template directly so it
+    // serializes to HTML. With no request URL available server-side that's the "/"
+    // route; reactivity and client navigation attach when the page hydrates.
+    if (typeof document === "undefined") {
+      const { component, params } = match(appPath());
+      return component ? component(params) : null;
+    }
     outlet = document.createElement("div");
     outlet.style.display = "contents";
     onCleanup(destroy); // unmount the page + drop the popstate listener on teardown
