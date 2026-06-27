@@ -43,7 +43,9 @@ the core's public API, with **no core changes**:
 - `@zoijs/i18n` — reactive locale, plurals, and `Intl` formatting.
 - `@zoijs/testing` — first-party DOM testing helpers (`render` / queries / `fireEvent`).
 - `@zoijs/devtools` — a dev-only reactive-graph inspector.
-- `@zoijs/ssr` — render to an HTML string (SSR + static prerender), no DOM, zero deps.
+- `@zoijs/ssr` — render to an HTML string + in-place hydration + `serialize` for
+  server→client data (SSR + static prerender), no DOM, zero deps.
+- `@zoijs/eslint-plugin` — enforces the reactive-binding rule (auto-fixable, dev-only, zero deps).
 - `create-zoijs` — the starter CLI (`npm create zoijs@latest`).
 
 ## 2.0+ — still on the table (separate packages)

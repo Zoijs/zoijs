@@ -54,7 +54,7 @@ Yes — type definitions ship in the package, with full generics for state, comp
 
 ## Does it do routing / SSR / a global store?
 
-Not yet — these are intentionally out of the core to keep it small. They may arrive later as **optional** modules that never compromise the no-build, small-core identity.
+Routing and SSR are intentionally **not in the core** — but they ship as optional packages: [`@zoijs/router`](../../router/README.md) for client-side routing and [`@zoijs/ssr`](../../ssr/README.md) for server-side rendering + static prerendering with in-place hydration. A global store is deliberately left out (state is local and composable); a `@zoijs/storage` reactive value covers persistence. Each optional package is opt-in and never compromises the no-build, small-core identity.
 
 ## Can I use my own CSS / Tailwind / etc.?
 

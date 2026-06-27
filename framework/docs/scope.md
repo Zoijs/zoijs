@@ -64,7 +64,8 @@ Where each capability **ends** and where **user code** begins:
 - **forms** ends at "values/errors/touched are tracked and `validate()` ran." The
   network submit is `@zoijs/action`; schemas/async validation are yours.
 - **head** ends at "the tag is set now and restored on unmount." SEO for crawlers
-  that don't run JS needs server rendering — not in scope.
+  that don't run JS needs server rendering — that's [`@zoijs/ssr`](../../ssr/README.md)
+  (head is SSR-safe: put the initial tags in your HTML shell), not head itself.
 - **create-zoijs** ends at "files were written." Everything after `cd` is a normal
   project you own; the CLI never runs again.
 
@@ -210,7 +211,11 @@ code, or in a separate community package — not in Zoijs.**
 These are intentionally *not* implemented. Listing them here so the next person
 doesn't relitigate them:
 
-- **`@zoijs/ssr`** — server rendering + hydration (2.0+ candidate, separate package).
+- **`@zoijs/ssr`** — server rendering + hydration — **shipped** (separate package,
+  RFC 0008): a DOM-free compiler + `@zoijs/core/server` (1.5.0) let it render to a
+  string; in-place hydration landed in core 1.6.0 / ssr 0.2.0, and `serialize` +
+  `resource({ initial })` (ssr 0.3.0 / resource 0.2.0) hand server data to the client.
+  `head` and `router` are SSR-safe. Per-request routed SSR (loaders) is still deferred.
 - **An optional template compiler** — must be behavior-identical and never required.
 - **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
   completion of the reactive trio. An optional **`svg`** helper — **deferred**

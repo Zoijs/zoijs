@@ -2,7 +2,7 @@
 
 > **Historical snapshot — the initial ecosystem launch (2026-06-25).** It describes the
 > ecosystem *as it launched* (core + six optional packages). The ecosystem has since
-> grown to ten optional packages plus `create-zoijs`; for the current list see
+> grown to eleven optional packages plus `create-zoijs`; for the current list see
 > [`ecosystem.md`](ecosystem.md) and [`../ROADMAP.md`](../ROADMAP.md), and for the
 > authoritative status see [`enterprise-readiness.md`](enterprise-readiness.md).
 

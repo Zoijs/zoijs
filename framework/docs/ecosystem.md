@@ -22,9 +22,10 @@ through one app — the **Task Board** demo — that uses five of them together.
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
 | [`@zoijs/i18n`](../../i18n/README.md) | Internationalization | `createI18n(options)` → `t`, `locale`, `setLocale`, `n`, `d`, `list`, `add` |
-| [`@zoijs/ssr`](../../ssr/README.md) | Server rendering | `renderToString(component)` → an HTML string (SSR + static prerender) |
+| [`@zoijs/ssr`](../../ssr/README.md) | Server rendering | `renderToString(component, { hydratable })`, `hydrate`, `serialize` (SSR + static prerender + data hand-off) |
 | [`@zoijs/testing`](../../testing/README.md) | DOM testing helpers (dev) | `render`, `screen`, `fireEvent`, `waitFor`, `cleanup`, `mockRouter` |
 | [`@zoijs/devtools`](../../devtools/README.md) | Reactive-graph inspector (dev) | `inspect()`, `createInspector()` |
+| [`@zoijs/eslint-plugin`](../../eslint-plugin/README.md) | Lint rule (dev) | `require-reactive-binding` (auto-fixable) + `recommended` config |
 
 > New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
 > (no build step). The optional packages below add capabilities to an app you
@@ -42,8 +43,9 @@ npm install @zoijs/storage     # persistence (localStorage)
 npm install @zoijs/forms       # form state + validation
 npm install @zoijs/i18n        # internationalization
 npm install @zoijs/ssr         # server-side rendering
-npm install -D @zoijs/testing  # DOM testing helpers (dev dependency)
-npm install -D @zoijs/devtools # reactive-graph inspector (dev dependency)
+npm install -D @zoijs/testing       # DOM testing helpers (dev dependency)
+npm install -D @zoijs/devtools      # reactive-graph inspector (dev dependency)
+npm install -D @zoijs/eslint-plugin # lint rule for the reactive-binding rule (dev dependency)
 ```
 
 Or load them with no install via an import map / CDN (pin the version):
