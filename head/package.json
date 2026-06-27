@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/head",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Set the document title and meta description from a Zoijs component. Tiny, optional, no build step.",
   "type": "module",
   "main": "src/index.js",

@@ -2,6 +2,16 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## 0.2.1 — 2026-06-26
+
+### Fixed
+- **SSR-safe.** `createRouter(...)` and `view()` no longer touch `window`/`document`
+  when those don't exist, so a routed component can be passed to `@zoijs/ssr`'s
+  `renderToString` without throwing. Server-side, `view()` renders the matched route's
+  template directly (the `"/"` route, since no request URL is available) and
+  navigation (`go`, popstate, `interceptLinks`) becomes a no-op; the client takes over
+  on hydration. No API change. Per-request routed SSR remains a separate, planned step.
+
 ## 0.2.0 — 2026-06-26
 
 ### Added

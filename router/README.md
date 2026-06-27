@@ -200,6 +200,18 @@ Now a plain left-click on any **internal** `<a>` navigates client-side, just lik
 It's off by default so nothing changes unless you ask. This is the piece that makes a
 content-heavy site (like docs) feel like a true SPA.
 
+## Server rendering
+
+The router is **SSR-safe**: `createRouter(...)` and `view()` no longer touch
+`window`/`document` when those don't exist, so a routed component can be passed to
+`@zoijs/ssr`'s `renderToString` without throwing. On the server `view()` renders the
+matched route's template directly (and `link()` produces plain anchors), then the page
+hydrates on the client where navigation, the History API, and `interceptLinks` take
+over.
+
+With no request URL available server-side, the server renders the `"/"` route. Feeding
+the actual request path in — per-request routed SSR — is a separate, planned step.
+
 ## Common mistakes
 
 - **Hosting under a sub-path without `base`.** The first load matches `"*"`

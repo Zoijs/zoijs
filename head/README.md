@@ -118,7 +118,9 @@ Navigate Home → About and the tab title and description follow along.
   title depends on changing state, call it again (e.g. set it from an `effect` in
   your own code) — but most pages just need a single static title.
 - **Using it for SEO on a static-HTML crawler.** This sets the head *client-side*.
-  For pre-rendered/SSR SEO you need server-rendered tags — out of scope here.
+  Under `@zoijs/ssr` it's a safe no-op (it never throws during `renderToString`), so
+  put the initial `<title>`/`<meta>` in your HTML shell; `head` then updates them on
+  the client after hydration.
 
 ## License
 

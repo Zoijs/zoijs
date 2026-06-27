@@ -24,6 +24,9 @@ import { onCleanup } from "@zoijs/core";
  * @param {string} value
  */
 export function title(value) {
+  // SSR: there is no document. Put the initial <title> in your HTML shell; this
+  // updates it on the client after hydration. (No-op here, never throws.)
+  if (typeof document === "undefined") return;
   const previous = document.title;
   document.title = String(value);
   onCleanup(() => {
@@ -47,6 +50,8 @@ export function description(value) {
  * @param {string} content
  */
 export function meta(name, content) {
+  // SSR: no document — put the initial <meta> in your HTML shell. (No-op, never throws.)
+  if (typeof document === "undefined") return;
   let el = findMeta(name);
   const created = !el;
   const previous = el ? el.getAttribute("content") : null;
