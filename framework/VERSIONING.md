@@ -38,3 +38,37 @@ template scanner internals, and anything under `src/` not re-exported by
 
 Because the API is frozen at 1.0, any addition or change goes through a short
 RFC (see `CONTRIBUTING.md`). This keeps the surface small and deliberate.
+
+## Support & LTS policy
+
+Zoijs's stability promise is unusually easy to keep: the core's public surface is a
+**frozen nine functions**, so a `1.x` upgrade is always additive and never asks you to
+change working code.
+
+**`@zoijs/core` (stable, `1.x`).**
+
+- The **current major** is actively maintained: bug fixes, performance, security, and
+  additive (RFC-gated) features all land on the latest `1.x`. Upgrading within `1.x` is
+  safe by definition (SemVer MINOR/PATCH).
+- A new **MAJOR** ships only for a genuine breaking change (none is planned — see
+  [`ROADMAP.md`](ROADMAP.md) non-goals). When one does, the **previous major receives
+  security and critical-bug fixes for at least 6 months** after the new major is
+  published, so you are never forced to migrate on someone else's schedule.
+- **Security fixes** always land on the latest supported line and are disclosed per
+  [`SECURITY.md`](SECURITY.md). Supported lines are listed there.
+
+**Optional packages (`0.x`).** The ecosystem packages (`@zoijs/router`, `/resource`,
+`/forms`, `/i18n`, `/ssr`, …) are pre-1.0 and may still refine their surface; changes
+are additive where possible and always noted in each package's `CHANGELOG.md`. Each is
+independent — you upgrade only what you use. They reach `1.0` once their shape has
+settled in real use.
+
+**Platform baseline.** Node **≥ 18** for tooling/tests; the runtime targets modern
+evergreen browsers (Chromium, Firefox, WebKit), verified in CI. Raising the minimum
+browser baseline is a MAJOR change (see above). There is **no build step** to support,
+at any version — the published package *is* its source.
+
+**Upgrading.** Within a major: `npm update`. Across a (future) major: the `CHANGELOG.md`
+entry carries the migration note, and any deprecation has already warned in dev for at
+least one MINOR cycle (see *Deprecation policy*). Because the surface is tiny, migrations
+are correspondingly small.
