@@ -147,3 +147,48 @@ test("ignores a result that resolves after the owner is disposed", { skip: domSk
   await tick();
   assert.equal(r.data(), undefined); // disposed guard prevented the write
 });
+
+// ---- { initial }: server-seeded resources (SSR hydration) -------------------
+
+test("with { initial }, starts settled and does NOT auto-load", { skip: domSkip }, async () => {
+  let called = 0;
+  let r;
+  mount(() => {
+    r = resource(() => { called++; return Promise.resolve("fetched"); }, { initial: "seeded" });
+    return html`<p>${() => String(r.data())}</p>`;
+  }, document.createElement("div"));
+
+  assert.equal(r.data(), "seeded"); // the provided value, immediately
+  assert.equal(r.loading(), false); // already settled — no spinner
+  assert.equal(r.error(), null);
+  await tick();
+  assert.equal(called, 0); // fetcher was never invoked — no refetch, no flash
+});
+
+test("{ initial } accepts null as a real settled value (no auto-load)", { skip: domSkip }, async () => {
+  let called = 0;
+  let r;
+  mount(() => {
+    r = resource(() => { called++; return Promise.resolve("x"); }, { initial: null });
+    return html`<p>x</p>`;
+  }, document.createElement("div"));
+  await tick();
+  assert.equal(r.data(), null);
+  assert.equal(called, 0); // presence of the `initial` key — not its value — skips the load
+});
+
+test("refresh() still loads on demand after { initial }", { skip: domSkip }, async () => {
+  const d = deferred();
+  let r;
+  mount(() => {
+    r = resource(() => d.promise, { initial: "seeded" });
+    return html`<p>${() => (r.loading() ? "L" : String(r.data()))}</p>`;
+  }, document.createElement("div"));
+
+  assert.equal(r.data(), "seeded");
+  r.refresh();
+  assert.equal(r.loading(), true); // an explicit load is in flight
+  d.resolve("fresh");
+  await tick();
+  assert.equal(r.data(), "fresh");
+});

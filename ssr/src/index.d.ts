@@ -30,3 +30,15 @@ export function renderToString(component: Component, options?: RenderOptions): s
  * in place, with no full re-render and no flash. Returns an `unmount()`.
  */
 export function hydrate(component: Component, target: Element | string): () => void;
+
+/**
+ * Serialize a value to a JSON string that is SAFE to embed inside a `<script>` tag
+ * (escapes `<`, `>`, `&`, and the U+2028/U+2029 line terminators). Use it to pass
+ * server-fetched data to the client so a `@zoijs/resource` started with `{ initial }`
+ * doesn't refetch:
+ *
+ * ```js
+ * `<script>window.__DATA__ = ${serialize(data)}</script>`
+ * ```
+ */
+export function serialize(value: unknown): string;

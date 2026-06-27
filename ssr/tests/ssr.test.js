@@ -136,3 +136,38 @@ test("default (non-hydratable) output has no markers", () => {
   assert.equal(out, "<p>Hi Ada!</p>");
   assert.ok(!out.includes("zoijs"));
 });
+
+// ---- serialize(): safe <script> embedding -----------------------------------
+
+import { serialize } from "../src/index.js";
+
+const LS = String.fromCharCode(0x2028); // line separator — legal JSON, breaks JS strings
+const PS = String.fromCharCode(0x2029); // paragraph separator
+
+test("serialize escapes </script> so it can't break out of a <script> tag", () => {
+  const out = serialize({ html: "</script><script>alert(1)</script>" });
+  assert.ok(!out.includes("</script>"), "no literal closing tag");
+  assert.ok(!out.includes("<script>"), "no literal opening tag");
+  assert.ok(out.includes(String.fromCharCode(92) + "u003c"), "< is emitted as a \u003c escape");
+  assert.deepEqual(JSON.parse(out), { html: "</script><script>alert(1)</script>" });
+});
+
+test("serialize escapes <, >, & and the U+2028/U+2029 line terminators", () => {
+  const value = { a: "<b> & </b>", sep: "x" + LS + "y" + PS + "z", n: 42, nil: null };
+  const out = serialize(value);
+  assert.ok(!/[<>&]/.test(out), "no raw <, > or &");
+  assert.ok(!new RegExp("[\u2028\u2029]").test(out), "no raw line separators");
+  assert.deepEqual(JSON.parse(out), value); // semantics preserved
+});
+
+test("serialize maps non-JSON values (undefined, functions) to null", () => {
+  assert.equal(serialize(undefined), "null");
+  assert.equal(serialize(() => {}), "null");
+});
+
+test("serialize embeds into a <script> that evaluates to the original data", () => {
+  const data = { user: { name: "Ada </script>", roles: ["a", "b"] }, sep: "p" + LS + "q" };
+  const sandbox = {};
+  new Function("window", `window.__DATA__ = ${serialize(data)};`)(sandbox);
+  assert.deepEqual(sandbox.__DATA__, data);
+});

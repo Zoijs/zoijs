@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/ssr",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Render Zoijs components to an HTML string on the server — no DOM, no dependencies, same security as the client. For SSR and static prerendering.",
   "type": "module",
   "main": "src/index.js",
