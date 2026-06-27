@@ -142,7 +142,7 @@ See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, a
 - Production mode via `configure({ dev: false })` — no build step.
 - Safety: self-triggering effects are warned + stopped; a throwing binding doesn't break others.
 
-**Out of scope (by design):** router, CLI, plugins, SSR, global store, TypeScript-first setup, Virtual DOM.
+**Out of the core (by design):** routing, SSR, data, forms, and i18n live in optional packages — `@zoijs/router`, `@zoijs/ssr`, `@zoijs/resource`/`@zoijs/action`, `@zoijs/forms`, `@zoijs/i18n` — not the core. **Not part of Zoijs at all:** plugins, a global store, JSX, a Virtual DOM, a mandatory build step, TypeScript-first setup.
 
 ## Project Structure
 

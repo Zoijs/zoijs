@@ -179,24 +179,30 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | Package | What it is |
 |---|---|
 | [`@zoijs/core`](framework) | The framework (this package) |
-| [`@zoijs/router`](router) | A tiny client-side router for SPAs — routes are a plain object, links are plain anchors. |
-| [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`. |
-| [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). |
+| [`@zoijs/router`](router) | A tiny client-side router for SPAs — routes are a plain object, links are plain anchors. SSR-safe. |
+| [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`, plus a server `{ initial }` hand-off. |
+| [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). SSR-safe. |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
 | [`@zoijs/storage`](storage) | A localStorage-backed reactive value — a drop-in, persistent `createState` for themes, drafts, and preferences. |
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
+| [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
+| [`@zoijs/ssr`](ssr) | Render a component to an HTML string + in-place hydration (SSR / static prerender) + `serialize` for server→client data. No DOM, no deps. |
+| [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
+| [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
+| [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |
 
-Install the ones you need (each peer-depends on `@zoijs/core`):
+Install only the ones you need — each runtime package peer-depends on `@zoijs/core`:
 
 ```bash
-npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head @zoijs/action @zoijs/storage @zoijs/forms
+npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head   # e.g. a typical SPA
+npm install -D @zoijs/eslint-plugin                                  # dev-only tools
 ```
 
-See them work together in the **[Task Board demo](examples/task-board)** — one small app using all five packages — and read the **[ecosystem guide](framework/docs/ecosystem.md)** for how they fit and why each is optional.
+See them work together in the **[Task Board demo](examples/task-board)** and the larger **[Admin Dashboard](examples/admin)** / **[Contacts CRM](examples/contacts)** apps, and read the **[ecosystem guide](framework/docs/ecosystem.md)** for how they fit and why each is optional.
 
 ## Project status
 
-Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/VERSIONING.md)). It's intentionally small: routing, SSR, and a forms/data layer are **not** in the core and may arrive later as optional packages (see the [roadmap](framework/ROADMAP.md)). It's a great fit for SPAs, internal tools, dashboards, prototypes, and teaching; for SEO-critical content sites you'll want SSR (not yet available).
+Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/VERSIONING.md)). It's intentionally small: routing, SSR, and a forms/data layer are **not** in the core — they're optional packages you add only if you need them (see the [roadmap](framework/ROADMAP.md)). It's a great fit for SPAs, internal tools, dashboards, prototypes, and teaching; for SEO-critical or content-heavy sites, [`@zoijs/ssr`](ssr) adds server-side rendering and static prerendering with in-place hydration.
 
 ## Repository structure
 
@@ -215,9 +221,16 @@ head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
 storage/          @zoijs/storage — optional localStorage persistence helper (same layout)
 forms/            @zoijs/forms — optional native-forms helper (same layout)
+i18n/             @zoijs/i18n — optional reactive i18n (same layout)
+ssr/              @zoijs/ssr — optional server rendering + hydration (same layout)
+testing/          @zoijs/testing — optional DOM testing helpers (same layout)
+devtools/         @zoijs/devtools — optional reactive-graph inspector (same layout)
+eslint-plugin/    @zoijs/eslint-plugin — optional lint rule (dev-only, zero deps)
 create/           create-zoijs — the starter CLI (npm create zoijs@latest)
 examples/
-  task-board/     ecosystem demo — one app using all five packages
+  task-board/     ecosystem demo — one app using several packages
+  admin/          flagship dashboard demo
+  contacts/       CRM demo
 ```
 
 The official documentation website ([zoijs.dev](https://zoijs.dev)) is maintained in a separate repository.
@@ -229,7 +242,7 @@ Contributions that keep Zoijs small, clear, and beginner-friendly are very welco
 Each package is self-contained (its own `package.json`, no workspaces). Work in one with the usual commands:
 
 ```bash
-cd framework        # or router / resource / head / action / storage / forms
+cd framework        # or any package directory: router, resource, head, action, storage, forms, i18n, ssr, testing, devtools, eslint-plugin
 npm install
 npm test            # unit + DOM tests (jsdom)
 npm run test:types  # TypeScript checks
@@ -240,7 +253,7 @@ Or from the **repository root**, run every package's suite at once:
 
 ```bash
 npm run install:all  # install dev deps in every package (first time)
-npm test             # all unit suites (core + 6 packages)
+npm test             # all unit suites (core + every optional package) + gates
 npm run test:types   # all TypeScript checks
 npm run test:browser # all Playwright suites + the Task Board demo
 ```
