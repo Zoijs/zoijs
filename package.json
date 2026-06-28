@@ -1,0 +1,31 @@
+{
+  "name": "zoijs-monorepo",
+  "private": true,
+  "description": "Zoijs monorepo — convenience scripts to test every package from the root. Not published; not an npm workspace.",
+  "scripts": {
+    "test": "npm run test:deps && npm run test:docs && npm run bench:size && npm run test:core && npm run test:router && npm run test:resource && npm run test:head && npm run test:action && npm run test:storage && npm run test:forms && npm run test:testing && npm run test:devtools && npm run test:i18n && npm run test:ssr && npm run test:eslint-plugin && npm run test:create",
+    "test:deps": "node scripts/check-deps.mjs",
+    "test:docs": "node scripts/check-docs.mjs",
+    "bench": "node bench/size.mjs && node bench/dom.mjs",
+    "bench:size": "node bench/size.mjs --check",
+    "test:core": "npm --prefix framework test",
+    "test:router": "npm --prefix router test",
+    "test:resource": "npm --prefix resource test",
+    "test:head": "npm --prefix head test",
+    "test:action": "npm --prefix action test",
+    "test:storage": "npm --prefix storage test",
+    "test:forms": "npm --prefix forms test",
+    "test:testing": "npm --prefix testing test",
+    "test:devtools": "npm --prefix devtools test",
+    "test:i18n": "npm --prefix i18n test",
+    "test:ssr": "npm --prefix ssr test",
+    "test:eslint-plugin": "npm --prefix eslint-plugin test",
+    "test:create": "npm --prefix create test",
+    "test:types": "npm --prefix framework run test:types && npm --prefix router run test:types && npm --prefix resource run test:types && npm --prefix head run test:types && npm --prefix action run test:types && npm --prefix storage run test:types && npm --prefix forms run test:types && npm --prefix testing run test:types && npm --prefix devtools run test:types && npm --prefix i18n run test:types && npm --prefix ssr run test:types && npm --prefix eslint-plugin run test:types",
+    "test:browser": "npm --prefix framework run test:browser && npm --prefix router run test:browser && npm --prefix resource run test:browser && npm --prefix head run test:browser && npm --prefix action run test:browser && npm --prefix storage run test:browser && npm --prefix forms run test:browser && npm run test:task-board && npm run test:admin && npm run test:contacts",
+    "test:task-board": "npm --prefix examples/task-board run test:browser",
+    "test:admin": "npm --prefix examples/admin run test:browser",
+    "test:contacts": "npm --prefix examples/contacts run test:browser",
+    "install:all": "npm --prefix framework install && npm --prefix router install && npm --prefix resource install && npm --prefix head install && npm --prefix action install && npm --prefix storage install && npm --prefix forms install && npm --prefix testing install && npm --prefix devtools install && npm --prefix i18n install && npm --prefix ssr install && npm --prefix eslint-plugin install && npm --prefix bench install && npm --prefix examples/task-board install && npm --prefix examples/admin install && npm --prefix examples/contacts install"
+  }
+}

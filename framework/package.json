@@ -1,0 +1,71 @@
+{
+  "name": "@zoijs/core",
+  "version": "1.6.0",
+  "description": "Zoijs — a beginner-friendly, no-build, no-Virtual-DOM frontend framework. Plain HTML, CSS, and JavaScript.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./devtools": {
+      "types": "./src/devtools.d.ts",
+      "default": "./src/reactivity/devtools.js"
+    },
+    "./server": {
+      "types": "./src/server.d.ts",
+      "default": "./src/server.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "framework"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "framework",
+    "frontend",
+    "ui",
+    "reactive",
+    "reactivity",
+    "signals",
+    "no-build",
+    "no-jsx",
+    "no-virtual-dom",
+    "fine-grained",
+    "beginner-friendly",
+    "html",
+    "spa"
+  ],
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:unit": "node --test",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "test:browser": "playwright test",
+    "dev": "npx serve -l 7310 ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "create-zoijs",
+  "version": "0.1.4",
+  "description": "Create a new Zoijs app with one command. Plain HTML, CSS, and JavaScript — no build step.",
+  "type": "module",
+  "bin": {
+    "create-zoijs": "bin/create-zoijs.js"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "create"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "create",
+    "create-zoijs",
+    "scaffold",
+    "starter",
+    "cli",
+    "no-build",
+    "no-jsx"
+  ],
+  "scripts": {
+    "test": "node --test tests/create.test.js"
+  }
+}

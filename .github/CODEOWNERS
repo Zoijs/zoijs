@@ -1,0 +1,17 @@
+# Code owners for Zoijs.
+#
+# Every pull request automatically requests a review from the owner(s) below.
+# Combined with "Require review from Code Owners" in the `main` branch ruleset,
+# this means a maintainer must approve before anything merges.
+#
+# Add more maintainers (or a @Zoijs/team) over time as the project grows.
+
+* @jay-m2
+
+# Especially sensitive areas — keep them owned explicitly too:
+/.github/          @jay-m2
+/framework/src/    @jay-m2
+/router/src/       @jay-m2
+/resource/src/     @jay-m2
+/head/src/         @jay-m2
+/action/src/       @jay-m2

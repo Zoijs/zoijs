@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="../../framework/examples/favicon.svg" type="image/svg+xml" />
+    <title>Contacts</title>
+    <meta name="description" content="A Zoijs CRUD demo." />
+    <link rel="stylesheet" href="./style.css" />
+    <!-- No build step: map each package name to its local source. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "../../framework/src/index.js",
+          "@zoijs/router": "../../router/src/index.js",
+          "@zoijs/resource": "../../resource/src/index.js",
+          "@zoijs/action": "../../action/src/index.js",
+          "@zoijs/forms": "../../forms/src/index.js",
+          "@zoijs/head": "../../head/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "name": "@zoijs/forms",
+  "version": "0.1.1",
+  "description": "A tiny, native-forms-first helper for Zoijs: reactive values, errors, and touched state. No JSX, no build step.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "forms"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "forms",
+    "form",
+    "validation",
+    "fields",
+    "reactive",
+    "no-build",
+    "no-jsx"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "test:browser": "playwright test",
+    "dev": "npx serve -l 3700 .."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@zoijs/action": "file:../action",
+    "@zoijs/core": "file:../framework",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

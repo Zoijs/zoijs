@@ -1,0 +1,57 @@
+{
+  "name": "@zoijs/ssr",
+  "version": "0.3.0",
+  "description": "Render Zoijs components to an HTML string on the server — no DOM, no dependencies, same security as the client. For SSR and static prerendering.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "ssr"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "ssr",
+    "server-side-rendering",
+    "prerender",
+    "ssg",
+    "render-to-string",
+    "no-build",
+    "no-jsx"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.6.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@zoijs/core": "file:../framework",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

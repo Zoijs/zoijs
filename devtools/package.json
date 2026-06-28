@@ -1,0 +1,58 @@
+{
+  "name": "@zoijs/devtools",
+  "version": "0.1.0",
+  "description": "A reactive-graph inspector for Zoijs: watch one state update exactly one DOM node. Dev-only, read-only, no build step.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "devtools"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "devtools",
+    "inspector",
+    "reactive",
+    "reactivity",
+    "signals",
+    "debug",
+    "no-build",
+    "no-jsx"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.4.0"
+  },
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@zoijs/core": "file:../framework",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

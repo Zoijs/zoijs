@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Fast feedback: every package's unit/DOM tests + TypeScript checks, on a
+  # small Node matrix. Uses the root scripts (npm --prefix under the hood).
+  unit:
+    name: Unit + Types (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 18 is EOL (2025-04) and modern jsdom needs require(ESM), which
+        # only exists in Node 20.19+/22.12+ — so we test 20, 22, and current 24.
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+      - run: npm run install:all
+      - run: npm test
+      - run: npm run test:types
+
+  # Real browsers are slower, so they run once in a separate job. We run inside
+  # the official Playwright image, which already ships every browser and all
+  # system dependencies — so we never run `playwright install --with-deps`
+  # (whose apt step is flaky on the hosted runner's Microsoft repos). Node is
+  # included in the image. Pin the tag to the @playwright/test version we use.
+  browser:
+    name: Browser (Chromium / Firefox / WebKit)
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+    # GitHub sets HOME=/github/home (owned by pwuser) for container jobs, but the
+    # job runs as root — Firefox refuses to launch unless $HOME is owned by the
+    # current user. Point HOME at root's own home.
+    env:
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm run install:all
+      # Ensure the browser binaries match the installed @playwright/test (no apt;
+      # the image already provides the system libraries). Usually a no-op.
+      - name: Ensure browser binaries
+        working-directory: framework
+        run: npx playwright install chromium firefox webkit
+      - run: npm run test:browser

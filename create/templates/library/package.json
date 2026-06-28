@@ -1,0 +1,38 @@
+{
+  "name": "{{APP_NAME}}",
+  "version": "0.1.0",
+  "description": "A small library built on @zoijs/core.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "zoijs"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@zoijs/core": "^1.2.0"
+  },
+  "devDependencies": {
+    "@zoijs/core": "^1.2.0",
+    "typescript": "^5.9.3"
+  }
+}
