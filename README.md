@@ -204,6 +204,36 @@ See them work together in the **[Task Board demo](examples/task-board)** and the
 
 Zoijs is **`1.0`** with a **frozen public API** ([versioning policy](framework/VERSIONING.md)). It's intentionally small: routing, SSR, and a forms/data layer are **not** in the core — they're optional packages you add only if you need them (see the [roadmap](framework/ROADMAP.md)). It's a great fit for SPAs, internal tools, dashboards, prototypes, and teaching; for SEO-critical or content-heavy sites, [`@zoijs/ssr`](ssr) adds server-side rendering and static prerendering with in-place hydration.
 
+## Founder
+
+Zoijs was created by Jeremiah O.
+
+The project began with a simple idea: modern frontend development should build on the web platform instead of replacing it. Rather than introducing proprietary syntax, mandatory build pipelines, or a Virtual DOM, Zoijs embraces standard HTML, CSS, and JavaScript while providing fine-grained reactivity, excellent performance, and an intentionally small API.
+
+As the founder and lead architect, Jeremiah continues to guide the framework's technical direction, public API, long-term roadmap, documentation, and overall vision. Zoijs is developed as an open-source project, and contributions from the community are welcome.
+
+## Project Leadership
+
+### Founder & Lead Maintainer
+
+**Jeremiah O**
+
+Responsible for:
+
+* Framework architecture
+* Public API design
+* Performance engineering
+* Security architecture
+* Documentation
+* Release management
+* Long-term roadmap
+
+### Contributors
+
+Zoijs is an open-source project that welcomes contributions from developers around the world. Every contribution—whether code, documentation, testing, bug reports, or ideas—helps improve the framework.
+
+See the GitHub Contributors page to recognize everyone who has helped build Zoijs.
+
 ## Repository structure
 
 This is a monorepo. The framework package lives in [`framework/`](framework):
