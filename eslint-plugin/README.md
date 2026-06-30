@@ -127,6 +127,29 @@ for the interaction rule, decorative `alt=""` always allowed) to keep false posi
 low. They aren't a replacement for an automated auditor (axe/Lighthouse) or testing with
 a real screen reader — they catch the mistakes that are cheap to catch at author time.
 
+### Security rules
+
+Defense-in-depth on top of the runtime's secure-by-default rendering (inert text, URL
+scheme allowlisting, blocked event-handler attributes). These catch the two residual
+footguns the runtime can't sanitize for you. See the [security guide](https://zoijs.dev/security).
+
+| Rule | Flags | Level |
+|---|---|---|
+| `no-target-blank-without-rel` | a `target="_blank"` link with no `rel="noopener"` (reverse tabnabbing) | error |
+| `no-dynamic-style` | a `style` attribute bound from a dynamic value (CSS injection / data exfiltration) | warn |
+
+```js
+html`<a href=${url} target="_blank">Docs</a>`               // ✗ no-target-blank-without-rel
+html`<a href=${url} target="_blank" rel="noopener">Docs</a>`// ✓
+html`<div style=${cssString}>…</div>`                       // ✗ no-dynamic-style
+html`<div class=${() => (active ? "on" : "")}>…</div>`      // ✓ bind a class instead
+html`<div style="color:red">…</div>`                        // ✓ static style is fine
+```
+
+Both are narrow: only a *static* `target="_blank"` is flagged (a dynamic `target`/`rel`
+is left alone), and `no-dynamic-style` only fires on an interpolated `style` value, never
+a fully static one.
+
 ## Why a plugin and not a core feature
 
 Linting is a build-time concern; the Zoijs core stays runtime-only and

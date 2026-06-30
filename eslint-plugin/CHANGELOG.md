@@ -3,6 +3,23 @@
 All notable changes to `@zoijs/eslint-plugin` are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## 0.3.0
+
+Adds two zero-dependency **security rules**, defense-in-depth on top of the runtime's
+secure-by-default rendering. Both are in the `recommended` / `legacy-recommended` configs.
+
+- **`no-target-blank-without-rel`** (error) — a link with `target="_blank"` but no
+  `rel="noopener"` lets the opened page reach back through `window.opener`
+  (reverse tabnabbing). Add `rel="noopener"` (or `rel="noopener noreferrer"`). Only a
+  *static* `target="_blank"` is flagged; dynamic `target=${…}`/`rel=${…}` is left alone.
+- **`no-dynamic-style`** (warn) — binding `style` from a dynamic value is the one
+  dynamic-attribute path the runtime doesn't sanitize, so attacker-controlled CSS can
+  exfiltrate data (`background:url(…)`). Prefer binding a `class` or setting individual
+  properties from trusted values. A fully static `style="…"` is fine.
+
+Both run on the same tiny template-markup scanner as the a11y rules — no HTML parser,
+no dependency.
+
 ## 0.2.0
 
 Adds a small set of zero-dependency **accessibility rules** that scan the markup inside

@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/eslint-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ESLint rules for Zoijs — catch the one reactivity footgun before it ships. Zero dependencies, no build step.",
   "type": "module",
   "main": "src/index.js",
@@ -43,7 +43,7 @@
     "no-jsx"
   ],
   "scripts": {
-    "test": "node --test tests/require-reactive-binding.test.js tests/a11y.test.js",
+    "test": "node --test tests/require-reactive-binding.test.js tests/a11y.test.js tests/security.test.js",
     "test:types": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

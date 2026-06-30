@@ -28,6 +28,8 @@ export interface ZoijsEslintPlugin {
     "alt-text": ZoijsRuleModule;
     "no-positive-tabindex": ZoijsRuleModule;
     "no-static-element-interactions": ZoijsRuleModule;
+    "no-target-blank-without-rel": ZoijsRuleModule;
+    "no-dynamic-style": ZoijsRuleModule;
   };
   configs: {
     /** Flat config (ESLint 9+): `export default [ zoijs.configs.recommended ]`. */
