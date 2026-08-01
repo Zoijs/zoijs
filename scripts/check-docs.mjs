@@ -29,6 +29,7 @@ const PACKAGES = [
   { dir: "devtools", entries: ["src/index.d.ts"] },
   { dir: "i18n", entries: ["src/index.d.ts"] },
   { dir: "ssr", entries: ["src/index.d.ts"] },
+  { dir: "sanitize", entries: ["src/index.d.ts"] },
 ];
 
 const VALUE_EXPORT = /export (?:declare )?(?:async )?(?:function|const) ([A-Za-z0-9_]+)/g;
