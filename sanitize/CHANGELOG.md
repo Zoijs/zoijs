@@ -1,0 +1,27 @@
+# Changelog
+
+All notable changes to `@zoijs/sanitize` are documented here.
+
+## 0.1.0 — 2026-07-31
+
+Initial release of the optional HTML sanitizer for Zoijs — the supported, tested
+way to render rich HTML you broadly trust (markdown output, a CMS body) without a
+raw-HTML sink.
+
+- `sanitize(dirty)` — parses an untrusted HTML string with `DOMParser` (inert: no
+  scripts run, no resources load) and returns an **array of safe DOM nodes** that
+  drops straight into a Zoijs text binding
+- **Allowlist-based**: only known-safe content elements and attributes survive;
+  `script` / `style` / `iframe` / `object` / `embed`, foreign content (SVG/MathML),
+  every `on*` handler, `srcdoc`, and unknown tags are removed
+- URL attributes (`href` / `src` / `cite`) are scheme-checked with the **same**
+  `isSafeUrl` predicate the core renderer uses (imported from `@zoijs/core/server`),
+  so the decision can never drift from the rest of Zoijs
+- `target="_blank"` links are hardened with `rel="noopener noreferrer"`
+- Comments and non-element/text nodes are dropped
+- Client-only (returns live nodes); throws with a clear message when called without
+  a DOM. Not part of `@zoijs/ssr` string output — see the README
+- Zero runtime dependencies; peer-depends only on `@zoijs/core` — the core is
+  unchanged
+- Verified with unit tests (jsdom) plus real-browser tests on Chromium / Firefox /
+  WebKit, where a surviving handler or `javascript:` URL would actually execute
