@@ -62,6 +62,37 @@ export function isSafeUrl(url) {
   return SAFE_SCHEMES.has(scheme);
 }
 
+// CSS property name: letters/digits/hyphens, with optional leading hyphens for
+// vendor (-webkit-…) and custom (--foo) properties. Anything else isn't a
+// plausible property name and is dropped.
+const CSS_PROP = /^-{0,2}[A-Za-z][A-Za-z0-9-]*$/;
+
+/**
+ * Build an inline-style string from a plain object, SAFELY — the safe alternative
+ * to interpolating a `style` string. Keys and values come from an object (not
+ * string concatenation), so a value can never break out of the attribute or inject
+ * extra declarations. camelCase keys are hyphenated (backgroundColor →
+ * background-color); custom properties (`--x`) pass through. A declaration whose
+ * value could escape its own declaration (contains ";", "{" or "}") is dropped,
+ * mirroring what the browser's CSSOM would reject. Shared by the client renderer
+ * and @zoijs/ssr so both emit byte-identical CSS (hydration-safe).
+ * @param {Record<string, unknown>} obj
+ * @returns {string}
+ */
+export function styleObjectToCss(obj) {
+  let css = "";
+  for (const key in obj) {
+    const raw = obj[key];
+    if (raw === null || raw === undefined || raw === false) continue;
+    const prop = key.startsWith("--") ? key : key.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+    if (!CSS_PROP.test(prop)) continue; // not a plausible property name → skip
+    const val = String(raw);
+    if (/[;{}]/.test(val)) continue; // would break out of the declaration → skip
+    css += `${prop}:${val};`;
+  }
+  return css;
+}
+
 // Attribute names that must never be bound from data.
 const DANGEROUS_ATTRS = new Set(["srcdoc"]); // iframe srcdoc = raw-HTML sink
 

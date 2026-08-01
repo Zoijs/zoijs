@@ -68,6 +68,20 @@ test("boolean attributes: true → bare, false/null → omitted", () => {
   assert.equal(renderToString(() => html`<input disabled=${null} />`), "<input/>");
 });
 
+test("object style serializes to a safe CSS string (mirrors the client)", () => {
+  assert.equal(
+    renderToString(() => html`<div style=${{ color: "red", backgroundColor: "blue" }}>x</div>`),
+    '<div style="color:red;background-color:blue;">x</div>'
+  );
+  // A ";"-laden value can't inject extra declarations — the poisoned one is dropped.
+  assert.equal(
+    renderToString(() => html`<div style=${{ width: "1px; position: fixed", color: "red" }}>x</div>`),
+    '<div style="color:red;">x</div>'
+  );
+  // An empty object contributes no style attribute.
+  assert.equal(renderToString(() => html`<div style=${{}}>x</div>`), "<div>x</div>");
+});
+
 test("value and checked serialize to markup form", () => {
   assert.equal(renderToString(() => html`<input value=${"hi"} checked=${true} />`), '<input value="hi" checked/>');
   assert.equal(renderToString(() => html`<input value=${0} checked=${false} />`), '<input value="0"/>');

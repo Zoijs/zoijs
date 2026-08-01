@@ -17,10 +17,17 @@ import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
-import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS } from "../utils/security.js";
+import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } from "../utils/security.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const noop = () => {};
+
+// A bound `style` STRING carrying one of these is a smell: CSS can exfiltrate data
+// (background:url(…)) or enable clickjacking, and expression()/comments are classic
+// obfuscation. Not blocked (legit uses exist) — a one-time dev warning nudges you to
+// the safe object form. Deduped per element so a reactive style can't spam.
+const SUSPICIOUS_STYLE = /url\s*\(|expression\s*\(|\/\*|<\/style|javascript:/i;
+const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
 
 /**
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
@@ -466,6 +473,23 @@ function applyAttribute(el, name, value) {
   if (URL_ATTRS.has(name) && !isSafeUrl(toText(value))) {
     if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}": ${value}`);
     return;
+  }
+  if (name === "style") {
+    if (value !== null && typeof value === "object") {
+      // Object form: values come from an object, not string concatenation, so they
+      // can't break out of the attribute or inject extra declarations.
+      el.setAttribute("style", styleObjectToCss(value));
+      return;
+    }
+    if (isDev() && typeof value === "string" && styleWarned && !styleWarned.has(el) && SUSPICIOUS_STYLE.test(value)) {
+      styleWarned.add(el);
+      console.warn(
+        `Zoijs: bound "style" contains a risky token (url()/expression()/comment). ` +
+          `Only bind style from data you control, or use the object form ` +
+          `style=\${() => ({ ... })}. See docs/security.md.`
+      );
+    }
+    // A string style falls through and is set verbatim (unchanged behavior).
   }
   if (name === "value" || name === "checked") {
     el[name] = value; // form-control state lives on the property
