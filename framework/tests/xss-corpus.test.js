@@ -81,6 +81,29 @@ test("url attribute: dangerous schemes are never set on href/src", { skip }, () 
   }
 });
 
+// Every URL-bearing attribute — not just href/src — must be scheme-checked. Each
+// of these navigates a (nested) browsing context, so a javascript:/data:text/html
+// value in any of them is an execution vector: <object data> / <embed src> load a
+// nested document, <form action>/<button formaction> submit to it, <base href>
+// repoints relative URLs. Guards against the allowlist (URL_ATTRS) drifting out of
+// sync with the set of attributes that actually carry a URL.
+const URL_ATTR_CASES = [
+  { tag: "object", attr: "data", html: (v) => html`<object data=${() => v}></object>` },
+  { tag: "embed", attr: "src", html: (v) => html`<embed src=${() => v} />` },
+  { tag: "form", attr: "action", html: (v) => html`<form action=${() => v}></form>` },
+  { tag: "button", attr: "formaction", html: (v) => html`<button formaction=${() => v}>x</button>` },
+  { tag: "base", attr: "href", html: (v) => html`<base href=${() => v} />` },
+];
+
+test("url attribute: dangerous schemes are dropped on every URL-bearing attr", { skip }, () => {
+  for (const { tag, attr, html: build } of URL_ATTR_CASES) {
+    for (const payload of UNSAFE_URLS) {
+      const el = render(() => build(payload)).querySelector(tag);
+      assert.equal(el.hasAttribute(attr), false, `${tag}[${attr}] set for: ${JSON.stringify(payload)}`);
+    }
+  }
+});
+
 // Legitimate URLs must still pass — guard against over-blocking (false positives).
 const SAFE_URLS = [
   "https://example.com",
