@@ -32,8 +32,11 @@ export function escapeAttr(value) {
 
 // Attribute names that carry a URL — their values are scheme-checked (isSafeUrl).
 // Shared by the client renderer (DOM) and @zoijs/ssr (string) so both make the
-// exact same safety decision.
-export const URL_ATTRS = new Set(["href", "src", "action", "formaction", "poster", "ping", "xlink:href"]);
+// exact same safety decision. `data` is the <object data> sink: an <object> (or
+// <embed src>) loads its URL into a nested browsing context, so a javascript:/
+// data:text/html value there is as dangerous as one in href/src — it must be
+// scheme-checked too.
+export const URL_ATTRS = new Set(["href", "src", "action", "formaction", "poster", "ping", "data", "xlink:href"]);
 
 // Allowlisted URL schemes for URL-bearing attributes (href, src, ...).
 const SAFE_SCHEMES = new Set(["http", "https", "mailto", "tel"]);

@@ -55,6 +55,13 @@ test("unsafe attribute names are refused", () => {
   assert.equal(renderToString(() => html`<iframe srcdoc=${"<script>"}></iframe>`), "<iframe></iframe>");
 });
 
+test("object data: dangerous schemes dropped (nested-context URL sink)", () => {
+  // <object data> loads a nested browsing context, so it is scheme-checked like href/src.
+  assert.equal(renderToString(() => html`<object data=${"javascript:alert(1)"}></object>`), "<object></object>");
+  assert.equal(renderToString(() => html`<object data=${"data:text/html,<script>"}></object>`), "<object></object>");
+  assert.match(renderToString(() => html`<object data=${"/report.pdf"}></object>`), /data="\/report\.pdf"/);
+});
+
 test("boolean attributes: true → bare, false/null → omitted", () => {
   assert.equal(renderToString(() => html`<input disabled=${true} />`), '<input disabled=""/>');
   assert.equal(renderToString(() => html`<input disabled=${false} />`), "<input/>");

@@ -14,7 +14,7 @@ The core guarantee: **dynamic values fill text and attribute *slots* only — th
 |---|---|---|
 | `${() => value}` in text | rendered as an **inert Text node** (escaped) | ✅ always |
 | `attr=${() => value}` | set via `setAttribute` (or property for `value`/`checked`) | ✅ |
-| URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
+| URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `data`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
 | `onclick=${fn}` | `addEventListener` with a **function reference** | ✅ strings ignored |
 
 ### Text is always escaped
