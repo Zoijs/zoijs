@@ -53,7 +53,7 @@ These either **throw a clear error** or are **blocked**:
 | `onclick="a ${fn}"` (multi-part handler) | throws | `onclick=${fn}` |
 | `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML` |
 
-There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely need to render trusted HTML (e.g. sanitized markdown), sanitize it yourself with a vetted library and build DOM — and treat that boundary as security-critical.
+There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely need to render *rich* HTML you broadly trust (e.g. markdown or CMS output), use the optional [`@zoijs/sanitize`](../../sanitize/README.md) package: `sanitize(dirtyHtml)` parses the string inertly and returns **safe DOM nodes** (allowlist-based, reusing the same URL/attribute guards described above) that drop straight into a text binding — `html\`<article>${() => sanitize(body)}</article>\``. For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
 
 ### A note on `style`
 

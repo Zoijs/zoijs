@@ -187,6 +187,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
 | [`@zoijs/ssr`](ssr) | Render a component to an HTML string + in-place hydration (SSR / static prerender) + `serialize` for server→client data. No DOM, no deps. |
+| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported alternative to a raw-HTML sink. |
 | [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |
@@ -253,6 +254,7 @@ storage/          @zoijs/storage — optional localStorage persistence helper (s
 forms/            @zoijs/forms — optional native-forms helper (same layout)
 i18n/             @zoijs/i18n — optional reactive i18n (same layout)
 ssr/              @zoijs/ssr — optional server rendering + hydration (same layout)
+sanitize/         @zoijs/sanitize — optional untrusted-HTML sanitizer (same layout)
 testing/          @zoijs/testing — optional DOM testing helpers (same layout)
 devtools/         @zoijs/devtools — optional reactive-graph inspector (same layout)
 eslint-plugin/    @zoijs/eslint-plugin — optional lint rule (dev-only, zero deps)
