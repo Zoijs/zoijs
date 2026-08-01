@@ -57,7 +57,15 @@ There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely 
 
 ### A note on `style`
 
-Binding `style=${...}` from **untrusted** data is risky (CSS can exfiltrate data or enable clickjacking). Zoijs allows dynamic `style` (it's needed for legitimate cases), but only bind it from data you control.
+Binding `style=${...}` from a **string** built out of **untrusted** data is risky (CSS can exfiltrate data with `background:url(…)` or enable clickjacking). Zoijs still allows a dynamic string `style` — it's needed for legitimate cases — but prefer the **object form**, which is injection-safe:
+
+```js
+html`<div style=${() => ({ width: pct + "%", color: theme })}>…</div>`;
+```
+
+Keys and values come from an object, not string concatenation, so a value can never break out of the attribute or inject extra declarations — a value containing `;`/`{`/`}` is dropped, exactly as the browser's CSSOM would reject it. camelCase keys are hyphenated (`backgroundColor` → `background-color`) and custom properties (`--x`) pass through. The server (`@zoijs/ssr`) emits the identical CSS string, so it hydrates cleanly.
+
+If you do pass a **string** `style`, bind it only from data you control. In dev mode, a string `style` containing a risky token (`url(`, `expression(`, a CSS comment) logs a one-time warning nudging you to the object form.
 
 ### A note on returning DOM nodes
 

@@ -13,6 +13,8 @@ export function isSafeUrl(url: string): boolean;
 export function isSafeAttributeName(name: string): boolean;
 /** Attribute names whose values carry a URL (scheme-checked). */
 export const URL_ATTRS: ReadonlySet<string>;
+/** Build an inline-style string from a plain object, safely (injection-proof). */
+export function styleObjectToCss(obj: Record<string, unknown>): string;
 
 /** A part descriptor: a child slot, or a dynamic element with attribute parts. */
 export type Part =
