@@ -25,6 +25,7 @@ import {
   isSafeUrl,
   isSafeAttributeName,
   URL_ATTRS,
+  styleObjectToCss,
 } from "@zoijs/core/server";
 import { mount } from "@zoijs/core";
 
@@ -167,6 +168,11 @@ function computeAttribute(attr, values) {
 function serializeAttribute(name, value) {
   if (!isSafeAttributeName(name)) return ""; // on*, srcdoc
   if (URL_ATTRS.has(name) && !isSafeUrl(toText(value))) return ""; // dangerous scheme
+  if (name === "style" && value !== null && typeof value === "object") {
+    // Object form: mirror the client — build the CSS string safely (no breakout).
+    const css = styleObjectToCss(value);
+    return css ? ` style="${escapeAttr(css)}"` : "";
+  }
   if (name === "checked") return value ? " checked" : "";
   if (name === "value") {
     return value == null || value === false ? "" : ` value="${escapeAttr(value)}"`;

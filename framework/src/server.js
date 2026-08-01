@@ -19,6 +19,7 @@ export {
   isSafeUrl,
   isSafeAttributeName,
   URL_ATTRS,
+  styleObjectToCss,
 } from "./utils/security.js";
 
 /** True for an `html\`…\`` result (brand check — does not build the DOM template). */
