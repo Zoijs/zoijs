@@ -2,6 +2,22 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## 0.4.0 — 2026-08-06
+
+### Fixed
+- **Hash/query-only navigations no longer re-mount the page.** A `popstate` or navigation that
+  resolves to the same route + params updates the reactive `location` without tearing down and
+  rebuilding the page — preserving form input, scroll, and focus, and no longer flickering
+  `@zoijs/head` tags.
+- **Scroll management.** The router sets `history.scrollRestoration = "manual"` and manages scroll
+  itself (pages render after the URL changes, so the browser can't): forward navigations scroll to
+  the target `#hash` or the top; Back/Forward restore the previous position.
+- **Re-entrancy guard.** A component that navigates synchronously during its own render (e.g. an
+  auth guard redirecting) no longer orphans the intermediate page's owner scope (a leak); the
+  in-flight render picks up the newest URL.
+- **`link()` ignores protocol-relative (`//host/…`) targets** and lets the browser handle them,
+  instead of throwing a `SecurityError` from `pushState`.
+
 ## 0.3.0 — 2026-06-27
 
 ### Added — routed SSR
