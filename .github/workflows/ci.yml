@@ -47,9 +47,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: npm run install:all
-      # Ensure the browser binaries match the installed @playwright/test (no apt;
-      # the image already provides the system libraries). Usually a no-op.
-      - name: Ensure browser binaries
-        working-directory: framework
-        run: npx playwright install chromium firefox webkit
+      # Ensure the browser binaries match the installed @playwright/test (no apt; the image
+      # already provides the system libraries). `@playwright/test` is `^1.61.1`, so a package's
+      # lockfile can resolve a NEWER 1.6.x than the pinned image (e.g. sanitize → 1.62.1) whose
+      # browser builds aren't baked in — causing "Executable doesn't exist at
+      # /ms-playwright/webkit-XXXX". Install for EVERY browser-testing package's own resolved
+      # Playwright, so whatever each one pins is present. Same-version installs are no-ops.
+      - name: Ensure browser binaries (per browser-testing package)
+        run: |
+          for pkg in framework router resource head action storage forms sanitize \
+                     examples/task-board examples/admin examples/contacts; do
+            npm --prefix "$pkg" exec -- playwright install chromium firefox webkit
+          done
       - run: npm run test:browser
