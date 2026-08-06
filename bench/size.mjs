@@ -18,8 +18,10 @@ const SRC = join(root, "framework", "src");
 // headroom and is raised deliberately when a reviewed feature lands. The core has
 // grown through RFC-gated additions (ref, effect, boundary, the devtools hook, the
 // DOM-free server compiler, and in-place hydration) from ~13.3 KB to ~16 KB; raised
-// to 18 KB (2026-06-27) to restore ~10% headroom after hydration shipped.
-const BUDGET_GZIP = 18 * 1024; // 18 KB — ~10% headroom over today's ~16 KB
+// to 18 KB (2026-06-27) to restore ~10% headroom after hydration shipped; raised to
+// 19 KB (2026-08-06) after the reviewed reactivity/security fixes landed (per-run owner
+// scoping, disposed-node/owner cleanup, case-insensitive URL sanitization) — ~18.1 KB now.
+const BUDGET_GZIP = 19 * 1024; // 19 KB — ~5% headroom over today's ~18.1 KB
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They
