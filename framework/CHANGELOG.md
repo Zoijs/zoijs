@@ -4,6 +4,33 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.7.0] — 2026-08-06
+
+### Security
+- **URL-sanitizer casing bypass fixed.** HTML attribute names are case-insensitive, but the
+  URL scheme check (and the `value`/`checked`/`xlink:`/`style` dispatch) compared names
+  case-sensitively — so `<a HREF=${url}>` / `<img SRC=${url}>` skipped `isSafeUrl` entirely and
+  could set a `javascript:` URL. Attribute names are now normalized for every security/dispatch
+  decision; the original casing is preserved for `setAttribute`, so case-sensitive SVG attributes
+  (`viewBox`, …) are unaffected. Mirrored in `@zoijs/ssr`.
+
+### Fixed
+- **Effect/computed runs are scoped per run.** `onCleanup`, and any `computed()` / `effect()`
+  created inside an effect body, are now torn down before the next run (and on dispose) instead
+  of accumulating on the enclosing owner for the node's whole lifetime — fixing a leak (e.g. a
+  `setInterval` + `onCleanup` inside an effect started a new timer every run). This also makes
+  reactive `@zoijs/head` `title()`/`meta()` behave correctly.
+- **Disposing a computed unlinks its observers**, so a longer-lived effect can no longer read a
+  frozen, stale value from a disposed computed.
+- **`onCleanup` under an already-disposed owner** (an async callback that resolves after unmount)
+  runs the cleanup immediately instead of leaking it into a drained scope.
+- **A runaway effect is disposed** at the flush limit in every mode, instead of being left frozen
+  (never re-running yet never updating).
+- **`each()` duplicate keys are skipped in production**, not only warned about in dev —
+  previously a duplicate key orphaned the first record's DOM node and owner scope (a leak).
+
+No public API changes.
+
 ## [1.6.0] — 2026-06-27
 
 ### Added
