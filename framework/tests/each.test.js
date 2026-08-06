@@ -40,6 +40,18 @@ test("initial render lists all items", { skip }, () => {
   assert.deepEqual(texts(target), ["a", "b"]);
 });
 
+test("duplicate keys render once — the duplicate is skipped, not orphaned/leaked", { skip }, () => {
+  const s = createState([{ id: 1, name: "a" }, { id: 1, name: "dup" }, { id: 2, name: "b" }]);
+  const target = listMount(s);
+  // Only the FIRST occurrence of key 1 renders (+ key 2) — two <li>, not three. Before the fix a
+  // second record for key 1 rendered and was then orphaned (DOM + owner leak).
+  assert.deepEqual(texts(target), ["a", "b"]);
+  // A later update to unique keys reconciles cleanly with no stuck orphan node left behind.
+  s.set([{ id: 1, name: "a2" }, { id: 2, name: "b" }, { id: 3, name: "c" }]);
+  flush();
+  assert.deepEqual(texts(target), ["a2", "b", "c"]);
+});
+
 test("append, prepend, remove", { skip }, () => {
   const s = createState([{ id: 1, name: "a" }]);
   const target = listMount(s);

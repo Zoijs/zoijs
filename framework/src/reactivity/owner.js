@@ -40,7 +40,19 @@ export function runWithOwner(owner, fn) {
 
 /** Register a cleanup function in the active owner (no-op outside a scope). */
 export function onCleanup(fn) {
-  if (currentOwner) currentOwner.disposers.push(fn);
+  if (!currentOwner) return; // no active scope — nothing owns this cleanup
+  if (currentOwner.disposed) {
+    // Registered into an ALREADY-disposed scope — e.g. an async callback that resolved after its
+    // owner was torn down (teardown-races-async-resolution). Pushing would leak it: the disposers
+    // array has already been drained and will never run again. Tear the resource down now instead.
+    try {
+      fn();
+    } catch (err) {
+      console.error("Zoijs: a cleanup handler threw:", err);
+    }
+    return;
+  }
+  currentOwner.disposers.push(fn);
 }
 
 /** Dispose a scope: tear down child scopes first, then run its disposers. */

@@ -167,14 +167,18 @@ function computeAttribute(attr, values) {
 // markup form, false/null omitted, true → bare, otherwise name="escaped".
 function serializeAttribute(name, value) {
   if (!isSafeAttributeName(name)) return ""; // on*, srcdoc
-  if (URL_ATTRS.has(name) && !isSafeUrl(toText(value))) return ""; // dangerous scheme
-  if (name === "style" && value !== null && typeof value === "object") {
+  // HTML attribute names are case-insensitive — normalize for the security/dispatch checks so
+  // `HREF`/`SRC`/`VALUE` can't skip the URL guard or property routing (mirrors the client
+  // renderer). Keep the original `name` when emitting so case-sensitive SVG attrs are preserved.
+  const lname = name.toLowerCase();
+  if (URL_ATTRS.has(lname) && !isSafeUrl(toText(value))) return ""; // dangerous scheme
+  if (lname === "style" && value !== null && typeof value === "object") {
     // Object form: mirror the client — build the CSS string safely (no breakout).
     const css = styleObjectToCss(value);
     return css ? ` style="${escapeAttr(css)}"` : "";
   }
-  if (name === "checked") return value ? " checked" : "";
-  if (name === "value") {
+  if (lname === "checked") return value ? " checked" : "";
+  if (lname === "value") {
     return value == null || value === false ? "" : ` value="${escapeAttr(value)}"`;
   }
   if (value === false || value == null) return "";
