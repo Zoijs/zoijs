@@ -148,3 +148,8 @@ form.settings { display: flex; flex-direction: column; gap: 14px; max-width: 380
   .sidebar { width: auto; flex: none; }
   .sidebar nav { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* @zoijs/router outlet: keep the router wrapper layout-transparent (class, not inline style, for CSP). */
+.zoijs-router-outlet {
+  display: contents;
+}

@@ -188,3 +188,8 @@ select {
   display: flex;
   gap: 0.6rem;
 }
+
+/* @zoijs/router outlet: keep the router wrapper layout-transparent (class, not inline style, for CSP). */
+.zoijs-router-outlet {
+  display: contents;
+}

@@ -71,3 +71,8 @@ form.contact-form { display: flex; flex-direction: column; gap: 14px; }
 .field input[aria-invalid="true"] { border-color: var(--danger); }
 .field small { color: var(--danger); }
 [role="alert"] { color: var(--danger); }
+
+/* @zoijs/router outlet: keep the router wrapper layout-transparent (class, not inline style, for CSP). */
+.zoijs-router-outlet {
+  display: contents;
+}

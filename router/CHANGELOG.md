@@ -2,6 +2,22 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## 0.5.0 — 2026-08-06
+
+### Changed
+- **The `view()` outlet uses a class instead of an inline style.** It now renders
+  `<div class="zoijs-router-outlet">` rather than `<div style="display: contents">`. An inline
+  `style=` attribute is blocked by a strict `style-src 'self'` Content-Security-Policy (and it
+  shows up in prerendered HTML, so the block is visible at load); a class + external stylesheet
+  rule needs no CSP exception.
+
+  **Migration (one line of CSS):** to keep the outlet layout-transparent, add
+  ```css
+  .zoijs-router-outlet { display: contents; }
+  ```
+  to your stylesheet. Without it the outlet is a plain `<div>` wrapper — fine for most layouts,
+  but flex/grid layouts that relied on the wrapper being transparent should add the rule.
+
 ## 0.4.0 — 2026-08-06
 
 ### Fixed
