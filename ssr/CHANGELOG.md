@@ -2,6 +2,15 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## 0.3.1 — 2026-08-06
+
+### Security
+- **URL-sanitizer casing bypass fixed** in `serializeAttribute` (mirrors `@zoijs/core`): attribute
+  names are normalized before the URL scheme check and the `value`/`checked`/`style` dispatch, so
+  an uppercase/mixed-case URL attribute (`HREF`, `SRC`, …) can no longer emit a
+  `javascript:`/`data:text/html` URL. Original casing is preserved when serializing, so
+  case-sensitive SVG attributes are unaffected.
+
 ## 0.3.0 — 2026-06-27
 
 ### Added
