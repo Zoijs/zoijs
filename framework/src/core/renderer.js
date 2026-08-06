@@ -337,7 +337,7 @@ function setupKeyedList(anchor, marker) {
     const newRecords = new Map();
     const ordered = [];
     const sources = []; // each item's previous DOM position, or -1 if newly created
-    const seen = isDev() ? new Set() : null;
+    const seen = new Set();
 
     // Previous DOM order, by key — lets us find which reused items are already in
     // increasing relative order and can stay put.
@@ -347,12 +347,16 @@ function setupKeyedList(anchor, marker) {
     for (let i = 0; i < newItems.length; i++) {
       const item = newItems[i];
       const key = keyFn(item);
-      if (isDev()) {
-        if (seen.has(key)) {
-          console.warn(`Zoijs each(): duplicate key ${stringifyKey(key)} — keys must be unique; DOM for duplicates may be unstable.`);
+      if (seen.has(key)) {
+        // Duplicate key — `each` requires unique keys. Render only the FIRST occurrence: adding a
+        // second record for the same key overwrites it in newRecords, orphaning the first (its DOM
+        // node and owner scope leak, unreachable by any later reconcile). Skip in every mode.
+        if (isDev()) {
+          console.warn(`Zoijs each(): duplicate key ${stringifyKey(key)} — skipping the duplicate; keys must be unique.`);
         }
-        seen.add(key);
+        continue;
       }
+      seen.add(key);
       let rec = oldRecords.get(key);
       if (rec) {
         oldRecords.delete(key);
@@ -470,11 +474,17 @@ function applyAttribute(el, name, value) {
     if (isDev()) console.warn(`Zoijs: refusing to bind unsafe attribute "${name}"`);
     return;
   }
-  if (URL_ATTRS.has(name) && !isSafeUrl(toText(value))) {
+  // HTML attribute names are case-insensitive, so every security/dispatch decision below must
+  // compare a normalized name. Otherwise `<a HREF=${x}>`, `<input VALUE=${x}>`, or `<img SRC=${x}>`
+  // would skip the URL scheme check / property routing entirely (the browser still honors HREF as
+  // href). The original `name` is kept for setAttribute so case-SENSITIVE SVG attributes
+  // (viewBox, preserveAspectRatio, …) are preserved verbatim.
+  const lname = name.toLowerCase();
+  if (URL_ATTRS.has(lname) && !isSafeUrl(toText(value))) {
     if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}": ${value}`);
     return;
   }
-  if (name === "style") {
+  if (lname === "style") {
     if (value !== null && typeof value === "object") {
       // Object form: values come from an object, not string concatenation, so they
       // can't break out of the attribute or inject extra declarations.
@@ -491,14 +501,14 @@ function applyAttribute(el, name, value) {
     }
     // A string style falls through and is set verbatim (unchanged behavior).
   }
-  if (name === "value" || name === "checked") {
-    el[name] = value; // form-control state lives on the property
+  if (lname === "value" || lname === "checked") {
+    el[lname] = value; // form-control state lives on the property
     return;
   }
-  if (name.startsWith("xlink:")) {
+  if (lname.startsWith("xlink:")) {
     // SVG namespaced attribute (e.g. xlink:href).
-    if (value === false || value == null) el.removeAttributeNS(XLINK_NS, name.slice(6));
-    else el.setAttributeNS(XLINK_NS, name, toText(value));
+    if (value === false || value == null) el.removeAttributeNS(XLINK_NS, lname.slice(6));
+    else el.setAttributeNS(XLINK_NS, lname, toText(value));
     return;
   }
   if (value === false || value == null) {
