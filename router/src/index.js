@@ -78,22 +78,95 @@ export function createRouter(routes, options = {}) {
   // a page's onCleanup fires when you route away from it.
   let outlet = null;
   let unmountPage = null;
+  let currentMatch = null; // { component, params } the page is currently mounted for
+  let rendering = false; // re-entrancy guard
+  let pendingRender = false;
   const renderPage = () => {
     if (!outlet) return;
-    const { component, params } = match(appPath());
-    if (unmountPage) unmountPage(); // dispose the previous page → its onCleanup runs
-    unmountPage = mount(() => (component ? component(params) : null), outlet);
+    // Re-entrancy guard (Ro4): if a component navigates synchronously during its own mount, a
+    // nested render here would mount a page and then be overwritten by the outer mount, leaking
+    // that page's owner (its effects/listeners/onCleanup). Flag it and let the in-flight loop
+    // pick up the newest URL instead.
+    if (rendering) {
+      pendingRender = true;
+      return;
+    }
+    rendering = true;
+    try {
+      do {
+        pendingRender = false;
+        const m = match(appPath());
+        if (unmountPage) unmountPage(); // dispose the previous page → its onCleanup runs
+        unmountPage = mount(() => (m.component ? m.component(m.params) : null), outlet);
+        currentMatch = m;
+      } while (pendingRender); // a nav during mount asked for another render — do it now, in order
+    } finally {
+      rendering = false;
+    }
   };
 
-  // Apply a URL change: refresh the reactive cell and swap the page.
+  // Apply a URL change: refresh the reactive cell, and swap the page ONLY when the matched route
+  // or its params actually changed (Ro1). A hash- or query-only change keeps the same component
+  // mounted — re-mounting it would wipe uncontrolled DOM state (form input, scroll, focus) and
+  // flicker head tags — while the reactive `location` cell still updates for query()/path() reads.
   const apply = () => {
     location.set(readLocation());
+    if (currentMatch) {
+      const next = match(appPath());
+      if (next.component === currentMatch.component && sameParams(next.params, currentMatch.params)) return;
+    }
     renderPage();
   };
 
-  // Back/forward buttons fire "popstate"; re-read the URL when they do. (Skipped
+  // ---- scroll management (Ro2/Ro3) ------------------------------------------
+  // Pages render with JS AFTER the URL changes, so the browser's own scroll restoration can't
+  // work (the target DOM doesn't exist yet when it tries). Take it over: remember scroll on the
+  // outgoing entry, scroll to the target's #hash (or top) on a forward nav, and restore the saved
+  // position on back/forward.
+  if (typeof window !== "undefined" && window.history && "scrollRestoration" in window.history) {
+    try {
+      window.history.scrollRestoration = "manual";
+    } catch {
+      /* not settable in this environment — leave the default */
+    }
+  }
+  const hashTarget = (hash) => {
+    if (!hash || hash.length < 2 || typeof document === "undefined") return null;
+    try {
+      return document.getElementById(decodeURIComponent(hash.slice(1)));
+    } catch {
+      return null;
+    }
+  };
+  const saveScroll = () => {
+    if (typeof window === "undefined") return;
+    try {
+      window.history.replaceState({ ...(window.history.state || {}), zoijsScrollY: window.scrollY || 0 }, "");
+    } catch {
+      /* ignore */
+    }
+  };
+  const scrollAfterForward = (hash) => {
+    if (typeof window === "undefined") return;
+    const el = hashTarget(hash);
+    if (el) el.scrollIntoView();
+    else window.scrollTo(0, 0);
+  };
+
+  // Back/forward buttons fire "popstate": re-read the URL, then restore scroll. (Skipped
   // server-side, where there is no window to listen on.)
-  if (typeof window !== "undefined") window.addEventListener("popstate", apply);
+  const onPopstate = () => {
+    apply();
+    if (typeof window === "undefined") return;
+    const el = hashTarget(window.location.hash);
+    if (el) {
+      el.scrollIntoView();
+      return;
+    }
+    const y = window.history.state && window.history.state.zoijsScrollY;
+    window.scrollTo(0, typeof y === "number" ? y : 0);
+  };
+  if (typeof window !== "undefined") window.addEventListener("popstate", onPopstate);
 
   // Optional: intercept clicks on ANY internal <a> (not just router.link ones) so
   // a plain left-click navigates client-side instead of doing a full page reload.
@@ -123,7 +196,7 @@ export function createRouter(routes, options = {}) {
     if (destroyed) return;
     destroyed = true;
     if (typeof window !== "undefined") {
-      window.removeEventListener("popstate", apply);
+      window.removeEventListener("popstate", onPopstate);
       if (options.interceptLinks) window.removeEventListener("click", onLinkClick);
     }
     if (unmountPage) unmountPage();
@@ -152,8 +225,12 @@ export function createRouter(routes, options = {}) {
     if (typeof window === "undefined") return; // navigation is a client-only action
     const target = toBrowser(String(to));
     if (target === currentUrl()) return; // already here — don't spam history
+    saveScroll(); // remember where we are, on the OUTGOING entry (so Back can restore it)
     window.history.pushState({}, "", target);
     apply();
+    // Forward nav: scroll to the target's #hash (Ro3), or to the top for a new page (Ro2).
+    const h = target.indexOf("#");
+    scrollAfterForward(h >= 0 ? target.slice(h) : "");
   };
 
   const link = (to, text) => {
@@ -162,7 +239,10 @@ export function createRouter(routes, options = {}) {
       // absolute URL (external link) — so "open in new tab" etc. still work.
       if (e.defaultPrevented) return;
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      if (/^[a-z][a-z0-9+.-]*:/i.test(to)) return;
+      // Absolute (`scheme:`) OR protocol-relative (`//host/…`) targets are external — let the
+      // browser navigate. Ro6: `//host` is a DIFFERENT origin, so pushState() would throw a
+      // SecurityError and the click would do nothing.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(to) || String(to).startsWith("//")) return;
       e.preventDefault();
       go(to);
     };
@@ -237,6 +317,17 @@ function normalizeBase(base) {
 function segments(path) {
   // "/users/:id" -> ["users", ":id"]; "/" and "" -> []
   return String(path).split("?")[0].split("/").filter(Boolean);
+}
+
+// Shallow equality of two route-param maps — used to decide whether a URL change actually
+// changed the route (vs. only its hash/query), so the page isn't needlessly re-mounted.
+function sameParams(a, b) {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
 }
 
 function currentUrl() {

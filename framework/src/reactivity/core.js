@@ -14,7 +14,7 @@
 //   computed { value, observers, sources, state, equals, fn, isEffect:false }
 //   effect   {        observers, sources, state,         fn, isEffect:true  }
 
-import { onCleanup } from "./owner.js";
+import { onCleanup, getOwner, createOwner, runWithOwner, disposeOwner } from "./owner.js";
 import { isDev } from "./env.js";
 import { reportCreate, reportRun, reportWrite, reportDispose } from "./devtools.js";
 
@@ -48,8 +48,12 @@ export function flush() {
     for (const node of nodes) {
       const count = (runCounts.get(node) || 0) + 1;
       runCounts.set(node, count);
-      if (count === RUNAWAY_LIMIT && isDev()) {
-        console.warn(`Zoijs: an effect re-ran ${RUNAWAY_LIMIT}× in one flush — stopping it (possible infinite loop).`, node.fn);
+      if (count === RUNAWAY_LIMIT) {
+        // Actually stop the runaway, in every mode. Merely skipping it while it stays DIRTY
+        // freezes it: it never re-runs (still DIRTY → future writes don't re-enqueue it) yet
+        // never updates again — a silently dead effect. Disposing is the honest "stop".
+        if (isDev()) console.warn(`Zoijs: an effect re-ran ${RUNAWAY_LIMIT}× in one flush — disposing it (infinite loop).`, node.fn);
+        disposeNode(node);
       }
       if (count >= RUNAWAY_LIMIT) continue;
       updateIfNecessary(node);
@@ -107,14 +111,21 @@ function runComputation(node) {
     node.state = CLEAN;
     return;
   }
-  if (node.isEffect) runEffectCleanup(node); // per-run teardown before re-running
+  if (node.isEffect) runEffectCleanup(node); // per-run teardown before re-running (returned cleanup)
+  // Tear down whatever the PREVIOUS run created via onCleanup or nested computed()/effect(), then
+  // give this run a fresh scope nested under the node's creating owner. Without this, in-body
+  // onCleanup callbacks and nested primitives accumulate on the enclosing owner for the node's
+  // entire lifetime (a leak: e.g. a setInterval+onCleanup inside an effect starts a new timer
+  // every run and never clears the old ones). Now they are scoped per RUN, Solid-style.
+  if (node.runOwner) disposeOwner(node.runOwner);
+  node.runOwner = runWithOwner(node.owner, () => createOwner());
   cleanupSources(node);
   const previousObserver = currentObserver;
   currentObserver = node;
   let result;
   let threw = false;
   try {
-    result = node.fn();
+    result = runWithOwner(node.runOwner, () => node.fn());
   } catch (err) {
     threw = true;
     // Task 3/5: contain the failure so other bindings keep working.
@@ -157,8 +168,18 @@ function runEffectCleanup(node) {
 function disposeNode(node) {
   if (node.disposed) return;
   node.disposed = true;
-  cleanupSources(node);
-  if (node.isEffect) runEffectCleanup(node); // final cleanup on dispose
+  cleanupSources(node); // unlink from our sources
+  // Also unlink from our OBSERVERS. Otherwise a longer-lived observer (e.g. an effect in a
+  // parent scope that read this computed) keeps this now-dead node in its `sources`, and on its
+  // next run re-reads it and silently gets a FROZEN stale value (updateIfNecessary early-returns
+  // for a disposed node). Severing both directions makes a disposed node truly leave the graph.
+  for (const observer of node.observers) observer.sources.delete(node);
+  node.observers.clear();
+  if (node.runOwner) {
+    disposeOwner(node.runOwner); // tear down the last run's onCleanup + nested primitives
+    node.runOwner = null;
+  }
+  if (node.isEffect) runEffectCleanup(node); // final cleanup on dispose (returned cleanup)
   reportDispose(node); // devtools: node left the graph (dev + attached)
 }
 
@@ -191,6 +212,8 @@ export function computed(fn, equals = Object.is) {
     isEffect: false,
     disposed: false,
     equals,
+    owner: getOwner(), // creating scope — each run's child scope nests under this
+    runOwner: null, // the current run's scope (onCleanup + nested primitives), replaced per run
   };
   onCleanup(() => disposeNode(node)); // disposed with its owner scope
   reportCreate(node, "computed");
@@ -213,6 +236,8 @@ export function effect(fn) {
     disposed: false,
     equals: Object.is,
     cleanup: null,
+    owner: getOwner(), // creating scope — each run's child scope nests under this
+    runOwner: null, // the current run's scope (onCleanup + nested primitives), replaced per run
   };
   onCleanup(() => disposeNode(node)); // disposed with its owner scope
   reportCreate(node, "effect"); // before its first run, so the run is attributed
