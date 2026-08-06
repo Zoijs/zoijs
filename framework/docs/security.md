@@ -49,7 +49,7 @@ These either **throw a clear error** or are **blocked**:
 | `<${tag}>` (dynamic tag) | throws | use a conditional returning different templates |
 | `<el ${x}>` (dynamic/spread attribute name) | throws | name attributes statically: `disabled=${cond}` |
 | `<iframe srcdoc=${html}>` | attribute blocked | don't inject HTML; build real elements |
-| `<textarea>${x}</textarea>` | throws | bind the property in code |
+| `<script>${x}</script>` / `<style>${x}</style>` | throws | never interpolate into script/style (injection surface) |
 | `onclick="a ${fn}"` (multi-part handler) | throws | `onclick=${fn}` |
 | `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML` |
 

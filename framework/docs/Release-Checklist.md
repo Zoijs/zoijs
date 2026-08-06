@@ -53,7 +53,7 @@ Fine-grained updates; no Virtual DOM. Keyed `each` reuses/moves nodes. Measured 
 1. `each` reconcile is O(n) per change; no LIS move-minimization.
 2. No SSR/hydration; `each` identity relies on stable keys.
 3. Errors in bindings are logged, not bounded by an error boundary.
-4. Rawtext interpolation (`<textarea>${x}</textarea>`) and dynamic tag/attribute names throw by design.
+4. Interpolation into `<script>/<style>` and dynamic tag/attribute names throw by design; a sole-child `${}` in `<textarea>/<title>` binds the element's content.
 5. `data:image/svg+xml` fully rejected; `srcset` not scheme-checked; dynamic `style` from untrusted data is the caller's responsibility.
 6. Strict Trusted-Types CSP must allow the `zoijs` policy.
 

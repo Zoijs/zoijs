@@ -132,6 +132,15 @@ function renderTemplate(result) {
       if (top) out += ELEMENT_MARKER;
       out += renderAttributes(part.attrs, values);
       pos = elemAt + ELEMENT_MARKER.length;
+      // Raw-text content binding (<textarea>/<title>): the value is the element's sole content, so
+      // emit it right after the ">" as escaped text (the client sets it as a property instead).
+      const contentAttr = part.attrs.find((a) => a.content);
+      if (contentAttr) {
+        const gt = skeleton.indexOf(">", pos);
+        out += skeleton.slice(pos, gt + 1); // copy the rest of the open tag, up to and including ">"
+        out += escapeText(toText(computeAttribute(contentAttr, values)));
+        pos = gt + 1;
+      }
     }
   }
   renderDepth--;
@@ -143,6 +152,7 @@ function renderAttributes(attrs, values) {
   for (const attr of attrs) {
     if (attr.event) continue; // event handlers are wired on the client
     if (attr.name === "ref") continue; // ref is a client-only binding
+    if (attr.content) continue; // raw-text content binding — emitted as element content below
     out += serializeAttribute(attr.name, computeAttribute(attr, values));
   }
   return out;

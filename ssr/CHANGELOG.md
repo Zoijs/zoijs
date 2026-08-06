@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## 0.4.0 — 2026-08-06
+
+### Added
+- **Renders `<textarea>`/`<title>` content bindings** (`@zoijs/core` ≥ 1.8.0). A sole-child `${}` in
+  `<textarea>`/`<title>` is emitted as the element's escaped text content, matching the client render
+  (which sets it as a property). Hydratable output keeps the `data-zoijs-bind` marker so the client
+  adopts the element in place.
+
 ## 0.3.1 — 2026-08-06
 
 ### Security

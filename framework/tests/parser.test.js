@@ -138,8 +138,22 @@ test("dynamic/spread attribute name throws a clear error", () => {
   assert.throws(() => html`<div ${"hidden"}>x</div>`, /attribute name|spread/i);
 });
 
-test("interpolation inside <textarea> throws a clear error", () => {
-  assert.throws(() => html`<textarea>${"x"}</textarea>`, /textarea/i);
+test("a sole ${} inside <textarea>/<title> is allowed (content binding)", () => {
+  assert.doesNotThrow(() => html`<textarea>${"x"}</textarea>`);
+  assert.doesNotThrow(() => html`<title>${"x"}</title>`);
+  // Surrounding whitespace is fine — it's stripped, the value is still the sole content.
+  assert.doesNotThrow(() => html`<textarea>  ${"x"}  </textarea>`);
+});
+
+test("interpolation mixed with text inside <textarea>/<title> throws a clear error", () => {
+  assert.throws(() => html`<textarea>Hello ${"x"}</textarea>`, /only content/i);
+  assert.throws(() => html`<title>${"x"} suffix</title>`, /only content/i);
+  assert.throws(() => html`<textarea>${"a"}${"b"}</textarea>`, /only content/i);
+});
+
+test("interpolation inside <script>/<style> still throws (injection surface)", () => {
+  assert.throws(() => html`<script>${"x"}</script>`, /script/i);
+  assert.throws(() => html`<style>${"x"}</style>`, /style/i);
 });
 
 test("interpolation inside a comment throws a clear error", () => {

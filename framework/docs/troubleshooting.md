@@ -49,7 +49,8 @@ Zoijs refuses to silently corrupt output. These throw with a clear message:
 |---|---|
 | `<${tag}>` | dynamic tag names aren't supported |
 | `<div ${x}>` | dynamic/spread attribute names aren't supported |
-| `<textarea>${x}</textarea>` | interpolation inside raw-text elements isn't supported |
+| `<script>${x}</script>` / `<style>${x}</style>` | interpolation into script/style isn't supported (injection surface) |
+| `<textarea>a ${x}</textarea>` | a `${}` in `<textarea>/<title>` must be the *only* content (a bare `<textarea>${x}</textarea>` is fine) |
 | `<!-- ${x} -->` | interpolation inside comments isn't supported |
 | `onclick="a ${fn}"` | event handlers must be a single `${}` value |
 
