@@ -73,6 +73,20 @@ mount(App, "#app");
 That's a complete app. `router.view()` renders whichever component matches the
 current URL and swaps it when you navigate.
 
+### Make the outlet layout-transparent
+
+`router.view()` returns a wrapper `<div class="zoijs-router-outlet">`. Add one CSS rule so
+that wrapper doesn't affect your layout (its children lay out as if it weren't there):
+
+```css
+.zoijs-router-outlet { display: contents; }
+```
+
+It uses a class rather than an inline `style="display: contents"` so a strict
+`style-src 'self'` Content-Security-Policy needs no exception — inline style attributes (which
+show up in prerendered HTML) are blocked by such a policy, but an external stylesheet rule is
+not. Skip the rule and the outlet is just a normal `<div>` wrapper.
+
 ## The API (six functions)
 
 | Method | What it does |

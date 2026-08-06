@@ -254,8 +254,12 @@ export function createRouter(routes, options = {}) {
     >`;
   };
 
-  // view() returns the outlet: an invisible (display: contents) element the
-  // router renders the current page into. Place it once in your layout.
+  // view() returns the outlet: a wrapper element the router renders the current page into.
+  // Place it once in your layout. It carries the class `zoijs-router-outlet` rather than an
+  // inline `style="display: contents"` — so a strict `style-src 'self'` Content-Security-Policy
+  // (which blocks inline style attributes, and would see one when a route is prerendered to
+  // static HTML) needs no exception. Make the wrapper layout-transparent in your CSS:
+  //     .zoijs-router-outlet { display: contents; }
   const view = () => {
     // SSR: no DOM to mount into — return the matched route's template directly so it
     // serializes to HTML. With routed SSR (`location`) that's the request's route;
@@ -265,7 +269,7 @@ export function createRouter(routes, options = {}) {
       return component ? component(params) : null;
     }
     outlet = document.createElement("div");
-    outlet.style.display = "contents";
+    outlet.className = "zoijs-router-outlet"; // style it `display: contents` in your CSS (above)
     onCleanup(destroy); // unmount the page + drop the popstate listener on teardown
     renderPage();
     return outlet;
