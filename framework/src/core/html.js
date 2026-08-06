@@ -67,6 +67,9 @@ const COMMENT = 10;
 const RAWTEXT = 11;
 
 const RAWTEXT_TAGS = new Set(["script", "style", "textarea", "title"]);
+// Raw-text elements whose sole-child ${} binds their CONTENT via a property (a comment marker
+// can't live in raw text). script/style are excluded on purpose — an injection surface.
+const RAWTEXT_BINDABLE = new Map([["textarea", "value"], ["title", "textContent"]]);
 const isWS = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
 const isLetter = (c) => c >= "a" && c <= "z" || c >= "A" && c <= "Z";
 
@@ -91,6 +94,12 @@ function compile(strings) {
   let holes = null; // hole indices of the current dynamic attribute value
   let frag = ""; // running static fragment of the current attribute value
 
+  // Raw-text content binding (<textarea>/<title>) — positions recorded by finalizeTag.
+  let rawtextMarkerPos = 0; // in `out`, just before ">" (where data-zoijs-bind would go)
+  let rawtextElementPart = -1; // parts[] index of this element, or -1 if it has none yet
+  let rawtextContentStart = 0; // in `out`, just after ">" (content region start)
+  let rawtextBound = false; // a content ${} already bound → only whitespace may follow
+
   const finalizeAttr = () => {
     if (dynamic) {
       strs.push(frag);
@@ -114,11 +123,16 @@ function compile(strings) {
       out += " data-zoijs-bind";
       parts.push({ type: "element", attrs: dynAttrs });
     }
+    // Record, for a possible raw-text content binding, this element's ">" position and part.
+    rawtextElementPart = dynAttrs.length ? parts.length - 1 : -1;
+    rawtextMarkerPos = out.length;
     out += selfClose ? "/>" : ">";
     const lower = tagName.toLowerCase();
     if (RAWTEXT_TAGS.has(lower)) {
       state = RAWTEXT;
       rawtextTag = lower;
+      rawtextContentStart = out.length;
+      rawtextBound = false;
     } else {
       state = TEXT;
     }
@@ -209,7 +223,19 @@ function compile(strings) {
 
         case RAWTEXT:
           out += c;
-          if (c === ">" && out.toLowerCase().endsWith("</" + rawtextTag + ">")) state = TEXT;
+          if (c === ">" && out.toLowerCase().endsWith("</" + rawtextTag + ">")) {
+            if (rawtextBound) {
+              // Value is the element's sole content: only whitespace may sit between the ${} and
+              // the close tag. Reject anything else, then drop that whitespace.
+              const closeStart = out.length - ("</" + rawtextTag + ">").length;
+              if (/\S/.test(out.slice(rawtextContentStart, closeStart))) {
+                unsupported(`interpolation inside <${rawtextTag}> must be its only content (no text before or after \${})`);
+              }
+              out = out.slice(0, rawtextContentStart) + "</" + rawtextTag + ">";
+              rawtextBound = false;
+            }
+            state = TEXT;
+          }
           break;
       }
     }
@@ -244,8 +270,31 @@ function compile(strings) {
           unsupported("dynamic attribute names / spreads are not supported (e.g. `<el ${x}>`)");
         case COMMENT:
           unsupported("interpolation inside an HTML comment is not supported");
-        case RAWTEXT:
-          unsupported(`interpolation inside <${rawtextTag}> is not supported — set its content via a property instead`);
+        case RAWTEXT: {
+          // <textarea>/<title>: a sole-child ${} becomes a content binding. script/style have no
+          // prop → throw (injection surface). A second ${} or surrounding text → throw.
+          const prop = RAWTEXT_BINDABLE.get(rawtextTag);
+          if (!prop) {
+            unsupported(`interpolation inside <${rawtextTag}> is not supported — set its content via a property instead`);
+          }
+          if (rawtextBound || /\S/.test(out.slice(rawtextContentStart))) {
+            unsupported(`interpolation inside <${rawtextTag}> must be its only content (no text before or after \${})`);
+          }
+          out = out.slice(0, rawtextContentStart); // drop leading whitespace
+          // `content` reuses the whole-value attr plumbing but marks a property/text write, not an
+          // attribute (see renderer bindAttribute + ssr renderAttributes).
+          const contentAttr = { name: prop, content: prop, strings: ["", ""], holes: [hole], whole: true, event: false };
+          if (rawtextElementPart >= 0) {
+            parts[rawtextElementPart].attrs.push(contentAttr);
+          } else {
+            // No dynamic attributes yet → add the bind marker + an element part now.
+            out = out.slice(0, rawtextMarkerPos) + " data-zoijs-bind" + out.slice(rawtextMarkerPos);
+            parts.push({ type: "element", attrs: [contentAttr] });
+            rawtextContentStart = out.length; // shifted by the inserted marker
+          }
+          rawtextBound = true;
+          break;
+        }
         case CLOSE_TAG:
           unsupported("interpolation inside a closing tag is not supported");
         default:

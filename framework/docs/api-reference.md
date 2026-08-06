@@ -21,7 +21,9 @@ A tagged template. Write real HTML; interpolate values with `${}`.
 - `onevent=${fn}` — an event listener.
 - Returns an opaque `TemplateResult` — pass it to `mount`, return it from a component, place it in another template, or use it in `each`'s render function.
 
-**Unsupported (throws a clear error):** dynamic tag names (`<${tag}>`), dynamic/spread attribute names (`<el ${x}>`), interpolation inside `<script>/<style>/<textarea>/<title>` or HTML comments.
+A sole-child `${}` in `<textarea>` or `<title>` binds the element's content — `html\`<textarea>${text}</textarea>\``, `html\`<title>${pageTitle}</title>\`` (reactive when the value is a function). It must be the *only* content (no surrounding text).
+
+**Unsupported (throws a clear error):** dynamic tag names (`<${tag}>`), dynamic/spread attribute names (`<el ${x}>`), interpolation inside `<script>` or `<style>` (an injection surface), text mixed with `${}` inside `<textarea>/<title>`, and interpolation inside HTML comments.
 
 ---
 

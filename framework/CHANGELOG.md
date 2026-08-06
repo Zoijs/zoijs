@@ -4,6 +4,20 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [1.8.0] — 2026-08-06
+
+### Added
+- **`${}` inside `<textarea>` and `<title>` now works** when it's the element's sole child.
+  `html\`<textarea>${text}</textarea>\`` and `html\`<title>${pageTitle}</title>\`` bind the value as
+  the element's content (`<textarea>`'s `value`, `<title>`'s `textContent`) and update reactively when
+  the value is a function. Previously any interpolation inside a raw-text element threw.
+
+  A comment marker can't live inside raw text, so this is a property/content binding under the hood,
+  which is why it's limited to a **single interpolation with no surrounding text** — mixed content
+  (`<textarea>Hi ${x}</textarea>`) still throws with a clear message. `<script>` and `<style>` continue
+  to reject interpolation entirely (an injection surface). `@zoijs/ssr` renders the bound content as
+  escaped text, so server output and client render match.
+
 ## [1.7.0] — 2026-08-06
 
 ### Security

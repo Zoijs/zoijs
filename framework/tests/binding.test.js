@@ -24,6 +24,54 @@ test("text binding updates the SAME text node in place", { skip }, () => {
   assert.equal(span.firstChild, textNode); // reused, not recreated
 });
 
+test("<textarea> sole ${} binds its value (static + reactive)", { skip }, () => {
+  const target = document.createElement("div");
+  const text = createState("hello");
+  mount(() => html`<textarea>${() => text.get()}</textarea>`, target);
+  const ta = target.querySelector("textarea");
+
+  assert.equal(ta.value, "hello");
+  text.set("world");
+  flush();
+  assert.equal(ta.value, "world");
+  // No stray marker text leaked into the raw-text content.
+  assert.equal(ta.textContent.includes("zoijs"), false);
+});
+
+test("<textarea> with a non-function value sets value once", { skip }, () => {
+  const target = document.createElement("div");
+  mount(() => html`<textarea>${"static content"}</textarea>`, target);
+  assert.equal(target.querySelector("textarea").value, "static content");
+});
+
+test("<title> sole ${} binds its textContent", { skip }, () => {
+  const target = document.createElement("div");
+  const t = createState("Home");
+  mount(() => html`<title>${() => t.get()}</title>`, target);
+  const title = target.querySelector("title");
+
+  assert.equal(title.textContent, "Home");
+  t.set("About");
+  flush();
+  assert.equal(title.textContent, "About");
+});
+
+test("<textarea> content binding coexists with a dynamic attribute", { skip }, () => {
+  const target = document.createElement("div");
+  const rows = createState(3);
+  const body = createState("draft");
+  mount(() => html`<textarea rows=${() => rows.get()}>${() => body.get()}</textarea>`, target);
+  const ta = target.querySelector("textarea");
+
+  assert.equal(ta.getAttribute("rows"), "3");
+  assert.equal(ta.value, "draft");
+  rows.set(5);
+  body.set("final");
+  flush();
+  assert.equal(ta.getAttribute("rows"), "5");
+  assert.equal(ta.value, "final");
+});
+
 test("attribute binding: set, toggle boolean, and remove on null", { skip }, () => {
   const target = document.createElement("div");
   const disabled = createState(false);

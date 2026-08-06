@@ -192,3 +192,21 @@ test("serialize embeds into a <script> that evaluates to the original data", () 
   new Function("window", `window.__DATA__ = ${serialize(data)};`)(sandbox);
   assert.deepEqual(sandbox.__DATA__, data);
 });
+
+// ---- raw-text content binding (<textarea>/<title>) ---------------------------
+
+test("renders <textarea> sole ${} as escaped element content", () => {
+  const body = createState("a < b & c");
+  const out = renderToString(() => html`<textarea>${() => body.get()}</textarea>`);
+  assert.equal(out, "<textarea>a &lt; b &amp; c</textarea>");
+});
+
+test("renders <title> sole ${} as escaped text content", () => {
+  const out = renderToString(() => html`<title>${"Home & Away"}</title>`);
+  assert.equal(out, "<title>Home &amp; Away</title>");
+});
+
+test("<textarea> content binding coexists with a dynamic attribute", () => {
+  const out = renderToString(() => html`<textarea rows=${3}>${"draft"}</textarea>`);
+  assert.equal(out, '<textarea rows="3">draft</textarea>');
+});

@@ -169,13 +169,67 @@ Add `.htaccess` next to `index.html`:
 </IfModule>
 ```
 
+## Content Security Policy, import maps, and caching
+
+None of this is required to ship, but if you run a **strict CSP** or vendor the framework, three
+real-world traps are worth knowing. Each was hit by a production Zoijs app; all three have a clean fix.
+
+### A strict `style-src 'self'` and the router outlet
+
+Under `style-src 'self'` the browser blocks **inline `style="…"` attributes** (and they show up in
+pre-rendered HTML, so the block is visible on first load). Zoijs is built to avoid inline styles, with
+one thing to know: `@zoijs/router`'s `view()` outlet.
+
+- On **`@zoijs/router` ≥ 0.5.0** the outlet is a class (`<div class="zoijs-router-outlet">`), not an
+  inline style. Add one CSS rule to keep it layout-transparent:
+
+  ```css
+  .zoijs-router-outlet { display: contents; }
+  ```
+
+- The inline **import map** (`<script type="importmap">`) is a *script*, so `script-src` — not
+  `style-src` — governs it. Allow exactly it with its sha256 hash (compute the hash from the built
+  HTML so it can't drift); never fall back to `'unsafe-inline'`.
+
+### Import maps + `modulepreload` can cancel each other out
+
+If you resolve `@zoijs/*` with an inline import map, **do not also ship
+`<link rel="modulepreload" href="…">`** for those modules on a host that promotes preloads to an HTTP
+`Link:` header (Cloudflare's *Early Hints* does this automatically). The header starts a module preload
+**before the body — and therefore the import map — is parsed**, and per spec *an import map is rejected
+once any module load or preload has started*. The map is then discarded and every bare specifier fails
+with `Failed to resolve module specifier "@zoijs/core"`. **Firefox enforces this strictly; Chromium is
+lenient**, so it can pass every Chrome check and still be broken in Firefox.
+
+Fixes (pick one):
+- **Drop the `modulepreload` tags.** Simplest and host-agnostic — nothing can be hoisted ahead of the
+  map. Verify with `curl -sI https://your-site/ | grep -i link:` (there must be no `rel=modulepreload`).
+- **Skip the import map entirely** by rewriting bare `@zoijs/*` specifiers to absolute vendored paths
+  at build time. With no map to race, `modulepreload` is safe again.
+- Or turn off the host's Early Hints (a dashboard toggle — weaker, since it can be re-enabled).
+
+### Caching a vendored framework
+
+If you vendor `@zoijs/*` into `/vendor/…` and serve it **`immutable`** for speed, re-vendoring changes
+the file *contents* but not the *URL* — so a returning visitor keeps the year-old cached copy and can
+silently run stale framework code. Two safe options:
+
+- **Content-hash the URL**: emit `/vendor/zoijs-<hash>/…` (hash the vendored tree at build time) and
+  point the import map / rewrite at it. New content ⇒ new URL ⇒ `immutable` caches bust cleanly, and
+  versioning the whole directory also busts the framework's internal relative imports.
+- **Or serve `/vendor/*` with `Cache-Control: public, max-age=0, must-revalidate`** — a cheap 304 per
+  file, never stale. Correct, just slightly slower than immutable.
+
 ## Checklist
 
 1. Will users ever **hard-refresh** a non-root URL? If yes, set up the **fallback**
    for your host.
 2. Is the app at a **sub-path**? If yes, set the router **`base`** to that path.
 3. **Pin or vendor** the `@zoijs/*` versions you import.
-4. Upload the folder. Done.
+4. Running a **strict CSP**? Add `.zoijs-router-outlet { display: contents }`, hash the inline import
+   map in `script-src`, and don't ship `modulepreload` **and** an import map together (see above).
+5. Serving vendored `@zoijs/*` as **`immutable`**? **Content-hash the URL** so re-vendoring busts caches.
+6. Upload the folder. Done.
 
 ## What you do *not* need
 

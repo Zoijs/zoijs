@@ -117,6 +117,17 @@ function bindAttribute(el, attr, values) {
     return;
   }
 
+  if (attr.content) {
+    // Raw-text content bind (<textarea>.value / <title>.textContent): a sole-child ${} the
+    // compiler routed here (no comment marker can live in raw text). Set the PROPERTY.
+    const prop = attr.content;
+    const raw = values[attr.holes[0]];
+    if (typeof raw === "function")
+      labelNext({ kind: "attr", el, name: prop }, () => effect(() => (el[prop] = toText(raw()))));
+    else el[prop] = toText(raw);
+    return;
+  }
+
   if (attr.event) {
     const handler = values[attr.holes[0]];
     // Only real functions are accepted as handlers — a string/object is ignored,
