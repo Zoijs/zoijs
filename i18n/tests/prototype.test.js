@@ -47,3 +47,17 @@ test("production mode: same own-property semantics", () => {
     configure({ dev: true });
   }
 });
+
+// Release audit: the formatter cache key used a literal NUL byte in the source, which made
+// grep/file treat the file as binary. It is now the "\u0000" escape — the same string at runtime.
+test("source is plain text (no literal NUL) and formatter caching still separates locale/options", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/index.js", import.meta.url));
+  assert.equal(src.includes(0), false, "no NUL byte in the source");
+  const t = createI18n({ locale: "en", messages: { en: {}, de: {} } });
+  assert.equal(t.n(1234.5), "1,234.5");
+  assert.equal(t.n(0.5, { style: "percent" }), "50%");
+  t.setLocale("de");
+  assert.equal(t.n(1234.5), new Intl.NumberFormat("de").format(1234.5), "a different locale gets its own cached formatter");
+  assert.equal(t.n(0.5, { style: "percent" }), new Intl.NumberFormat("de", { style: "percent" }).format(0.5));
+});
