@@ -57,6 +57,27 @@ sanitize('<p onclick="steal()">Hi <strong>there</strong> <script>evil()</script>
 2. **Allowlist, not denylist.** Only known-safe elements and attributes survive. Everything else — `script`, `style`, `iframe`, `object`, `embed`, SVG/MathML, every `on*` handler, `srcdoc`, unknown tags — is removed. A denylist can't keep up with parser quirks; an allowlist can.
 3. **Same URL guard as the core.** `href` / `src` / `cite` are scheme-checked with the *same* `isSafeUrl` the Zoijs renderer uses, so `javascript:` and `data:text/html` can't slip through — and the decision can never drift from the rest of the framework.
 4. **Reverse-tabnabbing guard.** `target="_blank"` links get `rel="noopener noreferrer"`.
+5. **No DOM clobbering.** Browsers expose elements by `id` (and some by `name`) as properties of `window`, `document` and forms — so untrusted `<a id="__DATA__">` could shadow `window.__DATA__` (the pattern [`serialize()`](../ssr) data uses) or a config global. Sanitized content therefore lives in its own namespace: `name` is always removed, and every `id` gets a prefix (below).
+
+## IDs and in-page links
+
+Every `id` in sanitized content is prefixed with **`user-content-`**, and the references that point at ids are rewritten to match, so in-page links and accessibility relationships keep working:
+
+```js
+sanitize('<a href="#chapter">Jump</a> … <h2 id="chapter">Chapter</h2>');
+// → <a href="#user-content-chapter">Jump</a> … <h2 id="user-content-chapter">Chapter</h2>
+```
+
+Rewritten with the same prefix: `href="#…"` (same-document fragments only), `headers` on table cells, and the ARIA id references (`aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-details`, `aria-errormessage`, `aria-activedescendant`, `aria-flowto`). Every id is prefixed — there's no list of "dangerous" names to keep up to date. Empty ids are removed; duplicate ids stay duplicates (namespaced). To link to a sanitized heading from outside the content, use the prefixed id (`#user-content-chapter`).
+
+Options:
+
+```js
+sanitize(html, { idPrefix: "article-" }); // your own namespace
+sanitize(html, { idPrefix: "" });         // keep ids exactly as written
+```
+
+`idPrefix: ""` is an explicit opt-out for content you control: it lets the markup claim **any** id on the page, which reopens the collision risk. `name` is removed either way. `idPrefix` must be a string (anything else throws a `TypeError`).
 
 Because it returns **live DOM nodes** (not a string), there is no HTML sink for the browser to re-parse — the safe path stays the only path.
 
@@ -66,7 +87,7 @@ Because it returns **live DOM nodes** (not a string), there is no HTML sink for 
 
 `a` `abbr` `address` `article` `aside` `b` `bdi` `bdo` `blockquote` `br` `caption` `cite` `code` `col` `colgroup` `dd` `del` `details` `dfn` `div` `dl` `dt` `em` `figcaption` `figure` `footer` `h1`–`h6` `header` `hgroup` `hr` `i` `img` `ins` `kbd` `li` `main` `mark` `nav` `ol` `p` `pre` `q` `rp` `rt` `ruby` `s` `samp` `section` `small` `span` `strong` `sub` `summary` `sup` `table` `tbody` `td` `tfoot` `th` `thead` `time` `tr` `u` `ul` `var` `wbr`
 
-**Attributes** — `class`, `id`, `title`, `dir`, `lang`, `role`, any `aria-*` / `data-*`, plus per-element ones like `href`, `src`, `alt`, `colspan`, `datetime`, `cite`. The `style` attribute is **dropped** (CSS is an injection surface — bind style through Zoijs's object form instead).
+**Attributes** — `class`, `id` (prefixed, see above), `title`, `dir`, `lang`, `role`, any `aria-*` / `data-*`, plus per-element ones like `href`, `src`, `alt`, `colspan`, `datetime`, `cite`. The `style` attribute is **dropped** (CSS is an injection surface — bind style through Zoijs's object form instead), and so is `name` (DOM clobbering).
 
 Anything not on these lists is removed.
 
@@ -74,7 +95,7 @@ Anything not on these lists is removed.
 
 | Function | Purpose |
 |---|---|
-| `sanitize(dirty)` | Sanitize an untrusted HTML string → `Node[]` (safe DOM nodes). `null`/`undefined`/`""` → `[]`. |
+| `sanitize(dirty, options?)` | Sanitize an untrusted HTML string → `Node[]` (safe DOM nodes). `null`/`undefined`/`""` → `[]`. `options.idPrefix` (default `"user-content-"`) namespaces ids — see [IDs and in-page links](#ids-and-in-page-links). |
 
 That's the whole package — one function.
 
