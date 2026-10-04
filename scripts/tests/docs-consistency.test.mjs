@@ -76,9 +76,11 @@ test("the shared runtime is described version-aware (not 'every 1.x copy')", () 
 
 test("no blanket CSP-compatibility claim — the allowances are named", () => {
   assert.deepEqual(offenders(DOCS, /\bCSP[- ](friendly|compatible|ready)\b|strict[- ]CSP[- ]compatible|runs under (a|any) strict Content-Security-Policy/i), []);
-  const phil = read("framework/PHILOSOPHY.md");
-  assert.match(phil, /style-src-attr 'unsafe-inline'/);
-  assert.match(phil, /import map/);
+  // The allowances are spelled out where the CSP guidance lives.
+  for (const f of ["framework/docs/production-security.md", "framework/docs/deployment.md"]) {
+    assert.match(read(f), /style-src-attr 'unsafe-inline'/, f);
+  }
+  assert.match(read("framework/docs/production-security.md"), /import map/);
 });
 
 test("unsafeHTML's server-rendered <script> behavior is documented where it's used", () => {
@@ -107,7 +109,7 @@ test("API counts match the main entry", () => {
 test("VERSIONING.md documents every public core subpath and the security-hardening policy", () => {
   const v = read("framework/VERSIONING.md");
   const subpaths = Object.keys(JSON.parse(read("framework/package.json")).exports).map((k) => (k === "." ? "@zoijs/core" : "@zoijs/core/" + k.slice(2)));
-  for (const s of subpaths) assert.match(v, new RegExp("\\| `" + s.replace(/\//g, "\\/") + "` \\|"), `${s} has a row in the subpath table`);
+  for (const s of subpaths) assert.ok(v.includes("| `" + s + "` |"), `${s} has a row in the subpath table`);
   assert.match(v, /participate in semver/);
   assert.match(v, /## Security hardening/);
   for (const example of ["ZJS010", "<base>", "noopener noreferrer", "@event=", "user-content-"]) assert.ok(v.includes(example), `cites ${example}`);

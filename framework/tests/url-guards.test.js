@@ -300,3 +300,17 @@ test("unsafeHTML stays the explicit escape hatch: its markup is not rewritten", 
   const a = first(() => html`<div>${unsafeHTML('<a target="_blank" href="/x">raw</a>')}</div>`, "a");
   assert.equal(a.hasAttribute("rel"), false, "trusted raw markup is inserted as written");
 });
+
+// Release prep (CodeQL): trailing-comma trimming used /,+$/, which is quadratic on long comma runs
+// — a 40k-character bound srcset blocked for ~0.8 s (client and SSR). It is now a linear loop.
+test("srcset: long comma runs are checked in linear time, with the same decisions", async () => {
+  const { isSafeSrcset } = await import("../src/utils/security.js");
+  assert.equal(isSafeSrcset("a.png,,, b.png 2x,"), true);
+  assert.equal(isSafeSrcset("a.png,,,"), true);
+  assert.equal(isSafeSrcset("javascript:alert(1),,,"), false);
+  assert.equal(isSafeSrcset("ok.png 1x, javascript:x,,"), false);
+  const hostile = "x" + ",".repeat(400_000) + "y,";
+  const t = performance.now();
+  assert.equal(isSafeSrcset(hostile), true);
+  assert.ok(performance.now() - t < 1000, `took ${Math.round(performance.now() - t)} ms`);
+});
