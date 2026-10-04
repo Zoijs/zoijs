@@ -114,7 +114,7 @@ import {
 - `createState(value)` — a reactive value (`get` / `set` / `peek`).
 - `computed(fn)` — a lazy, cached, **value-gated** derived value (`get` / `peek`).
 - `effect(fn)` — a side effect that re-runs when a value it reads changes; returns `{ dispose }` and may return a per-run cleanup.
-- `configure({ dev })` — toggle development warnings (default `dev: true`).
+- `configure({ dev })` — toggle development mode (warnings, devtools hook). Starts `true` on `@zoijs/core`, `false` on the production entry `@zoijs/core/prod`.
 - `onCleanup(fn)` — register teardown for a component or list item (timers, subscriptions).
 
 Plus the **`ref`** binding (`html\`<input ref=${(el) => el.focus()} />\``) — no export; it's a template
@@ -139,7 +139,7 @@ See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, a
 - `boundary()` render-time error boundary — a failing subtree shows a fallback instead of breaking `mount`.
 - `each()` keyed list reconciliation — minimal DOM moves; preserves focus / input / scroll on reorder.
 - Microtask batching, push-pull dependency tracking, **owner-scoped cleanup** (unmount and removed items dispose their subscriptions).
-- Production mode via `configure({ dev: false })` — no build step.
+- Production mode by loading `@zoijs/core/prod` (bundlers' production builds pick it automatically) — no build step required; `configure({ dev })` overrides.
 - Safety: self-triggering effects are warned + stopped; a throwing binding doesn't break others.
 
 **Out of the core (by design):** routing, SSR, data, forms, and i18n live in optional packages — `@zoijs/router`, `@zoijs/ssr`, `@zoijs/resource`/`@zoijs/action`, `@zoijs/forms`, `@zoijs/i18n` — not the core. **Not part of Zoijs at all:** plugins, a global store, JSX, a Virtual DOM, a mandatory build step, TypeScript-first setup.

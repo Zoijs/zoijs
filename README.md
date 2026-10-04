@@ -133,7 +133,7 @@ import { html, mount, createState, computed, each, configure, onCleanup } from "
 | `createState(value)` | A reactive value — `get` / `set` / `peek` |
 | `computed(fn)` | A lazy, cached, value-gated derived value |
 | `each(items, keyFn, renderFn)` | Keyed list rendering |
-| `configure({ dev })` | Toggle development warnings |
+| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod`) |
 | `onCleanup(fn)` | Teardown for a component or list item |
 
 Full details in the **[API Reference](framework/docs/api-reference.md)**.

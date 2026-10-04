@@ -8,7 +8,12 @@
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
+      "production": "./src/prod.js",
       "default": "./src/index.js"
+    },
+    "./prod": {
+      "types": "./src/index.d.ts",
+      "default": "./src/prod.js"
     },
     "./devtools": {
       "types": "./src/devtools.d.ts",

@@ -6,6 +6,17 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Production entry: `@zoijs/core/prod` (SEC-4).** Same API as `@zoijs/core`, but a page that loads
+  it starts in production mode — no development warnings, and the devtools hook never attaches.
+  Bundlers' production builds select it automatically through a new `"production"` export condition
+  on `@zoijs/core`; no-build apps point their import map at `src/prod.js` (or the CDN `/prod`
+  subpath) when deploying. Previously every app ran in development mode unless it remembered
+  `configure({ dev: false })`. `configure({ dev })` still overrides on either entry. The mode stays one
+  setting per realm: the first loaded copy chooses it, later copies join without resetting it.
+  In development mode on a non-`localhost` host, Zoijs now warns once that it is running in
+  development mode. Security and correctness checks are unaffected by the mode.
+
 ### Fixed
 - **Multiple copies of `@zoijs/core` on one page now share one reactive runtime (CORE-2).** The
   tracking context, owner scope, effect queue, dev flag and devtools inspector were per-module-copy,

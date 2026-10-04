@@ -47,8 +47,10 @@ html`<button onclick=${"doThing()"}>x</button>`; // ⚠️ ignored — a string 
 
 ### Markup comes only from tagged templates
 
-`html` compiles markup only from a real tagged-template literal written in your source.
-Calling it as a function is rejected before anything is parsed:
+Zoijs accepts markup through `html` tagged templates. Runtime data such as API responses,
+JSON, storage values, URL parameters, strings, and ordinary arrays cannot be passed to
+`html()` and compiled as markup — calling it as a function is rejected (`ZJS010`) before
+anything is parsed, before the Trusted Types policy, and before any `innerHTML`:
 
 ```js
 html`<p>${value}</p>`;            // ✅ markup from source; value is data
@@ -56,10 +58,19 @@ html(["<p>runtime markup</p>"]);  // ❌ throws ZJS010 — html is not an innerH
 ```
 
 Never pass runtime HTML through `html`. For HTML from users, a CMS, or markdown, use
-[`@zoijs/sanitize`](../../sanitize/README.md); otherwise build real elements. (The runtime
-check stops arrays that come from data or ordinary code. JavaScript can't tell a template
-object apart from one deliberately rebuilt to look identical, so the
-[`zoijs/no-html-call`](../../eslint-plugin/README.md) lint rule flags *any* direct call.)
+[`@zoijs/sanitize`](../../sanitize/README.md); otherwise build real elements.
+
+**What this check is — and isn't.** The guarantee is that data cannot cross the markup
+boundary, accidentally or through attacker-controlled serialization: nothing JSON,
+`structuredClone`, storage, or ordinary array code produces passes. It is a structural
+check, not a cryptographic or intrinsically unforgeable one. JavaScript currently provides
+no standard runtime API for proving that a template strings object came from the
+JavaScript parser, so trusted application code *can* deliberately reconstruct the same
+object shape. Such code already has equivalent authority to call DOM HTML sinks directly
+and is outside the attacker-data boundary. As defense in depth for developer-authored
+code, the [`zoijs/no-html-call`](../../eslint-plugin/README.md) lint rule (on in
+`recommended`) flags every direct call — `html(…)`, `html.call(…)`, `html.apply(…)`,
+`Reflect.apply(html, …)`.
 
 ## Unsafe patterns to avoid
 

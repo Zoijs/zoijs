@@ -77,7 +77,7 @@ In `docs/index.html`, map the package names to the CDN (pinned versions):
 <script type="importmap">
   {
     "imports": {
-      "@zoijs/core": "https://esm.sh/@zoijs/core@1",
+      "@zoijs/core": "https://esm.sh/@zoijs/core@1/prod",
       "@zoijs/router": "https://esm.sh/@zoijs/router@0.2",
       "@zoijs/resource": "https://esm.sh/@zoijs/resource@0.1",
       "@zoijs/action": "https://esm.sh/@zoijs/action@0.1",
@@ -87,13 +87,16 @@ In `docs/index.html`, map the package names to the CDN (pinned versions):
 </script>
 ```
 
+`@zoijs/core@1/prod` is the production entry: same API, development warnings and the
+devtools hook off. The other packages import `@zoijs/core` by name, so they share it.
+
 Use **relative** paths for your own assets (`./app.js`, `./style.css`) — an
 absolute `/style.css` would point at the domain root, not your sub-path.
 
 > **Want zero runtime dependencies?** Vendor instead: copy `framework/src` into
 > `docs/zoijs/core/`, and each single-file package (`router`, `resource`,
 > `action`, `head`) into `docs/zoijs/`, then map
-> `"@zoijs/core": "./zoijs/core/index.js"`, `"@zoijs/router": "./zoijs/router.js"`,
+> `"@zoijs/core": "./zoijs/core/prod.js"`, `"@zoijs/router": "./zoijs/router.js"`,
 > etc. The packages import `@zoijs/core` by name, which the import map resolves —
 > so no code changes are needed.
 
