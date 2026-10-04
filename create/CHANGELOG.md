@@ -2,6 +2,19 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## Unreleased
+
+### Security
+- **Hardened the scaffolded dev server (SEC-6)** (templates `app`, `basic`, `typescript`).
+  It listened on every network interface, served dotfiles (`/.env`, `/.git/config`, `.npmrc`)
+  and followed symlinks out of the project to anyone on the LAN, and a malformed URL such as
+  `/%E0` crashed it. It now listens on `127.0.0.1` only (opt into the LAN explicitly with
+  `ZOIJS_HOST=0.0.0.0`, which prints a warning), never serves a path with a dot-segment,
+  confines every file — including symlink targets — to the project folder (package-manager
+  links under `node_modules/` excepted), answers malformed or null-byte paths with `400`
+  and keeps running, and sends `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
+  `npm run dev` and the URL it prints are unchanged.
+
 ## 0.1.4 — 2026-06-27
 
 Scaffolded apps now come with editor config for a great out-of-the-box experience —
