@@ -28,7 +28,8 @@ All notable changes to Zoijs are documented here. The format is based on
   `boundary` | `resource` | `action`), once per failure, in every mode. Errors that escape still
   escape. The hook is realm-wide (shared by compatible copies); `onError: null` removes it, other
   `configure` calls leave it unchanged. A throwing hook is logged and never re-invoked for its own
-  failure. resource/action report through a new framework-internal subpath, `@zoijs/core/internal`.
+  failure. `@zoijs/resource`/`@zoijs/action` report through the shared runtime (no extra import or
+  import-map entry), so the hook and its recursion guard are one per realm.
 - **Production entry: `@zoijs/core/prod` (SEC-4).** Same API as `@zoijs/core`, but a page that loads
   it starts in production mode — no development warnings, and the devtools hook never attaches.
   Bundlers' production builds select it automatically through a new `"production"` export condition
@@ -63,9 +64,11 @@ All notable changes to Zoijs are documented here. The format is based on
   split the graph: state from one copy never updated bindings or effects from the other, and its
   cleanups never ran. They now live on one runtime object per JavaScript realm, keyed by
   `Symbol.for("zoijs.runtime@1")` (the runtime protocol): every compatible copy joins it, the first
-  copy's object is never replaced, and `configure({ dev })` is a single realm-wide setting. A copy with
-  a different runtime protocol keeps its own runtime and logs `ZJS201` in dev mode instead of mixing.
-  No API changes.
+  copy's object is never replaced, and `configure({ dev })` is a single realm-wide setting. The runtime
+  also holds the `onError` reporter and the `zoijs` Trusted Types policy, so compatible copies create
+  that policy once and share it — under `trusted-types zoijs` a second copy renders without
+  `'allow-duplicates'`. A copy with a different runtime protocol keeps its own runtime and logs
+  `ZJS201` in dev mode instead of mixing. No API changes.
 - **A conditionally shown component no longer rebuilds when state read during its setup changes (CORE-1).**
   A live binding can now return a component **uncalled** — `${() => show.get() ? Child : null}`, or
   `() => Child(props)` for props. Zoijs constructs it once, untracked, under the binding's owner, so
@@ -108,8 +111,7 @@ All notable changes to Zoijs are documented here. The format is based on
   `onError`, HTTPS, the dev server, compatible versions, and copy-paste headers for Netlify,
   Cloudflare Pages, Vercel, nginx and Apache (and GitHub Pages' limits). It also records two current
   limits a strict policy hits: `style` bindings are attributes (need `style-src-attr 'unsafe-inline'`),
-  and under enforced Trusted Types `@zoijs/sanitize` fails and a second core copy can't create the
-  `zoijs` policy. Package READMEs link to it; `npm run test:docs` checks it stays complete and that
+  and under enforced Trusted Types `@zoijs/sanitize` fails. Package READMEs link to it; `npm run test:docs` checks it stays complete and that
   every host recipe matches the canonical policy. No runtime change.
 - **Exact, integrity-pinned CDN guidance and truthful peer floors (SEC-7).** Docs and READMEs pointed
   at floating build-service URLs (`esm.sh/@zoijs/core@1`), which can change without a deploy, can't be
@@ -118,7 +120,7 @@ All notable changes to Zoijs are documented here. The format is based on
   `docs/installation.md` — or vendoring for a strict CSP. `scripts/zoijs-compat.json` records the first
   core version providing each import, and the release check verifies every package's peer floor
   against it (and against the published tarball), blocks floating CDN URLs, and blocks packages that
-  need the still-unversioned next core (`@zoijs/resource`, `@zoijs/action`, `create-zoijs`).
+  need the still-unversioned next core (`@zoijs/ssr`, `create-zoijs`).
   `scripts/cdn-importmap.mjs` generates import maps from the npm tarball.
 - **Hardened release supply chain (SEC-5).** Every package (all 14) now publishes only from CI,
   only when a `<package>-v<version>` tag on `main` is pushed, after the full CI suite passes — no

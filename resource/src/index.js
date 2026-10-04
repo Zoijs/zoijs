@@ -21,7 +21,13 @@
 // unchanged.
 
 import { createState, onCleanup } from "@zoijs/core";
-import { reportError } from "@zoijs/core/internal";
+// configure({ onError }) reporting goes through the core's shared runtime (CORE-2/CORE-3), found
+// by its registry key — not a core subpath import, so no-build pages need no extra import-map
+// entry. A core without that runtime (≤ 1.8) has no onError: the error still lands in error().
+const report = (error, info) => {
+  const rt = globalThis[Symbol.for("zoijs.runtime@1")];
+  if (rt && typeof rt.report === "function") rt.report(error, info);
+};
 
 /**
  * Wrap an async fetcher in reactive loading / data / error state.
@@ -70,7 +76,7 @@ export function resource(fetcher, options) {
   // configure({ onError }). Stale/superseded/disposed results are ignored, so not reported.
   const fail = (err) => {
     error.set(err);
-    reportError(err, { kind: "resource" });
+    report(err, { kind: "resource" });
   };
 
   // Ignore results from disposed resources or from a load that has been

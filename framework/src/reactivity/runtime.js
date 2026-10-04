@@ -1,11 +1,32 @@
 // runtime.js — reactive state shared by all compatible @zoijs/core copies in a
-// realm: one graph, one owner tree. Key = runtime protocol (see VERSIONING.md).
+// realm: one graph, one owner tree, one onError reporter, one Trusted Types policy.
+// Key = runtime protocol (see VERSIONING.md); protocol 1 ships with core 1.9.0.
 
 const P = 1;
 const PRE = "zoijs.runtime@";
 const KEY = Symbol.for(PRE + P);
 const g = globalThis;
-const make = () => ({ protocol: P, observer: null, owner: null, queue: new Set(), scheduled: false, dev: true, inspector: null, onError: null, reporting: false });
+const make = () => {
+  const r = { protocol: P, observer: null, owner: null, queue: new Set(), scheduled: false, dev: true, inspector: null, onError: null, reporting: false, tt: undefined,
+    // Hand a contained error to configure({ onError }). Lives here, not in a core import, so
+    // @zoijs/* packages call globalThis[Symbol.for("zoijs.runtime@1")].report(…) and need no
+    // import-map entry. The hook never receives its own failures, and an error raised while it
+    // runs is logged rather than re-reported — no recursion.
+    report(error, info) {
+      if (!r.onError) return;
+      if (r.reporting) return void console.error("Zoijs: error raised inside onError (not re-reported):", error);
+      r.reporting = true;
+      try {
+        r.onError(error, info);
+      } catch (hookError) {
+        console.error("Zoijs: the onError hook threw:", hookError);
+      } finally {
+        r.reporting = false;
+      }
+    },
+  };
+  return r;
+};
 
 let rt = g[KEY];
 const created = !rt || rt.protocol !== P;

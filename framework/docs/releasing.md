@@ -104,8 +104,11 @@ the first core version providing each import, the security floor for generated a
   imports (checked against the table offline, and against the published tarball online);
 - a package that needs a capability marked `"next"` (unreleased) is **blocked** until
   `nextCore` is set to the version that core release will carry and its floor is raised —
-  today: **`@zoijs/resource` and `@zoijs/action`** (they import `@zoijs/core/internal`) and
-  **`create-zoijs`** (its templates use the production entry, `src/prod.js`);
+  today: **`@zoijs/ssr`** (it imports `isSafeAttributeValue`/`openerRel` from `@zoijs/core/server`)
+  and **`create-zoijs`** (its templates use the production entry, `src/prod.js`). Packages never
+  import private core subpaths — no-build apps would need an import-map entry for them; sibling
+  packages that need core plumbing use the shared runtime (`globalThis[Symbol.for("zoijs.runtime@1")]`),
+  as `@zoijs/resource`/`@zoijs/action` do for `onError` reporting;
 - no shipped file may use a floating or build-service Zoijs CDN URL;
 - `create-zoijs` targets one exact, published core (`create/core-cdn.json`), at or above the
   security floor, whose integrity map matches the published files.

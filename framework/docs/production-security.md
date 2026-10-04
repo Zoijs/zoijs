@@ -204,9 +204,9 @@ static template strings — and `html()` refuses runtime arrays and data (`ZJS01
 - **`@zoijs/sanitize` doesn't support enforced Trusted Types yet.** It parses with
   `DOMParser`, a Trusted Types sink, without a policy, so under enforcement `sanitize()`
   will fail. Don't enable enforcement on pages that sanitize.
-- **One copy of `@zoijs/core` per page.** Each copy tries to create the `zoijs` policy; a
-  second copy's attempt is refused by `trusted-types zoijs` and its rendering fails. Map every
-  package to one core (an import map does this), or add `'allow-duplicates'`.
+- **Several copies of `@zoijs/core` are fine** *(next release)*: compatible copies share one
+  runtime and therefore one `zoijs` policy — it's created once, so `trusted-types zoijs` needs no
+  `'allow-duplicates'`. (Mapping every package to one core is still simplest.)
 - `unsafeHTML()` never uses the `zoijs` policy: pass it a `TrustedHTML` from your own policy
   (add that policy's name to `trusted-types`); a plain string is refused.
 - Trusted Types complements correct input handling and CSP — it doesn't validate your data,

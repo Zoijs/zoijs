@@ -2,6 +2,8 @@
 //
 // Intentionally thin: the framework prefers using the platform directly.
 
+import { runtime as rt } from "../reactivity/runtime.js";
+
 /**
  * Resolve a target that may be an element or a CSS selector string.
  * @param {Element|string} target
@@ -21,21 +23,21 @@ export function resolveTarget(target) {
 // strings + markers — html() accepts only tagged-template strings, and dynamic
 // values never reach it (the scanner forbids that) — so a pass-through policy is safe. Pages enforcing Trusted Types
 // must allow the `zoijs` policy (e.g. `trusted-types zoijs`).
-let ttPolicy;
-let ttChecked = false;
+// The policy lives on the shared runtime (rt.tt: undefined = not tried yet, null = none), so
+// compatible copies of the core create it once and reuse it — a second createPolicy("zoijs")
+// would be refused under `trusted-types zoijs`. If creation fails, there is no policy: the raw
+// string goes to innerHTML and an enforcing page refuses it (never a silent bypass).
 function trustedHTML(htmlText) {
-  if (!ttChecked) {
-    ttChecked = true;
+  if (rt.tt === undefined) {
+    rt.tt = null;
     try {
       const tt = typeof window !== "undefined" ? window.trustedTypes : undefined;
-      if (tt && tt.createPolicy) {
-        ttPolicy = tt.createPolicy("zoijs", { createHTML: (s) => s });
-      }
+      if (tt && tt.createPolicy) rt.tt = tt.createPolicy("zoijs", { createHTML: (s) => s });
     } catch {
-      ttPolicy = undefined; // policy name unavailable; fall back
+      /* policy name not allowed by the page's CSP */
     }
   }
-  return ttPolicy ? ttPolicy.createHTML(htmlText) : htmlText;
+  return rt.tt ? rt.tt.createHTML(htmlText) : htmlText;
 }
 
 /**

@@ -10,11 +10,11 @@ All notable changes to `@zoijs/action` are documented here.
   non-idempotent request twice. The lock is taken before `fn` starts and released when the run
   succeeds or fails (or on `reset()`); joined calls aren't reported to `onError`. Default unchanged.
   It doesn't prevent server-side replays — keep the endpoint idempotent.
-
-### Release blocker
-- This version imports `@zoijs/core/internal` (onError reporting, CORE-3), which first ships in the
-  next core release. Its `@zoijs/core` peer floor must be raised to that version before release;
-  `npm run release:check` blocks the release until then (SEC-7).
+- **Failures reach `configure({ onError })` (CORE-3).** A failed run that becomes this action's
+  `error()` is also reported to the app's onError hook as `{ kind: "action" }` (original error,
+  once; superseded/disposed runs aren't reported). It goes through the core's shared runtime, so
+  no-build apps need no extra import-map entry, and the peer range is unchanged: with an older
+  core (no shared runtime, ≤ 1.8) the error simply isn't reported, as before.
 
 ## 0.1.0 — 2026-06-24
 

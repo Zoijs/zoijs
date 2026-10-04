@@ -25,7 +25,13 @@
 // core's public API (createState, onCleanup) — the core is unchanged.
 
 import { createState, onCleanup } from "@zoijs/core";
-import { reportError } from "@zoijs/core/internal";
+// configure({ onError }) reporting goes through the core's shared runtime (CORE-2/CORE-3), found
+// by its registry key — not a core subpath import, so no-build pages need no extra import-map
+// entry. A core without that runtime (≤ 1.8) has no onError: the error still lands in error().
+const report = (error, info) => {
+  const rt = globalThis[Symbol.for("zoijs.runtime@1")];
+  if (rt && typeof rt.report === "function") rt.report(error, info);
+};
 
 /**
  * Wrap a write function in reactive pending / error / done / result state.
@@ -66,7 +72,7 @@ export function action(fn, options) {
       if (disposed || id !== runId) return undefined; // superseded/disposed: not this action's error
       error.set(err);
       pending.set(false);
-      reportError(err, { kind: "action" }); // also observable via configure({ onError })
+      report(err, { kind: "action" }); // also observable via configure({ onError })
       return undefined;
     }
   };
