@@ -99,3 +99,4 @@ unsafeHTML(42);
 unsafeHTML({ toString: () => "<b>" });
 // @ts-expect-error — the result is opaque: not assignable to string
 const asString: string = rawResult;
+void asString;
