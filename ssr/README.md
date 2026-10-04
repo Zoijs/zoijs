@@ -58,6 +58,11 @@ import { App } from "./App.js";
 hydrate(App, "#app"); // reuses the server elements; attaches events + reactivity
 ```
 
+> **No-build client (import map)?** `@zoijs/ssr` imports `@zoijs/core/server`, so the browser's
+> import map needs `@zoijs/core/server` next to `@zoijs/core` and `@zoijs/ssr` (same core version).
+> In the Zoijs repo, `node scripts/cdn-importmap.mjs @zoijs/core@<v> @zoijs/ssr@<v>` generates the
+> exact, integrity-pinned map including it.
+
 `hydrate()` runs the component and **adopts** the existing elements inside the target:
 they're reused exactly (same nodes, never re-created), and their event handlers and
 reactive attributes are attached in place. Each dynamic content region is re-rendered

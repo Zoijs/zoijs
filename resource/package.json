@@ -49,7 +49,7 @@
     "test": "node --test --import ./tests/setup-dom.js",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
-    "dev": "npx serve -l 3200 .."
+    "dev": "node ../scripts/test-server.mjs .. 3200"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
