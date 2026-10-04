@@ -18,6 +18,9 @@ The core guarantee: **dynamic values fill text and attribute *slots* only — th
 | `${() => value}` in text | rendered as an **inert Text node** (escaped) | ✅ always |
 | `attr=${() => value}` | set via `setAttribute` (or property for `value`/`checked`) | ✅ |
 | URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `data`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
+| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
+| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` | **compile error** | ✅ data can't steer resolution/navigation |
+| `target="_blank"` on `<a>`/`<area>`/`<form>` | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
 | `onclick=${fn}` | `addEventListener` with a **function reference** | ✅ strings ignored |
 
 ### Text is always escaped
@@ -40,6 +43,32 @@ Allowed: `http`, `https`, `mailto`, `tel`, relative URLs, and raster `data:image
 html`<a href=${() => url}>link</a>`;
 // url = "javascript:alert(1)"  →  href is not set.
 ```
+
+The same check covers every URL a bound value can carry, in every mode (dev or production), on
+the client and in `@zoijs/ssr`. A refused value is not set (development mode warns, naming the
+attribute but not the value):
+
+- **`srcset` / `imagesrcset`** — each candidate URL is checked (parsed as HTML does, so a
+  `data:image/…` URL keeps its commas); one unsafe candidate refuses the whole value.
+- **`<meta http-equiv="refresh" content=${…}>`** — the refresh URL (`0;url=…`, `0;URL='…'`, or
+  `0 …`) is found the way the browser finds it and checked; a value that isn't a valid refresh is
+  refused rather than guessed. Binding `http-equiv` itself is a compile error.
+- **SVG `<animate>`/`<set>`** — `from`/`to`/`by`/`values` are checked when the (static)
+  `attributeName` is a URL attribute such as `href`; binding `attributeName` is a compile error.
+- **`<base>`** — can't be bound at all (compile error), however safe the value looks: it changes
+  how every relative URL on the page resolves. Write it in the source (`<base href="/app/">`), or
+  use the router's `base` option.
+
+### `target="_blank"` opens without `window.opener`
+
+A Zoijs-rendered `<a>`, `<area>`, or `<form>` whose `target` is `_blank` — bound or written
+statically — always gets `rel` tokens `noopener` (the new page can't reach `window.opener`) and
+`noreferrer` (no `Referer` header is sent, a privacy default). They are merged into your own
+tokens (`rel="external"` → `external noopener noreferrer`), never duplicated, kept in place when
+`rel` updates, and dropped again if `target` changes away from `_blank` — whatever the attribute
+order. (Modern browsers already imply `noopener` for `_blank`; this makes it explicit everywhere,
+including server HTML.) Static markup elsewhere is your code and isn't rewritten — and
+`unsafeHTML()` markup is inserted exactly as written.
 
 ### Event handlers are functions, never strings
 

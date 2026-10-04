@@ -42,5 +42,18 @@ export interface Action<TArgs extends unknown[], TResult> {
  * ```
  */
 export function action<TArgs extends unknown[], TResult>(
-  fn: (...args: TArgs) => TResult | Promise<TResult>
+  fn: (...args: TArgs) => TResult | Promise<TResult>,
+  options?: ActionOptions
 ): Action<TArgs, TResult>;
+
+/** Options for {@link action}. */
+export interface ActionOptions {
+  /**
+   * For non-idempotent writes: while a run is pending, `run()` doesn't call `fn` again — it
+   * returns the pending run's promise (its arguments are ignored). The lock is released when
+   * that run succeeds or fails, or on `reset()`. Default `false`. It prevents overlapping runs
+   * in this page; it doesn't stop server-side replays or retries — make the endpoint idempotent
+   * (e.g. an idempotency key) for that.
+   */
+  exclusive?: boolean;
+}

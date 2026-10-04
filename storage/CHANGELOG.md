@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/storage` are documented here.
 
+## Unreleased
+
+### Added
+- **`validate` option (SEC-10).** `storage(key, initial, { validate })` checks the value restored
+  from `localStorage` (user-editable, not trusted): unless `validate(value)` returns `true` (or if it
+  throws), `initial` is used and the stored item is left until the next `set()`. Writes aren't
+  validated. Without `validate`, behavior is unchanged.
+
 ## 0.1.0 — 2026-06-25
 
 Initial release of the tiny localStorage-backed persistence helper for Zoijs.

@@ -2,6 +2,16 @@
 
 All notable changes to `@zoijs/i18n` are documented here.
 
+## Unreleased
+
+### Security
+- **Own-property lookups (SEC-10).** Interpolation used `key in vars`, so `{constructor}`,
+  `{toString}` or `{__proto__}` resolved to `Object.prototype` members (and `t("constructor")`
+  returned a function's source). Variables and dotted message keys now resolve from own properties
+  only — inherited names stay as written / show the key; null-prototype objects work; an explicitly
+  owned `constructor` key is still used. A dotted key no longer walks into a message string
+  (`t("hi.length")` is a missing key, not `"14"`).
+
 ## 0.1.0 — 2026-06-26
 
 Initial release — tiny, reactive internationalization for Zoijs.

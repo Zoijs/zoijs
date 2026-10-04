@@ -17,7 +17,7 @@ import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
-import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } from "../utils/security.js";
+import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
 import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
@@ -166,31 +166,30 @@ function bindAttribute(el, attr, values) {
     return;
   }
 
-  if (attr.whole) {
-    // A single ${} as the whole value → pass the raw value (preserves booleans,
-    // numbers, property types for value/checked).
-    const raw = values[attr.holes[0]];
-    if (typeof raw === "function")
-      labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, raw())));
-    else applyAttribute(el, attr.name, raw);
-    return;
-  }
+  // One write per part: a target/rel pair (SEC-9, computed together) or a single attribute.
+  const write = attr.opener
+    ? () => {
+        const t = partValue(el, attr.target, values);
+        applyAttribute(el, "target", t);
+        applyAttribute(el, "rel", openerRel(t, attr.rel && partValue(el, attr.rel, values)));
+      }
+    : () => applyAttribute(el, attr.name, partValue(el, attr, values), attr.check);
+  if (attr.holes.some((h) => typeof values[h] === "function")) labelNext({ kind: "attr", el, name: attr.name }, () => effect(write));
+  else write();
+}
 
-  // Multi-part value (static text + one or more holes) → always a joined string.
-  const compute = () => {
-    let result = attr.strings[0];
-    for (let i = 0; i < attr.holes.length; i++) {
-      const hv = values[attr.holes[i]];
-      const v = typeof hv === "function" ? hv() : hv;
-      warnStringified(el, attr.name, v);
-      result += v + attr.strings[i + 1];
-    }
-    return result;
-  };
-  const reactive = attr.holes.some((h) => typeof values[h] === "function");
-  if (reactive)
-    labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, compute())));
-  else applyAttribute(el, attr.name, compute());
+// A part's current value: a whole ${} passes the raw value (booleans, numbers, property types
+// for value/checked); static text + holes is always a joined string.
+function partValue(el, attr, values) {
+  const read = (h) => (typeof values[h] === "function" ? values[h]() : values[h]);
+  if (attr.whole) return read(attr.holes[0]);
+  let result = attr.strings[0];
+  for (let i = 0; i < attr.holes.length; i++) {
+    const v = read(attr.holes[i]);
+    warnStringified(el, attr.name, v);
+    result += v + attr.strings[i + 1];
+  }
+  return result;
 }
 
 // A callback ref: hand the real element to user code AFTER the current render is
@@ -520,7 +519,7 @@ function stringifyKey(key) {
 
 // ---- attribute binding -------------------------------------------------------
 
-function applyAttribute(el, name, value) {
+function applyAttribute(el, name, value, check) {
   if (isUnsafeHTML(value)) rawInAttr(name);
   if (!isSafeAttributeName(name)) {
     if (isDev()) console.warn(`Zoijs: refusing to bind unsafe attribute "${name}"`);
@@ -532,8 +531,9 @@ function applyAttribute(el, name, value) {
   // href). The original `name` is kept for setAttribute so case-SENSITIVE SVG attributes
   // (viewBox, preserveAspectRatio, …) are preserved verbatim.
   const lname = name.toLowerCase();
-  if (URL_ATTRS.has(lname) && !isSafeUrl(toText(value))) {
-    if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}": ${value}`);
+  // URLs, srcset, meta refresh, SVG animation (shared with SSR); refused in every mode.
+  if (!isSafeAttributeValue(lname, value, check)) {
+    if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}"`);
     return;
   }
   if (lname === "style") {

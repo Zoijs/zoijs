@@ -38,3 +38,8 @@ router.go();
 router.link("/");
 
 void [v, a, path, id];
+
+// ---- SEC-10: decodeSlash ----------------------------------------------------------
+createRouter({ "/f/:name": () => null }, { decodeSlash: false });
+// @ts-expect-error — decodeSlash is a boolean
+createRouter({ "/f/:name": () => null }, { decodeSlash: "no" });

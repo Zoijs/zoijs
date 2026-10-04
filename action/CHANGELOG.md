@@ -4,6 +4,13 @@ All notable changes to `@zoijs/action` are documented here.
 
 ## Unreleased
 
+### Added
+- **`exclusive` option (SEC-10).** `action(fn, { exclusive: true })`: while a run is pending,
+  `run()` returns that run's promise instead of calling `fn` again, so a double-click can't send a
+  non-idempotent request twice. The lock is taken before `fn` starts and released when the run
+  succeeds or fails (or on `reset()`); joined calls aren't reported to `onError`. Default unchanged.
+  It doesn't prevent server-side replays — keep the endpoint idempotent.
+
 ### Release blocker
 - This version imports `@zoijs/core/internal` (onError reporting, CORE-3), which first ships in the
   next core release. Its `@zoijs/core` peer floor must be raised to that version before release;

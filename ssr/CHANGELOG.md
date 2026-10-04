@@ -4,6 +4,13 @@ All notable changes to `@zoijs/ssr` are documented here.
 
 ## Unreleased
 
+### Security
+- **SEC-9 guards in server HTML.** Bound `srcset`/`imagesrcset` candidates, meta-refresh content and
+  SVG animation URLs go through the same check as the client (`isSafeAttributeValue` from
+  `@zoijs/core/server`), and `target="_blank"` is emitted with `rel="noopener noreferrer"` merged into
+  the app's rel — the HTML is safe before hydration. Requires the next core release (new `/server`
+  exports), so the peer floor rises with it; `release:check` blocks ssr until then.
+
 ### Added
 - **Renders `unsafeHTML()` results (SEC-3).** A result from `@zoijs/core/unsafe` in a content
   position is emitted unescaped — the only unescaped output path; plain strings are still escaped. In

@@ -37,7 +37,17 @@ const SRC = join(root, "framework", "src");
 // would trade correctness for bytes. Still a temporary COMMENTED-SOURCE budget until PERF-2.
 // This gate counts every client-reachable file, including opt-in entries like unsafe.js
 // (SEC-3), which a page only loads if it imports @zoijs/core/unsafe.
-const BUDGET_GZIP = 24 * 1024; // 24 KB (24,576 B) — temporary Phase 1 source budget, see above
+// Raised to 25 KB (2026-10-04) for SEC-9 (wider URL guards, opener protection) — client + SSR
+// security logic, with only ~394 B left at 24 KB. Required security/correctness work is not
+// weakened to fit an obsolete source budget, but this is NOT permission for uncontrolled growth:
+// it stays a temporary commented-source budget until PERF-2 replaces it with a
+// production/minified budget and a source-delivery budget.
+// Raised to 26.5 KB (2026-10-04) once SEC-9 landed at ~26.3 KB (its code alone exceeded 25 KB).
+// Same terms: a temporary Phase 1 commented-source budget; required security/correctness behavior
+// is not cut to fit an outdated ceiling; PERF-2 replaces it with separate production/minified and
+// source-delivery budgets. SEC-10's fixes live in the router/i18n/storage/action packages, so they
+// should not move this number.
+const BUDGET_GZIP = 26.5 * 1024; // 26.5 KB (27,136 B) — temporary Phase 1 source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They

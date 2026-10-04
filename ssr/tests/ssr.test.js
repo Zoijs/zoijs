@@ -318,3 +318,27 @@ test("SEC-3: JSON look-alikes are escaped data, never raw", () => {
   const forged = JSON.parse('{"__zoijsUnsafeHTML":true,"zoijs.unsafe-html":true,"Symbol(zoijs.unsafe-html)":true,"html":"<b>x</b>"}');
   assert.equal(renderToString(() => html`<p>${forged}</p>`), "<p>[object Object]</p>");
 });
+
+// ---- SEC-9: wider URL guards + opener protection, enforced in the server HTML ----------
+
+test("SEC-9: <base> bindings and bound meta http-equiv are refused on the server", () => {
+  assert.throws(() => renderToString(() => html`<base href=${"/x/"}>`), /on <base> is not supported/);
+  assert.throws(() => renderToString(() => html`<meta http-equiv=${"refresh"} content="0">`), /binding "http-equiv" on <meta>/);
+  assert.equal(renderToString(() => html`<base href="/app/"><p>${"x"}</p>`), '<base href="/app/"><p>x</p>');
+});
+
+test("SEC-9: meta refresh, srcset and SVG animation URLs are checked like the client", () => {
+  const J = "javascript:alert(1)";
+  assert.equal(renderToString(() => html`<meta http-equiv="refresh" content=${"0;url=/next"}>`), '<meta http-equiv="refresh" content="0;url=/next">');
+  assert.equal(renderToString(() => html`<meta http-equiv="refresh" content=${"0; URL='" + J + "'"}>`), '<meta http-equiv="refresh">');
+  assert.equal(renderToString(() => html`<img srcset=${"/a.png 1x, /b.png 2x"}>`), '<img srcset="/a.png 1x, /b.png 2x">');
+  assert.equal(renderToString(() => html`<img srcset=${"/a.png 1x, " + J.toUpperCase() + " 2x"}>`), "<img>");
+  assert.equal(renderToString(() => html`<svg><a><set attributeName="href" to=${J}></set></a></svg>`), '<svg><a><set attributeName="href"></set></a></svg>');
+});
+
+test("SEC-9: target=_blank is emitted with noopener noreferrer, merged into the app's rel", () => {
+  assert.equal(renderToString(() => html`<a target="_blank" href=${"/x"} rel="external">x</a>`), '<a href="/x" target="_blank" rel="external noopener noreferrer">x</a>');
+  assert.equal(renderToString(() => html`<a rel=${"noopener"} target=${"_blank"}>x</a>`), '<a target="_blank" rel="noopener noreferrer">x</a>');
+  assert.equal(renderToString(() => html`<a target=${"_self"} rel="external">x</a>`), '<a target="_self" rel="external">x</a>');
+  assert.equal(renderToString(() => html`<form target="_blank" action=${"/go"}></form>`), '<form action="/go" target="_blank" rel="noopener noreferrer"></form>');
+});
