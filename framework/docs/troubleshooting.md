@@ -57,8 +57,18 @@ Zoijs refuses to silently corrupt output. These throw with a clear message:
 | `<textarea>a ${x}</textarea>` | a `${}` in `<textarea>/<title>` must be the *only* content (a bare `<textarea>${x}</textarea>` is fine) |
 | `<!-- ${x} -->` | interpolation inside comments isn't supported |
 | `onclick="a ${fn}"` | event handlers must be a single `${}` value |
+| `.value=${x}` / `?disabled=${x}` / `@click=${fn}` (Lit syntax) | not supported — use `value=${x}`, `disabled=${x}`, `onclick=${fn}` (see [Coming from Lit](migration/from-lit.md)) |
+| `[x]=${v}`, `(click)=${fn}`, … | a bound attribute needs a plain HTML name |
+| `title="&hellip; ${x}"` | in an attribute that also has a `${}`, the static text may use numeric references (`&#8230;`), `&amp; &lt; &gt; &quot; &apos;` and the Latin-1 names (`&nbsp;`, `&eacute;`, …); write other characters directly |
 
 Rewrite to a supported form (e.g. `disabled=${cond}` instead of `<input ${cond}>`).
+
+## "Attribute … got an object/array, stringified as …"
+
+You bound an array or plain object to an ordinary attribute (`data-x=${["a", "b"]}`), so it
+became `"a,b"` or `"[object Object]"` — usually a bug. Pass a string instead
+(`data-x=${JSON.stringify(value)}`, `class=${list.join(" ")}`). The value still renders as before;
+the warning is development-only. (`style=${{ … }}` is the supported object form and never warns.)
 
 ## "I see a duplicate key warning"
 

@@ -31,7 +31,9 @@ const SRC = join(root, "framework", "src");
 // budgets: one for the production/minified output and one for source/module delivery.
 // Raised to 22.5 KB (2026-10-04) for SEC-4 (production entry) + CORE-3 (onError):
 // ~21.96 KB now (~300 B of CORE-3 is code), leaving room for the remaining Phase 1 items.
-const BUDGET_GZIP = 22.5 * 1024; // 22.5 KB (23,040 B) — temporary Phase 1 source budget, see above
+// Raised to 24 KB (2026-10-04) for CORE-4 (compiler edge cases): ~23.4 KB now — +1.1 KB
+// code, mostly the HTML-exact attribute entity decoder and its Latin-1 table.
+const BUDGET_GZIP = 24 * 1024; // 24 KB (24,576 B) — temporary Phase 1 source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They
