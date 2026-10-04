@@ -58,7 +58,9 @@ html(["<p>runtime markup</p>"]);  // ❌ throws ZJS010 — html is not an innerH
 ```
 
 Never pass runtime HTML through `html`. For HTML from users, a CMS, or markdown, use
-[`@zoijs/sanitize`](../../sanitize/README.md); otherwise build real elements.
+[`@zoijs/sanitize`](../../sanitize/README.md); otherwise build real elements. Sanitized
+content can't clobber page globals: `name` is removed and every `id` is namespaced
+(`user-content-…`), so it can't claim names like `__DATA__` that your bootstrap code reads.
 
 **What this check is — and isn't.** The guarantee is that data cannot cross the markup
 boundary, accidentally or through attacker-controlled serialization: nothing JSON,

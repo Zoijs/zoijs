@@ -53,3 +53,23 @@ test("legitimate rich text is rendered", async ({ page }) => {
   await expect(article.locator("script")).toHaveCount(0);
   expect(await page.evaluate(() => window.__xss === true)).toBe(false);
 });
+
+// SEC-8: in a real browser, ids and <a name> become named properties of window. Sanitized
+// content must not be able to claim page-level names like __DATA__ / config / location.
+test("sanitized content cannot clobber window globals", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    window.sanitizeTest.run('<a id="__DATA__" name="config" href="#__DATA__">x</a><p id="location">l</p>');
+    return {
+      data: typeof window.__DATA__,
+      config: typeof window.config,
+      location: Object.prototype.toString.call(window.location),
+      namespaced: !!document.getElementById("user-content-__DATA__"),
+      href: document.getElementById("user-content-__DATA__")?.getAttribute("href"),
+    };
+  });
+  expect(r.data).toBe("undefined");
+  expect(r.config).toBe("undefined");
+  expect(r.location).toBe("[object Location]");
+  expect(r.namespaced).toBe(true);
+  expect(r.href).toBe("#user-content-__DATA__");
+});

@@ -4,6 +4,17 @@ All notable changes to `@zoijs/sanitize` are documented here.
 
 ## Unreleased
 
+### Security
+- **Sanitized content can no longer clobber page globals (SEC-8).** `id` and `name` survived
+  sanitization, and browsers expose both as named properties — so `<a id="__DATA__" name="config">`
+  shadowed `window.__DATA__` and `window.config`. Now `name` is always removed, and every `id` is
+  prefixed with `user-content-`; same-document references are rewritten to match (`href="#…"`,
+  `headers`, and the ARIA id-reference attributes), so in-page links and accessibility
+  relationships keep working. Empty ids are removed. `sanitize(html, { idPrefix: "" })` keeps ids
+  as written (an explicit opt-out for trusted content; `name` is still removed), and a custom prefix
+  can be passed. **Mild behavior change:** links into sanitized content from outside it must use the
+  prefixed id (`#user-content-…`).
+
 ### Fixed
 - **Peer range now `@zoijs/core ^1.5.0` (was `^1.0.0`) (SEC-7).** sanitize imports `isSafeUrl` /
   `isSafeAttributeName` from `@zoijs/core/server`, which first shipped in core 1.5.0, so 1.0–1.4
