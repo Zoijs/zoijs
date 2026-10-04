@@ -126,6 +126,7 @@ in [`VERSIONING.md`](VERSIONING.md). What to check:
     refresh is refused. Binding `http-equiv` is a compile error.
   - **`srcset` / `imagesrcset`**: every candidate URL is checked (HTML's candidate parsing, so
     `data:image/…` commas stay inside their URL); one unsafe candidate refuses the whole value.
+    Parsing is linear in the value's length.
   - **SVG `<animate>`/`<set>`**: `from`/`to`/`by`/`values` are checked when the static
     `attributeName` is a URL attribute; binding `attributeName` is a compile error.
   - **`target="_blank"`** on `<a>`/`<area>`/`<form>` — bound or static — always carries

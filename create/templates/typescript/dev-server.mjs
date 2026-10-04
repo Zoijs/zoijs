@@ -19,7 +19,7 @@
 
 import { createServer } from "node:http";
 import { readFile, realpath } from "node:fs/promises";
-import { extname, resolve, relative, isAbsolute, sep } from "node:path";
+import { extname, resolve, relative, isAbsolute } from "node:path";
 
 const PORTS = [7310, 7311, 7312, 7313];
 const HOST = process.env.ZOIJS_HOST || "127.0.0.1";

@@ -73,7 +73,7 @@ export function isSafeSrcset(value) {
   for (let i = 0, url; i < s.length; ) {
     while (WS.test(s[i]) || s[i] === ",") i++;
     for (url = ""; i < s.length && !WS.test(s[i]); ) url += s[i++];
-    if (url.endsWith(",")) url = url.replace(/,+$/, "");
+    if (url.endsWith(",")) { let e = url.length; while (url[e - 1] === ",") e--; url = url.slice(0, e); } // linear (a /,+$/ regex is quadratic)
     else for (let d = 0; i < s.length && (s[i] !== "," || d); i++) d += s[i] === "(" ? 1 : s[i] === ")" && d ? -1 : 0;
     if (url && !isSafeUrl(url)) return false;
   }
