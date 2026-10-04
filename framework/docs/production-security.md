@@ -24,7 +24,7 @@ Copy this into your release process.
 - [ ] **Credentials** — `credentials: "include"` appears only where cross-origin cookies are intended, and the server's CORS allows exactly those origins. [→ 6](#6-configure-credentials-deliberately)
 - [ ] **Authorization on the server** — no data or action is protected only by hidden UI or a client-side route check. [→ 7](#7-authorize-on-the-server)
 - [ ] **`serialize()` only in a script body** — never in an attribute, URL, style, or raw HTML. [→ 8](#8-embed-serialize-output-only-in-a-script-body)
-- [ ] **Untrusted HTML goes through `@zoijs/sanitize`** — never `innerHTML`. [→ 9](#9-sanitize-untrusted-html) · [→ 10](#10-avoid-raw-dom-sinks)
+- [ ] **Untrusted HTML goes through `@zoijs/sanitize`** — never `innerHTML`; every `unsafeHTML()` use is reviewed (`grep -R unsafeHTML`, lint rule `zoijs/no-unsafe-html`). [→ 9](#9-sanitize-untrusted-html) · [→ 10](#10-avoid-raw-dom-sinks)
 - [ ] **Route params are validated** before they reach a path, URL, or permission decision. [→ 11](#11-treat-router-parameters-as-data)
 - [ ] **URLs you build are validated** — redirects, API URLs, URLs handed to other libraries. [→ 12](#12-validate-the-urls-your-code-builds)
 - [ ] **No secrets in the browser** — nothing in modules, import maps, config, or storage is secret. [→ 13](#13-keep-secrets-off-the-client)
@@ -204,9 +204,11 @@ static template strings — and `html()` refuses runtime arrays and data (`ZJS01
 - **`@zoijs/sanitize` doesn't support enforced Trusted Types yet.** It parses with
   `DOMParser`, a Trusted Types sink, without a policy, so under enforcement `sanitize()`
   will fail. Don't enable enforcement on pages that sanitize.
-- **One copy of `@zoijs/core` per page.** Each copy tries to create the `zoijs` policy; a
-  second copy's attempt is refused by `trusted-types zoijs` and its rendering fails. Map every
-  package to one core (an import map does this), or add `'allow-duplicates'`.
+- **Several copies of `@zoijs/core` are fine** *(next release)*: compatible copies share one
+  runtime and therefore one `zoijs` policy — it's created once, so `trusted-types zoijs` needs no
+  `'allow-duplicates'`. (Mapping every package to one core is still simplest.)
+- `unsafeHTML()` never uses the `zoijs` policy: pass it a `TrustedHTML` from your own policy
+  (add that policy's name to `trusted-types`); a plain string is refused.
 - Trusted Types complements correct input handling and CSP — it doesn't validate your data,
   and it doesn't make your own code's sinks safe; it only makes them fail loudly.
 
@@ -314,7 +316,7 @@ clobbering), and `getElementById` returns the first match. So:
 |---|---|
 | Your markup | `` html`…` `` tagged templates. Interpolated values are always data. |
 | HTML from users, a CMS, markdown | [`@zoijs/sanitize`](../../sanitize/README.md): `` html`<article>${() => sanitize(body)}</article>` `` |
-| Raw HTML you deliberately trust | No first-class API today. Build elements, or sanitize it too. |
+| Raw HTML you have independently established as trusted | `unsafeHTML()` from `@zoijs/core/unsafe` *(next release)* — **bypasses escaping**; never for API, database, URL, storage or user input |
 
 `html` can't be used as an HTML parser: calling it as a function with runtime data —
 strings, arrays, JSON — throws `ZJS010` *(next release)*. `sanitize()` is allowlist-based,
@@ -322,6 +324,18 @@ reuses Zoijs's URL guards, removes `name`, and namespaces ids and same-document 
 (`#fragment`, `headers`, ARIA ids) so sanitized content can't clobber page globals
 *(next release)*. Pass `idPrefix` to change the prefix. For fully adversarial input in
 high-value contexts, prefer an independently audited sanitizer such as DOMPurify.
+
+**`unsafeHTML()`** is the one sanctioned raw-HTML route, for markup you control end to end (your own
+build output, a fragment your trusted backend renders). It does not sanitize. Every use is an import
+from `@zoijs/core/unsafe`, so review them with `grep -R unsafeHTML` and the `zoijs/no-unsafe-html`
+lint warning; keep reviewed ones with an `eslint-disable-next-line … -- <reason>` comment. Under
+enforced Trusted Types it needs a `TrustedHTML` from your own policy — a plain string is refused.
+None of the URL/opener guards run inside its markup. With `@zoijs/ssr` the markup goes into the
+response verbatim, so a `<script>` in it **executes** on page load (client-side insertion leaves
+scripts inert). Trusted raw HTML used during SSR may contain executable markup. `unsafeHTML()` means
+exactly what it says; do not pass content you would not be willing to emit directly into the
+response.
+Details: [Security → `unsafeHTML()`](security.md#unsafehtml--the-one-escape-hatch).
 
 ## 10. Avoid raw DOM sinks
 
@@ -331,7 +345,11 @@ Zoijs can't protect code that bypasses it. Never give untrusted data to:
 - `DOMParser.parseFromString`, `Range.createContextualFragment`;
 - `eval`, `new Function`, string `setTimeout`/`setInterval`;
 - a DOM node you build from untrusted data and return from a binding (Zoijs inserts nodes
-  as-is).
+  as-is);
+- `unsafeHTML()` — its whole purpose is to skip escaping.
+
+If you need trusted raw markup, use `unsafeHTML()` rather than `ref` + `innerHTML`: it's
+reviewable, lint-flagged, and respects Trusted Types.
 
 The `zoijs/no-html-call` lint rule (in `recommended`) flags direct `html(…)` calls.
 
@@ -349,6 +367,8 @@ attacker-controlled. Before using one:
 
 - **Validate** it against the format you expect: `/^\d+$/` for an id, an allowlist for a
   section name.
+- **Keep slashes encoded** with `createRouter(routes, { decodeSlash: false })` *(next release)*:
+  `/files/..%2Fadmin` then gives `"..%2Fadmin"` instead of `"../admin"`.
 - **Encode** it when building another URL: `` `/api/files/${encodeURIComponent(params.name)}` ``,
   never raw concatenation into an API path, filesystem path, or redirect.
 - **Authorize on the server** — a param naming a resource doesn't mean the user may access it
@@ -359,13 +379,16 @@ is what *your code* does with it.
 
 ## 12. Validate the URLs your code builds
 
-Zoijs scheme-checks URL attributes it renders (`href`, `src`, `action`, `formaction`, …):
-`javascript:`, `vbscript:`, `data:text/html`, SVG `data:` URLs and unknown schemes are
-dropped. That check is about **executable schemes** in those attributes — it doesn't know your
-business rules, and it doesn't cover:
+Zoijs scheme-checks the URLs a bound value can carry — URL attributes (`href`, `src`, `action`,
+`formaction`, …), every `srcset` candidate, `<meta http-equiv="refresh">` content, and SVG
+animation values aimed at `href` *(srcset/refresh/SVG: next release)*: `javascript:`, `vbscript:`,
+`data:text/html`, SVG `data:` URLs and unknown schemes are dropped. `<base>` can't be bound at all,
+and `target="_blank"` always gets `rel="noopener noreferrer"`. These checks are about
+**executable schemes** and navigation contexts — they don't know your business rules, and they don't cover:
 
 - URLs you pass to `fetch`, `location.assign`, `window.open`, or a third-party library;
-- open redirects (`?next=https://evil.example` is a valid `https:` URL);
+- open redirects (`?next=https://evil.example` is a valid `https:` URL) — note `router.go()` takes
+  only app paths and throws on absolute URLs *(next release)*, but `location.assign()` doesn't;
 - which hosts your API calls may reach.
 
 Validate those yourself — parse with `new URL(value, location.origin)` and check `origin`

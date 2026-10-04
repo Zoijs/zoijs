@@ -78,47 +78,85 @@ provenance.) Never share or paste an npm OTP/token into a tool or chat.
 
 ## Order
 
-Each optional package only **peer-depends on `@zoijs/core`**, so they're independent of
-one another and can publish in any order. The single ordering rule:
+Each optional package only **peer-depends on `@zoijs/core`** (a star — no package depends on
+another), so apart from core they're independent and can publish in any order. Two rules:
 
-> If a package raises its **required core version**, publish `@zoijs/core` first so the new
-> peer range is satisfiable for installers. (The release check enforces this: it fails if
-> the floor of a package's core peer range isn't on npm yet, or lacks a subpath it imports.)
+> 1. **Core first.** A package whose `@zoijs/core` floor is a new core version waits until that
+>    core is on npm (the release check reports it **BLOCKED** until then).
+> 2. **`create-zoijs` after the core it scaffolds**, because its CDN map can only be generated from
+>    the *published* core files.
 
-(Today only `@zoijs/ssr` pins `^1.6.0`; core 1.6.0 is already live, so there's nothing to
-sequence.)
+## Merge gate (required status check)
+
+`ci.yml` reports one aggregate check, **`CI passed`**, which succeeds only when every
+`Unit + Types (Node 20/22/24)` leg **and** `Browser (Chromium / Firefox / WebKit)` succeeded
+(the individual job names are kept stable too). `publish.yml` already runs the whole CI
+workflow and its publish job `needs: [ci, verify]`, so nothing publishes past a red browser run.
+**Merging** is gated only if the `main` ruleset requires the check — this is GitHub
+configuration, outside the repository:
+
+- *Settings → Rules → Rulesets → "Protect Main Branch" → Add rule → **Require status checks to
+  pass*** → add **`CI passed`** (source: GitHub Actions), and enable **"Require branches to be up
+  to date before merging"**.
+
+`scripts/tests/ci-consistency.test.mjs` keeps the repository side honest (publish needs CI, CI
+has the browser job and the gate, every Playwright suite runs in CI); it can't see the ruleset.
+
+## Browser tests
+
+Every Playwright suite starts the repository's own static server,
+[`scripts/test-server.mjs`](../../scripts/test-server.mjs) (Node built-ins, 127.0.0.1 only,
+`no-store`), each on its own port — never `npx serve`, which would resolve a mutable package at
+test time. The port table lives in that file's header and is enforced by the consistency test.
 
 ## Before tagging
 
 - The package's `version`, `CHANGELOG.md`, and README are updated and merged to `main`.
 - Its `@zoijs/core` peer range starts at a core version that really has what it imports.
-- `npm run release:check -- <package>-v<version>` passes locally.
+- `npm run release:check -- <package>-v<version>` passes locally (**READY**).
 
 ## Versions a release must line up
 
 Compatibility floors live in [`scripts/zoijs-compat.json`](../../scripts/zoijs-compat.json):
-the first core version providing each import, the security floor for generated apps, and
-`nextCore`. The release check enforces it:
+the first core version providing each import (`"next"` = the coming, not-yet-versioned core),
+the security floor for generated apps, and `nextCore`. `npm run release:check` gives every
+package one verdict:
 
-- a package's `@zoijs/core` peer floor must provide every core subpath and named export it
-  imports (checked against the table offline, and against the published tarball online);
-- a package that needs a capability marked `"next"` (unreleased) is **blocked** until
-  `nextCore` is set to the version that core release will carry and its floor is raised —
-  today: **`@zoijs/resource` and `@zoijs/action`** (they import `@zoijs/core/internal`) and
-  **`create-zoijs`** (its templates use the production entry, `src/prod.js`);
-- no shipped file may use a floating or build-service Zoijs CDN URL;
-- `create-zoijs` targets one exact, published core (`create/core-cdn.json`), at or above the
-  security floor, whose integrity map matches the published files.
+| Verdict | Meaning | Fails |
+|---|---|---|
+| **READY** | can be released now | — |
+| **BLOCKED** | consistent, but waiting on order: it needs a `"next"` capability, a core version that isn't on npm yet, or (create) a CDN map from the published next core | its tag, and `--all --strict` — **not** plain `--all`, so CI stays green |
+| **ERROR** | wrong metadata: a peer floor that lacks an import, a floating CDN URL, a bad integrity map, a dirty tarball, a tag/version mismatch, a README import map missing a core subpath the package imports | always |
 
-**Releasing the next core** (the order matters):
+Packages never import private core subpaths — no-build apps would need an import-map entry for
+them; sibling packages that need core plumbing use the shared runtime
+(`globalThis[Symbol.for("zoijs.runtime@1")]`), as `@zoijs/resource`/`@zoijs/action` do for
+`onError` reporting. Public subpaths a package does import in the browser (`@zoijs/core/server`
+from `@zoijs/sanitize` and `@zoijs/ssr`'s `hydrate`, `@zoijs/core/devtools` from
+`@zoijs/devtools`) are mapped automatically by `scripts/cdn-importmap.mjs`, with integrity.
 
-1. Choose its version, set `"nextCore"` in `scripts/zoijs-compat.json`, replace the `"next"`
-   capabilities with it, and release `@zoijs/core` (tag `core-v<version>`).
-2. Raise `@zoijs/resource` and `@zoijs/action`'s peer floor to `^<version>` (regenerate their
-   lockfiles with `npm install --package-lock-only --ignore-scripts`) and release them.
-3. Regenerate the scaffolder's target from the published files —
-   `node scripts/cdn-importmap.mjs @zoijs/core@<version> --write create/core-cdn.json` — and
-   release `create-zoijs`. Then set `"nextCore"` back to `null`.
+**Releasing the next core** — three states, each with green CI:
+
+1. **Development** (`"nextCore": null`). Next-only capabilities are marked `"next"`; packages
+   needing them are BLOCKED (today: **`@zoijs/ssr`** — `isSafeAttributeValue`/`openerRel` from
+   `@zoijs/core/server` — and **`create-zoijs`** — the `@zoijs/core/prod` entry).
+2. **Core release.** Bump `framework/package.json` to the new version (e.g. `1.9.0`), leave
+   `nextCore` **null**, merge, tag `core-v1.9.0`. Core needs nothing published, so its tag
+   check is READY. Wait until it's on npm.
+3. **Dependents — one PR**, after core is published:
+   - set `"nextCore": "1.9.0"` and replace every `"next"` capability with `"1.9.0"`;
+   - raise the `@zoijs/core` peer floor to `^1.9.0` for each package that imports a capability
+     first in 1.9.0 (today: **`@zoijs/ssr`**), bump the packages being released, and regenerate
+     their lockfiles (`npm install --package-lock-only --ignore-scripts --prefix <pkg>`);
+   - regenerate the scaffolder's map from the published files:
+     `node scripts/cdn-importmap.mjs @zoijs/core@1.9.0 --write create/core-cdn.json`
+     (`--check create/core-cdn.json` verifies it), and refresh the import maps shown in docs
+     (`docs/installation.md`, the sanitize README) with the same tool;
+   - `npm run release:check -- --all --strict` must be all **READY**.
+
+   Then tag the dependents in any order — **`@zoijs/ssr`** and every other changed package —
+   and **`create-zoijs` last** (its map targets the published core). Finally set
+   `"nextCore"` back to `null` (the capabilities keep `"1.9.0"`) and sync the docs site (below).
 
 ## After publishing: sync the docs site
 

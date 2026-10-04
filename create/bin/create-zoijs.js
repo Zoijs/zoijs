@@ -139,6 +139,13 @@ export function scaffold({ name, template = DEFAULT_TEMPLATE, targetDir, templat
   return { written, tokens };
 }
 
+/** The commands to print after scaffolding (minimal has nothing to install; library has no app to serve). */
+export function nextSteps(name, template = DEFAULT_TEMPLATE) {
+  if (template === "minimal") return [`cd ${name}`, "npm run dev"];
+  if (template === "library") return [`cd ${name}`, "npm install", "npm test"];
+  return [`cd ${name}`, "npm install", "npm run dev"];
+}
+
 // ---- the CLI -----------------------------------------------------------------
 
 function ask(question) {
@@ -173,9 +180,8 @@ async function main(argv) {
 
   console.log(`\n✔ Created ${name} (${template} template) — ${result.written.length} files\n`);
   console.log("Next steps:");
-  console.log(`  cd ${name}`);
-  console.log("  npm install");
-  console.log("  npm run dev\n");
+  for (const step of nextSteps(name, template)) console.log(`  ${step}`);
+  console.log("");
   console.log("Zoijs works without this tool, too — it's only a convenience. See https://zoijs.dev/start\n");
 }
 

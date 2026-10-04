@@ -21,6 +21,7 @@
 
 import { createTemplate } from "../utils/dom.js";
 import { TEMPLATE } from "./brand.js";
+import { URL_ATTRS } from "../utils/security.js";
 
 const cache = new WeakMap();
 
@@ -93,6 +94,39 @@ function unsupported(message) {
   throw new Error(`Zoijs template: ${message}`);
 }
 
+// Bound names reach setAttribute, so Lit-style prefixes etc. are refused at compile time —
+// as is data steering resolution/navigation (SEC-9): <base>, meta http-equiv, SVG attributeName.
+function checkBoundName(name, tag) {
+  const r = name.slice(1);
+  const n = name.toLowerCase();
+  const hint = { ".": `${r}=\${…} or a ref`, "?": `${r}=\${…} (false/null removes it)`, "@": `on${r}=\${…}` }[name[0]];
+  if (hint || !/^[A-Za-z_:\u00C0-\uFFFF]/.test(name)) unsupported(`unsupported bound attribute "${name}"` + (hint ? ` — use ${hint}` : ""));
+  if (tag === "base" || (tag === "meta" && n === "http-equiv") || ((tag === "animate" || tag === "set") && n === "attributename")) {
+    unsupported(`binding "${name}" on <${tag}> is not supported — write it statically`);
+  }
+}
+
+const OPENER_TAGS = new Set(["a", "area", "form"]);
+const ANIM_VALUES = new Set(["from", "to", "by", "values"]);
+
+// Static text around a hole is set via setAttribute, so decode its character references
+// here as the HTML parser would. Unknown named ones are refused rather than guessed.
+// Latin-1 (U+00A0–U+00FF) + amp/lt/gt/quot are the only names decoded without ";".
+const LATIN1 = "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml".split(" ");
+const LEGACY = Object.assign(Object.create(null), { amp: "&", AMP: "&", lt: "<", LT: "<", gt: ">", GT: ">", quot: '"', QUOT: '"', COPY: "\u00A9", REG: "\u00AE" });
+LATIN1.forEach((n, i) => (LEGACY[n] = String.fromCharCode(160 + i)));
+
+function decodeAttr(s, name) {
+  return s.replace(/&(?:#(?:[xX]([\da-fA-F]+)|(\d+));?|([A-Za-z][A-Za-z\d]*)(;?))/g, (m, hex, dec, ref, semi, at) => {
+    const cp = parseInt(hex || dec, hex ? 16 : 10);
+    // Without ";" only legacy names decode, and never before "=" (query strings stay literal).
+    const v = ref ? (semi ? (ref === "apos" ? "'" : LEGACY[ref]) : s[at + m.length] === "=" ? m : LEGACY[ref] || m)
+      : cp && cp < 0x110000 && (cp < 0xd800 || cp > 0xdfff) && (cp < 0x80 || cp > 0x9f) && String.fromCodePoint(cp); // not 0/surrogate/C1
+    if (!v) unsupported(`unsupported character reference "${m}" in "${name}" — write the character itself`);
+    return v;
+  });
+}
+
 function compile(strings) {
   let out = "";
   const parts = [];
@@ -101,6 +135,8 @@ function compile(strings) {
   // current tag / attribute being built
   let tagName = "";
   let dynAttrs = [];
+  let statics = []; // the tag's valued static attributes { name, value, start, end }
+  let names = []; // all its attribute names, lower-cased
   let selfClose = false;
   let rawtextTag = "";
   let attrStart = 0; // index in `out` where the current attribute's name starts
@@ -125,7 +161,8 @@ function compile(strings) {
         if (!whole) unsupported(`event handler "${attrName}" must be a single \${} value`);
         event = true;
       }
-      dynAttrs.push({ name: attrName, strings: strs, holes, event, whole });
+      checkBoundName(attrName, tagName.toLowerCase());
+      dynAttrs.push({ name: attrName, strings: whole ? strs : strs.map((f) => decodeAttr(f, attrName)), holes, event, whole });
     }
     dynamic = false;
     strs = null;
@@ -134,7 +171,38 @@ function compile(strings) {
     attrName = "";
   };
 
+  const noteStatic = () => statics.push({ name: attrName.toLowerCase(), value: frag, start: attrStart, end: out.length });
+
   const finalizeTag = () => {
+    const tag = tagName.toLowerCase();
+    const st = (n) => statics.find((a) => a.name === n);
+    const val = (n) => (st(n) ? st(n).value.trim().toLowerCase() : "");
+    // SEC-9: element-level URL contexts, decided once the whole tag is known (order-free).
+    for (const a of dynAttrs) {
+      const n = a.name.toLowerCase();
+      if (tag === "meta" && n === "content" && val("http-equiv") === "refresh") a.check = "refresh";
+      if ((tag === "animate" || tag === "set") && ANIM_VALUES.has(n) && URL_ATTRS.has(val("attributename"))) a.check = "anim";
+    }
+    // Bound or static-_blank target: target + rel become ONE part, so noopener/noreferrer are
+    // merged into the app's rel by one computation, whatever the order or later updates.
+    if (OPENER_TAGS.has(tag) && (dynAttrs.some((a) => a.name.toLowerCase() === "target") || val("target") === "_blank")) {
+      const cut = [];
+      const take = (n) => {
+        const k = dynAttrs.findIndex((a) => a.name.toLowerCase() === n);
+        if (k >= 0) return dynAttrs.splice(k, 1)[0];
+        const a = st(n);
+        if (!a) return null;
+        cut.push(a); // moves from the markup into the part
+        return { name: n, strings: [decodeAttr(a.value, n)], holes: [], whole: false, event: false };
+      };
+      const target = take("target");
+      const rel = take("rel");
+      for (const a of cut.sort((x, y) => y.start - x.start)) out = out.slice(0, a.start - (isWS(out[a.start - 1]) ? 1 : 0)) + out.slice(a.end);
+      for (const n of ["target", "rel"]) {
+        if (names.filter((x) => x === n).length > (n === "rel" && !rel ? 0 : 1)) unsupported(`<${tag}> needs a single valued "${n}" attribute alongside target`);
+      }
+      dynAttrs.push({ name: "target", opener: true, target, rel, holes: target.holes.concat(rel ? rel.holes : []), strings: [], whole: false, event: false });
+    }
     if (dynAttrs.length) {
       out += " data-zoijs-bind";
       parts.push({ type: "element", attrs: dynAttrs });
@@ -154,6 +222,8 @@ function compile(strings) {
     }
     tagName = "";
     dynAttrs = [];
+    statics = [];
+    names = [];
     selfClose = false;
   };
 
@@ -190,6 +260,7 @@ function compile(strings) {
           break;
 
         case ATTR_NAME:
+          if (c === "=" || isWS(c) || c === ">" || c === "/") names.push(attrName.toLowerCase());
           if (c === "=") { out += c; state = BEFORE_VAL; }
           else if (isWS(c)) { out += c; state = AFTER_NAME; }
           else if (c === ">") finalizeTag();
@@ -214,15 +285,17 @@ function compile(strings) {
         case VAL_DQ:
         case VAL_SQ: {
           const q = state === VAL_DQ ? '"' : "'";
-          if (c === q) { if (dynamic) finalizeAttr(); else out += c; state = BEFORE_ATTR; }
+          if (c === q) { if (dynamic) finalizeAttr(); else { out += c; noteStatic(); } state = BEFORE_ATTR; }
           else if (dynamic) frag += c;
           else { frag += c; out += c; }
           break;
         }
 
         case VAL_UQ:
-          if (isWS(c)) { if (dynamic) finalizeAttr(); out += c; state = BEFORE_ATTR; }
-          else if (c === ">") { if (dynamic) finalizeAttr(); finalizeTag(); }
+          if (isWS(c)) { if (dynamic) finalizeAttr(); else noteStatic(); out += c; state = BEFORE_ATTR; }
+          else if (c === ">") { if (dynamic) finalizeAttr(); else noteStatic(); finalizeTag(); }
+          // `src=${url}/>`: that "/" self-closes the tag — it isn't part of the value.
+          else if (dynamic && c === "/" && s[k + 1] === ">") { finalizeAttr(); selfClose = true; state = BEFORE_ATTR; }
           else if (dynamic) frag += c;
           else { frag += c; out += c; }
           break;

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Zoijs — no-build import map (core + resource + action + forms)</title>
+    <!--
+      Exactly what a no-build app writes: one entry per PUBLIC package, and nothing else.
+      There is deliberately NO "@zoijs/core/internal" (or any other core subpath) mapping —
+      packages must never need one (release-audit regression: CORE-3 made resource/action
+      import "@zoijs/core/internal", so pages like this failed to load at all).
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "/framework/src/index.js",
+          "@zoijs/resource": "/resource/src/index.js",
+          "@zoijs/action": "/action/src/index.js",
+          "@zoijs/forms": "/forms/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./no-build.js"></script>
+  </body>
+</html>

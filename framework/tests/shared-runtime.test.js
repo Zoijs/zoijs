@@ -318,3 +318,79 @@ test("the diagnostic respects production mode already set on the realm", () => {
   );
   assert.deepEqual(out.errors, []);
 });
+
+// ---- release-blocker fixes: reporter + Trusted Types policy on the shared runtime -------
+
+test("the onError reporter lives on the shared runtime: either copy's configure, one guard", () => {
+  const rt = globalThis[KEY];
+  assert.equal(typeof rt.report, "function");
+  const seen = [];
+  B.configure({ onError: (error, info) => seen.push([error, info.kind]) });
+  try {
+    const err = new Error("pkg");
+    rt.report(err, { kind: "resource" }); // what @zoijs/resource / @zoijs/action call
+    A.configure({ onError: (error) => seen.push([error, "A-hook"]) });
+    rt.report(err, { kind: "action" });
+    assert.deepEqual(seen, [[err, "resource"], [err, "A-hook"]], "same identity, last hook wins realm-wide");
+    // the recursion guard is the runtime's, shared by every caller
+    const logged = [];
+    const orig = console.error;
+    console.error = (...a) => logged.push(a[0]);
+    try {
+      A.configure({ onError: () => rt.report(new Error("again"), { kind: "action" }) });
+      rt.report(new Error("first"), { kind: "resource" });
+    } finally {
+      console.error = orig;
+    }
+    assert.match(logged[0], /error raised inside onError \(not re-reported\)/);
+  } finally {
+    A.configure({ onError: null });
+  }
+});
+
+test("compatible copies create the zoijs Trusted Types policy ONCE and share it", { skip }, () => {
+  const rt = globalThis[KEY];
+  const saved = { tt: rt.tt, api: window.trustedTypes };
+  let created = 0;
+  let converted = 0;
+  window.trustedTypes = {
+    createPolicy(name, rules) {
+      created++;
+      // what an enforcing page does on a second createPolicy("zoijs") without 'allow-duplicates'
+      if (created > 1) throw new TypeError(`Policy with name "${name}" already exists.`);
+      return { createHTML: (s) => (converted++, rules.createHTML(s)) };
+    },
+  };
+  rt.tt = undefined; // as on a fresh page
+  try {
+    const a = root();
+    A.mount(() => A.html`<b class="tt-a">${"A"}</b>`, a);
+    const b = root();
+    B.mount(() => B.html`<b class="tt-b">${"B"}</b>`, b);
+    assert.equal(created, 1, "copy B reused copy A's policy instead of creating another");
+    assert.ok(converted >= 2, "both copies' templates went through the shared policy");
+    assert.equal(a.querySelector(".tt-a").textContent, "A");
+    assert.equal(b.querySelector(".tt-b").textContent, "B");
+    assert.equal(typeof rt.tt.createHTML, "function");
+  } finally {
+    rt.tt = saved.tt;
+    window.trustedTypes = saved.api;
+  }
+});
+
+test("a policy that can't be created is not retried per copy and never faked", { skip }, () => {
+  const rt = globalThis[KEY];
+  const saved = { tt: rt.tt, api: window.trustedTypes };
+  let attempts = 0;
+  window.trustedTypes = { createPolicy() { attempts++; throw new TypeError("refused by CSP"); } };
+  rt.tt = undefined;
+  try {
+    A.mount(() => A.html`<i class="np-a">${1}</i>`, root());
+    B.mount(() => B.html`<i class="np-b">${2}</i>`, root());
+    assert.equal(attempts, 1);
+    assert.equal(rt.tt, null, "no policy is recorded (the raw string reaches the sink, which an enforcing page refuses)");
+  } finally {
+    rt.tt = saved.tt;
+    window.trustedTypes = saved.api;
+  }
+});
