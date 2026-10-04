@@ -362,6 +362,8 @@ attacker-controlled. Before using one:
 
 - **Validate** it against the format you expect: `/^\d+$/` for an id, an allowlist for a
   section name.
+- **Keep slashes encoded** with `createRouter(routes, { decodeSlash: false })` *(next release)*:
+  `/files/..%2Fadmin` then gives `"..%2Fadmin"` instead of `"../admin"`.
 - **Encode** it when building another URL: `` `/api/files/${encodeURIComponent(params.name)}` ``,
   never raw concatenation into an API path, filesystem path, or redirect.
 - **Authorize on the server** — a param naming a resource doesn't mean the user may access it
@@ -372,13 +374,16 @@ is what *your code* does with it.
 
 ## 12. Validate the URLs your code builds
 
-Zoijs scheme-checks URL attributes it renders (`href`, `src`, `action`, `formaction`, …):
-`javascript:`, `vbscript:`, `data:text/html`, SVG `data:` URLs and unknown schemes are
-dropped. That check is about **executable schemes** in those attributes — it doesn't know your
-business rules, and it doesn't cover:
+Zoijs scheme-checks the URLs a bound value can carry — URL attributes (`href`, `src`, `action`,
+`formaction`, …), every `srcset` candidate, `<meta http-equiv="refresh">` content, and SVG
+animation values aimed at `href` *(srcset/refresh/SVG: next release)*: `javascript:`, `vbscript:`,
+`data:text/html`, SVG `data:` URLs and unknown schemes are dropped. `<base>` can't be bound at all,
+and `target="_blank"` always gets `rel="noopener noreferrer"`. These checks are about
+**executable schemes** and navigation contexts — they don't know your business rules, and they don't cover:
 
 - URLs you pass to `fetch`, `location.assign`, `window.open`, or a third-party library;
-- open redirects (`?next=https://evil.example` is a valid `https:` URL);
+- open redirects (`?next=https://evil.example` is a valid `https:` URL) — note `router.go()` takes
+  only app paths and throws on absolute URLs *(next release)*, but `location.assign()` doesn't;
 - which hosts your API calls may reach.
 
 Validate those yourself — parse with `new URL(value, location.origin)` and check `origin`

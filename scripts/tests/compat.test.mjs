@@ -80,3 +80,10 @@ test("the installation guide's CDN import map is the verified one (same version,
   assert.deepEqual(map.imports, cdn.imports);
   assert.deepEqual(map.integrity, cdn.integrity, "regenerate the docs map from create/core-cdn.json");
 });
+
+test("ssr is blocked until the next core ships the SEC-9 helpers it imports from /server", () => {
+  const r = results.find((x) => x.prefix === "ssr");
+  const names = coreImports("ssr").flatMap((i) => i.names);
+  assert.ok(names.includes("isSafeAttributeValue") && names.includes("openerRel"));
+  if (compat.nextCore === null) assert.match(r.blockers.join(" "), /isSafeAttributeValue from @zoijs\/core\/server.*next core release/);
+});

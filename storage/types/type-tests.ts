@@ -32,3 +32,9 @@ count.set("nope");
 theme.peek("x");
 
 void [theme, t, p, count, n, prefs, lang];
+
+// ---- SEC-10: validate ---------------------------------------------------------------
+const validated = storage("theme", "light", { validate: (v) => v === "light" || v === "dark" });
+const themeValue: string = validated.get();
+// @ts-expect-error — validate must return a boolean
+storage("theme", "light", { validate: (v: unknown) => v });

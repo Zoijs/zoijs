@@ -60,6 +60,7 @@ test("the canonical page covers every required topic", () => {
     "dev server": /Never deploy the development server/,
     HTTPS: /Serve over HTTPS/,
     "Trusted Types limits": /Trusted Types/,
+    "decodeSlash (SEC-10)": /decodeSlash: false/,
     "trusted raw HTML (SEC-3)": /`unsafeHTML\(\)` from `@zoijs\/core\/unsafe`[^\n]*\*\*bypasses escaping\*\*/,
   };
   for (const [topic, re] of Object.entries(required)) assert.ok(re.test(page), `missing: ${topic} (${re})`);
@@ -118,7 +119,7 @@ test("the documented import-map hash command produces the CSP hash of the map's 
 });
 
 test("future features are not documented as present", () => {
-  for (const name of ["decodeSlash", "ZOIJS_PUBLIC_"]) assert.ok(!page.includes(name), name);
+  for (const name of ["ZOIJS_PUBLIC_"]) assert.ok(!page.includes(name), name);
 });
 
 test("package and deployment docs link to the canonical page instead of copying it", () => {

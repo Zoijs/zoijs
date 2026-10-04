@@ -62,6 +62,64 @@ export function isSafeUrl(url) {
   return SAFE_SCHEMES.has(scheme);
 }
 
+// SEC-9 — more URL contexts, one decision shared by the client renderer and @zoijs/ssr.
+const SRCSET_ATTRS = new Set(["srcset", "imagesrcset"]);
+const WS = /[ \t\n\r\f]/;
+
+// srcset: candidates per the HTML parse — a URL is a non-whitespace run (data: commas stay
+// inside it; trailing commas end it), then descriptors up to a comma outside parentheses.
+export function isSafeSrcset(value) {
+  const s = String(value);
+  for (let i = 0, url; i < s.length; ) {
+    while (WS.test(s[i]) || s[i] === ",") i++;
+    for (url = ""; i < s.length && !WS.test(s[i]); ) url += s[i++];
+    if (url.endsWith(",")) url = url.replace(/,+$/, "");
+    else for (let d = 0; i < s.length && (s[i] !== "," || d); i++) d += s[i] === "(" ? 1 : s[i] === ")" && d ? -1 : 0;
+    if (url && !isSafeUrl(url)) return false;
+  }
+  return true;
+}
+
+// <meta http-equiv=refresh> content, per the HTML declarative-refresh parse ("5", "0; url=/x",
+// "0;URL='/x'", "0 /x"): find the URL the browser would load. Not a refresh → refused.
+export function isSafeRefresh(value) {
+  const s = String(value);
+  let i = 0;
+  const ws = () => { while (WS.test(s[i])) i++; };
+  ws();
+  const t = i;
+  while (/[\d.]/.test(s[i])) i++;
+  if (i === t || (i < s.length && !/[ \t\n\r\f;,]/.test(s[i]))) return false;
+  ws();
+  if (s[i] === ";" || s[i] === ",") i++;
+  ws();
+  if (i >= s.length) return true; // reload, no URL
+  let n = 0; // an optional "url =" prefix, consumed letter by letter as the spec does
+  while (n < 3 && s[i] && s[i].toLowerCase() === "url"[n]) i++, n++;
+  if (n === 3) { ws(); if (s[i] === "=") { i++; ws(); } }
+  let url = s.slice(i);
+  if (url[0] === "'" || url[0] === '"') url = url.slice(1).split(url[0])[0];
+  return isSafeUrl(url);
+}
+
+/** URL safety of a bound value: URL attrs, srcset, and the compiler-flagged `check` contexts
+ * ("refresh": meta-refresh content; "anim": SVG animate/set values aimed at a URL attribute). */
+export function isSafeAttributeValue(lname, value, check) {
+  if (value == null || typeof value === "boolean") return true;
+  const v = toText(value);
+  if (check) return check === "refresh" ? isSafeRefresh(v) : (lname === "values" ? v.split(";") : [v]).every(isSafeUrl);
+  return URL_ATTRS.has(lname) ? isSafeUrl(v) : SRCSET_ATTRS.has(lname) ? isSafeSrcset(v) : true;
+}
+
+/** target="_blank" → the app's rel tokens plus noopener + noreferrer (once each, any case);
+ * any other target → rel unchanged. Recomputed from the app's rel on every update. */
+export function openerRel(target, rel) {
+  if (typeof target !== "string" || target.trim().toLowerCase() !== "_blank") return rel;
+  const tokens = (rel == null || typeof rel === "boolean" ? "" : toText(rel)).split(/[ \t\n\r\f]+/).filter(Boolean);
+  const has = new Set(tokens.map((t) => t.toLowerCase()));
+  return tokens.concat(["noopener", "noreferrer"].filter((t) => !has.has(t))).join(" ");
+}
+
 // CSS property name: letters/digits/hyphens, with optional leading hyphens for
 // vendor (-webkit-…) and custom (--foo) properties. Anything else isn't a
 // plausible property name and is dropped.

@@ -78,6 +78,25 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **Wider URL guards and opener protection (SEC-9).** Bound values could still reach navigation and
+  resource contexts the URL check didn't cover. Now, in every mode, on the client and under
+  `@zoijs/ssr` (one shared decision, `isSafeAttributeValue`):
+  - **`<base>`** can't be bound at all — a compile error even for a safe-looking URL, since it
+    re-resolves every relative URL on the page. Static `<base href="/app/">` is unchanged.
+  - **`<meta http-equiv="refresh">`**: a bound `content` is parsed the way browsers parse a refresh
+    (`0;url=…`, `0;URL='…'`, `0 …`) and its URL must pass the URL check; a value that isn't a
+    refresh is refused. Binding `http-equiv` is a compile error.
+  - **`srcset` / `imagesrcset`**: every candidate URL is checked (HTML's candidate parsing, so
+    `data:image/…` commas stay inside their URL); one unsafe candidate refuses the whole value.
+  - **SVG `<animate>`/`<set>`**: `from`/`to`/`by`/`values` are checked when the static
+    `attributeName` is a URL attribute; binding `attributeName` is a compile error.
+  - **`target="_blank"`** on `<a>`/`<area>`/`<form>` — bound or static — always carries
+    `rel="noopener noreferrer"`, merged into the app's own tokens (never duplicated, re-applied when
+    `rel` updates, dropped when `target` leaves `_blank`), independent of attribute order, and already
+    present in server HTML. `noreferrer` also suppresses the Referer header.
+  Refused values are not set; the dev warning now names the attribute but not the URL. `unsafeHTML()`
+  markup is unaffected (trusted, inserted as written). New `@zoijs/core/server` exports
+  `isSafeAttributeValue` and `openerRel` for @zoijs/ssr.
 - **Production security checklist (SEC-11, documentation).** The security docs explained safe
   rendering but not how to deploy safely: the recommended CSP lacked `object-src`, `base-uri`,
   `form-action` and `frame-ancestors`, and there was no guidance on CSRF, credentialed requests, where

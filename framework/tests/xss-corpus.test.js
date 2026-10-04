@@ -86,15 +86,15 @@ test("url attribute: dangerous schemes are never set on href/src", { skip }, () 
 // Every URL-bearing attribute — not just href/src — must be scheme-checked. Each
 // of these navigates a (nested) browsing context, so a javascript:/data:text/html
 // value in any of them is an execution vector: <object data> / <embed src> load a
-// nested document, <form action>/<button formaction> submit to it, <base href>
-// repoints relative URLs. Guards against the allowlist (URL_ATTRS) drifting out of
+// nested document, <form action>/<button formaction> submit to it. Guards against the allowlist (URL_ATTRS) drifting out of
 // sync with the set of attributes that actually carry a URL.
 const URL_ATTR_CASES = [
   { tag: "object", attr: "data", html: (v) => html`<object data=${() => v}></object>` },
   { tag: "embed", attr: "src", html: (v) => html`<embed src=${() => v} />` },
   { tag: "form", attr: "action", html: (v) => html`<form action=${() => v}></form>` },
   { tag: "button", attr: "formaction", html: (v) => html`<button formaction=${() => v}>x</button>` },
-  { tag: "base", attr: "href", html: (v) => html`<base href=${() => v} />` },
+  // <base href> is no longer in this list: SEC-9 refuses ANY <base> binding at compile time
+  // (see the SEC-9 corpus section below).
 ];
 
 test("url attribute: dangerous schemes are dropped on every URL-bearing attr", { skip }, () => {
@@ -317,4 +317,41 @@ test("SEC-3: only an explicit unsafeHTML() result renders raw; data and forgerie
   const raw = render(() => html`<div>${unsafeHTML("<img src=x onerror=globalThis.__xss=1>")}</div>`);
   assert.ok(raw.querySelector("img[onerror]"), "the explicit wrapper is raw by design");
   raw.remove();
+});
+
+// ---- SEC-9: navigation / resource contexts beyond plain URL attributes -----------------
+// (No unsafeHTML here: it deliberately bypasses template-binding guards.)
+test("SEC-9: every unsafe URL is refused in srcset, meta refresh and SVG animation values", { skip }, () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    for (const payload of UNSAFE_URLS) {
+      const t = render(
+        () => html`<img srcset=${"/ok.png 1x, " + payload + " 2x"}><meta http-equiv="refresh" content=${"0;url=" + payload}><svg><a><set attributeName="href" to=${payload}></set></a></svg>`
+      );
+      // ASCII whitespace splits srcset candidates ("java\tscript:x" is the URL "java" + an invalid
+      // descriptor the browser drops), so only whitespace-free payloads are srcset URLs.
+      if (!/[ \t\n\r\f]/.test(payload)) assert.equal(t.querySelector("img").hasAttribute("srcset"), false, `srcset: ${JSON.stringify(payload)}`);
+      assert.equal(t.querySelector("meta").hasAttribute("content"), false, `refresh: ${JSON.stringify(payload)}`);
+      assert.equal(t.querySelector("set").hasAttribute("to"), false, `svg set: ${JSON.stringify(payload)}`);
+      t.remove();
+    }
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test("SEC-9: <base> can't be bound at all, whatever the value", () => {
+  for (const payload of [...UNSAFE_URLS, "/", "https://example.com/"]) {
+    assert.throws(() => html`<base href=${payload}>`, /on <base> is not supported/);
+  }
+});
+
+test("SEC-9: target=_blank never ships without noopener noreferrer", { skip }, () => {
+  for (const rel of [null, "", "external", "opener", "NOOPENER"]) {
+    const t = render(() => html`<a href=${"/x"} target=${"_blank"} rel=${rel}>x</a>`);
+    const tokens = (t.querySelector("a").getAttribute("rel") || "").toLowerCase().split(/\s+/);
+    assert.ok(tokens.includes("noopener") && tokens.includes("noreferrer"), `rel=${JSON.stringify(rel)}`);
+    t.remove();
+  }
 });
