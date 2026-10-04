@@ -2,6 +2,12 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## Unreleased
+
+### Fixed
+- **Peer range now `@zoijs/core ^1.7.0` (was `^1.6.0`) (SEC-7).** ssr imports `styleObjectToCss` from
+  `@zoijs/core/server`, which first shipped in core 1.7.0 — under 1.6.0 the module failed to link.
+
 ## 0.4.0 — 2026-08-06
 
 ### Added

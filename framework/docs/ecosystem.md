@@ -50,11 +50,12 @@ npm install -D @zoijs/devtools      # reactive-graph inspector (dev dependency)
 npm install -D @zoijs/eslint-plugin # lint rule for the reactive-binding rule (dev dependency)
 ```
 
-Or load them with no install via an import map / CDN (pin the version):
+Or load them with no install: an import map maps each name to an **exact-version** jsDelivr
+file URL with integrity hashes ([how](installation.md#from-a-cdn)), and you import by name:
 
 ```js
-import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
+import { html, mount } from "@zoijs/core";
+import { createRouter } from "@zoijs/router";
 ```
 
 Every package is:

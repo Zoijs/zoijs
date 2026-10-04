@@ -2,6 +2,13 @@
 
 All notable changes to `@zoijs/sanitize` are documented here.
 
+## Unreleased
+
+### Fixed
+- **Peer range now `@zoijs/core ^1.5.0` (was `^1.0.0`) (SEC-7).** sanitize imports `isSafeUrl` /
+  `isSafeAttributeName` from `@zoijs/core/server`, which first shipped in core 1.5.0, so 1.0–1.4
+  could never load it. The README's CDN example now uses exact, integrity-pinned URLs.
+
 ## 0.1.0 — 2026-07-31
 
 Initial release of the optional HTML sanitizer for Zoijs — the supported, tested

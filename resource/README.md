@@ -24,10 +24,12 @@ You can learn the whole thing in about 5 minutes.
 npm install @zoijs/core @zoijs/resource
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/resource" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { resource } from "https://esm.sh/@zoijs/resource@0.1";
+import { resource } from "@zoijs/resource";
 ```
 
 ## What a resource is

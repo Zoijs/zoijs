@@ -94,27 +94,43 @@ sequence.)
 - Its `@zoijs/core` peer range starts at a core version that really has what it imports.
 - `npm run release:check -- <package>-v<version>` passes locally.
 
+## Versions a release must line up
+
+Compatibility floors live in [`scripts/zoijs-compat.json`](../../scripts/zoijs-compat.json):
+the first core version providing each import, the security floor for generated apps, and
+`nextCore`. The release check enforces it:
+
+- a package's `@zoijs/core` peer floor must provide every core subpath and named export it
+  imports (checked against the table offline, and against the published tarball online);
+- a package that needs a capability marked `"next"` (unreleased) is **blocked** until
+  `nextCore` is set to the version that core release will carry and its floor is raised —
+  today: **`@zoijs/resource` and `@zoijs/action`** (they import `@zoijs/core/internal`) and
+  **`create-zoijs`** (its templates use the production entry, `src/prod.js`);
+- no shipped file may use a floating or build-service Zoijs CDN URL;
+- `create-zoijs` targets one exact, published core (`create/core-cdn.json`), at or above the
+  security floor, whose integrity map matches the published files.
+
+**Releasing the next core** (the order matters):
+
+1. Choose its version, set `"nextCore"` in `scripts/zoijs-compat.json`, replace the `"next"`
+   capabilities with it, and release `@zoijs/core` (tag `core-v<version>`).
+2. Raise `@zoijs/resource` and `@zoijs/action`'s peer floor to `^<version>` (regenerate their
+   lockfiles with `npm install --package-lock-only --ignore-scripts`) and release them.
+3. Regenerate the scaffolder's target from the published files —
+   `node scripts/cdn-importmap.mjs @zoijs/core@<version> --write create/core-cdn.json` — and
+   release `create-zoijs`. Then set `"nextCore"` back to `null`.
+
 ## After publishing: sync the docs site
 
-The site loads packages from esm.sh via **major/minor-pinned** import-map entries in the
-site's `prerender.mjs` (and the prerendered HTML). The pins are intentionally loose:
+The site (outside this repo) loads packages with an import map. Use **exact versions** and
+**integrity hashes**, never loose pins (`@zoijs/core@1`) or a build-service CDN: generate the
+map with `node scripts/cdn-importmap.mjs @zoijs/core@<v> @zoijs/router@<v> …` and replace the
+site's import map with it.
 
-| Pin | Auto-picks | Needs a manual bump when… |
-|---|---|---|
-| `@zoijs/core@1` | latest `1.x` | a new **major** ships |
-| `@zoijs/router@0.2` | latest `0.2.x` | crossing a **0.x minor** (e.g. `0.2 → 0.3`) |
-| `@zoijs/head@0.1` | latest `0.1.x` | crossing a 0.x minor |
-| `@zoijs/resource@0.1` | latest `0.1.x` | crossing a 0.x minor |
-| `@zoijs/action@0.1` | latest `0.1.x` | crossing a 0.x minor |
-
-Rules:
-
-1. **Bump a pin only *after* the new version is on npm** — bumping ahead of the publish
-   404s the live site.
-2. Bumping across a 0.x minor is **optional unless the site uses the new feature**: a
-   minor bump is backward-compatible, so the old pin keeps working. Bump for freshness /
-   doc-code parity.
-3. After changing a pin, re-run the site build (`npm run build`, which re-prerenders) and
-   deploy.
+1. **Update the map only *after* the new versions are on npm** — generating ahead of the
+   publish fails (the tarball doesn't exist yet), and pointing at it would 404 the site.
+2. Regenerate the whole map whenever any loaded package changes version: URLs and
+   integrity hashes must move together.
+3. Re-run the site build (`npm run build`, which re-prerenders) and deploy.
 4. Packages the site doesn't load at runtime — `@zoijs/ssr`, `@zoijs/testing`,
-   `@zoijs/devtools`, `@zoijs/eslint-plugin`, `create-zoijs` — have **no pin to touch**.
+   `@zoijs/devtools`, `@zoijs/eslint-plugin`, `create-zoijs` — need no entry.

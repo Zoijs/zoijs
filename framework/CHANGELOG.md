@@ -48,6 +48,15 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **Exact, integrity-pinned CDN guidance and truthful peer floors (SEC-7).** Docs and READMEs pointed
+  at floating build-service URLs (`esm.sh/@zoijs/core@1`), which can change without a deploy, can't be
+  integrity-checked, and contradicted the strict `script-src 'self'` guidance. CDN usage is now exact
+  jsDelivr file URLs (the published bytes) with an import-map `integrity` hash for every module — see
+  `docs/installation.md` — or vendoring for a strict CSP. `scripts/zoijs-compat.json` records the first
+  core version providing each import, and the release check verifies every package's peer floor
+  against it (and against the published tarball), blocks floating CDN URLs, and blocks packages that
+  need the still-unversioned next core (`@zoijs/resource`, `@zoijs/action`, `create-zoijs`).
+  `scripts/cdn-importmap.mjs` generates import maps from the npm tarball.
 - **Hardened release supply chain (SEC-5).** Every package (all 14) now publishes only from CI,
   only when a `<package>-v<version>` tag on `main` is pushed, after the full CI suite passes — no
   more laptop publishing. Publishing uses npm Trusted Publishing (OIDC) from a protected
