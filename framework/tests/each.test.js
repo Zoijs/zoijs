@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { each } from "../src/core/each.js";
+import { isEachMarker } from "../src/server.js";
 import { html } from "../src/core/html.js";
 import { mount } from "../src/core/mount.js";
 import { createState } from "../src/reactivity/state.js";
@@ -16,7 +17,7 @@ test("each() returns a marker carrying items/keyFn/renderFn", () => {
   const keyFn = (x) => x.id;
   const renderFn = (x) => x;
   const marker = each(itemsFn, keyFn, renderFn);
-  assert.equal(marker.__zoijsEach, true);
+  assert.equal(isEachMarker(marker), true);
   assert.equal(marker.items, itemsFn);
   assert.equal(marker.keyFn, keyFn);
   assert.equal(marker.renderFn, renderFn);

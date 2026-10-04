@@ -24,6 +24,11 @@ html`<p>${() => userInput}</p>`;
 // userInput = "<img src=x onerror=alert(1)>"  →  shown as literal text. No element, no execution.
 ```
 
+Only results created by `html` and `each()` are rendered as markup. They carry a
+Symbol brand that JSON and other data can't reproduce, so an object from an API
+shaped like an internal result (`{"__zoijsTemplate": true, …}`) is still just data
+and renders as text, on the client and under `@zoijs/ssr`.
+
 ### URLs are scheme-validated
 
 Allowed: `http`, `https`, `mailto`, `tel`, relative URLs, and raster `data:image/*` (png/jpeg/gif/webp/avif/bmp/ico). Blocked: `javascript:`, `vbscript:`, `data:text/html`, `data:image/svg+xml`, and any unknown scheme. The check also strips control characters first, so tricks like `java\tscript:` don't slip through.

@@ -10,15 +10,20 @@
 //     todo => html`<li>...</li>` // renderFn: builds DOM for one item
 //   )}
 //
+// The marker is branded with a Symbol (see brand.js), so list-shaped data from an
+// API can never be mistaken for it.
+//
 // When the array changes, items with matching keys reuse their DOM nodes (moved
 // if reordered); new keys are inserted; removed keys are disposed and removed.
+
+import { EACH } from "./brand.js";
 
 /**
  * @param {Function|Array} items    a function returning the array, or an array
  * @param {Function} keyFn          item -> unique key
  * @param {Function} renderFn       item -> html() result
- * @returns {{ __zoijsEach: true, items: any, keyFn: Function, renderFn: Function }}
+ * @returns {{ items: any, keyFn: Function, renderFn: Function }}  (Symbol-branded)
  */
 export function each(items, keyFn, renderFn) {
-  return { __zoijsEach: true, items, keyFn, renderFn };
+  return { [EACH]: true, items, keyFn, renderFn };
 }

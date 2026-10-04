@@ -30,9 +30,12 @@ export interface AttrPart {
   whole: boolean;
 }
 
-/** An `html\`…\`` result, viewed without its DOM template. */
+/**
+ * An `html\`…\`` result, viewed without its DOM template. Identity is a runtime
+ * Symbol brand, not a field — use {@link isTemplateResult}; an object merely shaped
+ * like this is NOT a template result.
+ */
 export interface TemplateResult {
-  __zoijsTemplate: true;
   __staticHTML: string;
   parts: Part[];
   values: unknown[];
@@ -41,7 +44,6 @@ export interface TemplateResult {
 
 /** An `each(...)` list marker. */
 export interface EachMarker {
-  __zoijsEach: true;
   items: unknown;
   keyFn: (item: unknown) => unknown;
   renderFn: (item: unknown) => unknown;

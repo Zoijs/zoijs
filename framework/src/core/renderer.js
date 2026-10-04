@@ -18,6 +18,7 @@ import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
 import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } from "../utils/security.js";
+import { isTemplateResult, isEachResult } from "./brand.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const noop = () => {};
@@ -36,6 +37,12 @@ const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
  * @returns {{ node: Node, dispose: Function }}
  */
 export function render(result, hydrateRoot) {
+  // Only a genuine (Symbol-branded) html`…` result is instantiated — its markup is
+  // author source. Anything else reaching here (data returned by a component or an
+  // each() render function) is refused rather than having its fields trusted.
+  if (!isTemplateResult(result)) {
+    throw new TypeError("Zoijs: expected an html`…` template result (a component or each() render function returned something else)");
+  }
   const owner = createOwner(); // nested under the active owner
   // Hydration adopts the server DOM in place — elements, attributes, and events are
   // reused, never re-created; each dynamic slot is cleared + re-rendered (same
@@ -104,7 +111,7 @@ function collectNodes(fragment, parts, hasElements) {
 }
 
 function bindChild(anchor, value) {
-  if (isEach(value)) setupKeyedList(anchor, value);
+  if (isEachResult(value)) setupKeyedList(anchor, value);
   else if (typeof value === "function") bindReactiveContent(anchor, value);
   else insertStaticContent(anchor, value);
 }
@@ -270,7 +277,7 @@ function insertItems(anchor, value, items) {
 function renderChild(value) {
   if (value == null || value === false || value === true) return { nodes: [], dispose: noop };
   if (value instanceof Node) return { nodes: [value], dispose: noop };
-  if (isHtmlResult(value)) {
+  if (isTemplateResult(value)) {
     const r = render(value);
     return { nodes: [...r.node.childNodes], dispose: r.dispose };
   }
@@ -278,10 +285,6 @@ function renderChild(value) {
 }
 
 // ---- keyed list binding ------------------------------------------------------
-
-function isEach(v) {
-  return v != null && typeof v === "object" && v.__zoijsEach === true;
-}
 
 // Longest strictly-increasing subsequence of the non-(-1) values; returns the SET
 // of indices that belong to it. Those items are already in increasing relative
@@ -529,10 +532,4 @@ function applyAttribute(el, name, value) {
   } else {
     el.setAttribute(name, toText(value));
   }
-}
-
-// ---- helpers -----------------------------------------------------------------
-
-function isHtmlResult(v) {
-  return v && v.__zoijsTemplate === true;
 }

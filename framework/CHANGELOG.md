@@ -4,6 +4,23 @@ All notable changes to Zoijs are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Zoijs follows
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [Unreleased]
+
+### Security
+- **Template results and `each()` markers can no longer be forged by data (SEC-1).** Zoijs
+  recognized its own result objects by string properties (`__zoijsTemplate: true`,
+  `__zoijsEach: true`), which JSON from an API, database, or storage can reproduce. Under
+  `@zoijs/ssr` a forged object in a text slot had its `__staticHTML` emitted verbatim —
+  stored XSS (`JSON.parse('{"__zoijsTemplate":true,"__staticHTML":"<img src=x onerror=…>"}')`
+  rendered a live `<img onerror>`); on the client it crashed the binding. Results are now
+  branded with `Symbol.for("zoijs.template")` / `Symbol.for("zoijs.each")`, which no JSON can
+  produce, so such objects render as ordinary data (`[object Object]`), on the client and
+  server alike. `Symbol.for` keeps results interoperable between compatible copies of the core.
+  `mount()` and `each()` render functions now reject a non-template with a clear `TypeError`
+  instead of trusting its fields. No documented API changed; code that read the private
+  `__zoijsTemplate` / `__zoijsEach` fields should use `isTemplateResult` / `isEachMarker` from
+  `@zoijs/core/server`.
+
 ## [1.8.0] — 2026-08-06
 
 ### Added
