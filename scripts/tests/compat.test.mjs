@@ -1,0 +1,82 @@
+// SEC-7 — every package's @zoijs/core peer floor tells the truth.
+//
+// Checks each package's real imports (subpaths and named exports) against
+// scripts/zoijs-compat.json — the first core version providing each — offline, so
+// it runs in every CI job. Packages that need a capability from the next,
+// still-unversioned core release must show up as release BLOCKERS (never pass
+// silently, never claim an impossible range). Online verification against the
+// published tarballs happens in `npm run release:check` at release time.
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { check, compat, coreImports, rangeFloor, cmp, PACKAGES } from "../release-check.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const pkgJson = (dir) => JSON.parse(readFileSync(join(root, dir, "package.json"), "utf8"));
+const results = Object.entries(PACKAGES).map(([prefix, dir]) => ({ prefix, dir, ...check(prefix, pkgJson(dir).version, { offline: true }) }));
+
+test("the compat table is well-formed", () => {
+  assert.match(compat.securityFloor, /^\d+\.\d+\.\d+$/);
+  for (const [cap, v] of Object.entries(compat.capabilities)) {
+    assert.ok(v === "next" || /^\d+\.\d+\.\d+$/.test(v), `${cap}: ${v}`);
+  }
+  assert.ok(compat.nextCore === null || /^\d+\.\d+\.\d+$/.test(compat.nextCore));
+});
+
+test("no package has a peer-floor or tarball problem (offline)", () => {
+  for (const r of results) assert.deepEqual(r.problems, [], `${r.prefix}: ${r.problems.join("; ")}`);
+});
+
+test("sanitize's peer floor excludes every core without @zoijs/core/server", () => {
+  const floor = rangeFloor(pkgJson("sanitize").peerDependencies["@zoijs/core"]);
+  assert.ok(coreImports("sanitize").some((i) => i.subpath === "@zoijs/core/server"), "sanitize imports /server");
+  assert.ok(cmp(floor, compat.capabilities["@zoijs/core/server"]) >= 0, `floor ${floor} < first /server core`);
+  assert.ok(cmp(floor, "1.5.0") >= 0, "1.0.0–1.4.x had no /server subpath (verified on npm)");
+});
+
+test("ssr's peer floor includes styleObjectToCss from /server (core 1.7.0)", () => {
+  const floor = rangeFloor(pkgJson("ssr").peerDependencies["@zoijs/core"]);
+  assert.ok(coreImports("ssr").some((i) => i.subpath === "@zoijs/core/server" && i.names.includes("styleObjectToCss")));
+  assert.ok(cmp(floor, compat.capabilities["@zoijs/core/server#styleObjectToCss"]) >= 0, `floor ${floor}`);
+});
+
+test("packages needing an unreleased core capability are release blockers, not silent passes", () => {
+  const needsNext = results.filter((r) => coreImports(r.dir).some((i) => compat.capabilities[i.subpath] === "next")).map((r) => r.prefix);
+  assert.deepEqual(needsNext.sort(), ["action", "resource"], "resource/action import @zoijs/core/internal");
+  for (const prefix of needsNext) {
+    const r = results.find((x) => x.prefix === prefix);
+    if (compat.nextCore === null) {
+      assert.equal(r.blockers.length, 1, `${prefix} must be blocked until the next core version is chosen`);
+      assert.match(r.blockers[0], /@zoijs\/core\/internal.*next core release/);
+    } else {
+      assert.ok(cmp(rangeFloor(pkgJson(r.dir).peerDependencies["@zoijs/core"]), compat.nextCore) >= 0, `${prefix} floor < ${compat.nextCore}`);
+    }
+  }
+});
+
+test("create is blocked until the next core (with the production entry) exists, and never targets an insecure core", () => {
+  const r = results.find((x) => x.prefix === "create");
+  const target = JSON.parse(readFileSync(join(root, "create", "core-cdn.json"), "utf8")).packages["@zoijs/core"].version;
+  assert.ok(cmp(target, compat.securityFloor) >= 0);
+  if (compat.nextCore === null) assert.match(r.blockers.join(" "), /@zoijs\/core\/prod/);
+});
+
+test("npm peer ranges stay ranges (not exact pins)", () => {
+  for (const [, dir] of Object.entries(PACKAGES)) {
+    const range = pkgJson(dir).peerDependencies?.["@zoijs/core"];
+    if (range) assert.match(range, /^(\^|>=)\d+\.\d+\.\d+$/, `${dir}: ${range}`);
+  }
+});
+
+test("the installation guide's CDN import map is the verified one (same version, same hashes)", () => {
+  const cdn = JSON.parse(readFileSync(join(root, "create", "core-cdn.json"), "utf8"));
+  const doc = readFileSync(join(root, "framework", "docs", "installation.md"), "utf8");
+  const m = /## From a CDN[\s\S]*?<script type="importmap">([\s\S]*?)<\/script>/.exec(doc);
+  assert.ok(m, "installation.md has a CDN import map");
+  const map = JSON.parse(m[1]);
+  assert.deepEqual(map.imports, cdn.imports);
+  assert.deepEqual(map.integrity, cdn.integrity, "regenerate the docs map from create/core-cdn.json");
+});

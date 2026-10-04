@@ -1,0 +1,58 @@
+{
+  "name": "@zoijs/i18n",
+  "version": "0.1.0",
+  "description": "Tiny, reactive internationalization for Zoijs: a reactive locale, message lookup with plurals, and the platform's Intl formatters. No JSX, no build step.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "i18n"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "i18n",
+    "internationalization",
+    "intl",
+    "translation",
+    "localization",
+    "reactive",
+    "no-build",
+    "no-jsx"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@zoijs/core": "file:../framework",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

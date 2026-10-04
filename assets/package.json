@@ -1,0 +1,19 @@
+{
+  "name": "zoijs-assets",
+  "private": true,
+  "type": "module",
+  "description": "Brand asset tooling: rasterize favicon.svg and generate vector logos.",
+  "scripts": {
+    "build": "node generate-logos.mjs && node build-icons.mjs",
+    "build:icons": "node build-icons.mjs",
+    "build:logos": "node generate-logos.mjs"
+  },
+  "devDependencies": {
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5"
+  },
+  "dependencies": {
+    "@expo-google-fonts/poppins": "^0.4.1",
+    "opentype.js": "^2.0.0"
+  }
+}
