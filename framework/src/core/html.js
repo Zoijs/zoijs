@@ -60,6 +60,8 @@ export function html(strings, ...values) {
 
 // What the engine passes a tag: a frozen array whose own `raw` is a frozen array,
 // non-enumerable. JSON, split(), spread and plain assignment can't produce this.
+// Structural, not provenance: deliberate code can rebuild it (see docs/security.md).
+// If a standard, widely supported Array.isTemplateObject() ships, evaluate it here.
 function isTemplateStrings(s) {
   const raw = Array.isArray(s) && Object.isFrozen(s) && Object.getOwnPropertyDescriptor(s, "raw");
   return !!raw && !raw.enumerable && Array.isArray(raw.value) && Object.isFrozen(raw.value);

@@ -13,6 +13,12 @@ npx serve . -l 7310
 
 Then open <http://localhost:7310>.
 
+
+## Deploy
+
+Swap the import map URL in `index.html` for the production entry —
+`https://esm.sh/@zoijs/core@1/prod` — so development warnings and the devtools hook are off.
+
 ## What's here
 
 - `index.html` — loads `@zoijs/core` from a CDN (pinned to the `v1` major) and

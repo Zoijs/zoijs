@@ -20,8 +20,16 @@ const SRC = join(root, "framework", "src");
 // DOM-free server compiler, and in-place hydration) from ~13.3 KB to ~16 KB; raised
 // to 18 KB (2026-06-27) to restore ~10% headroom after hydration shipped; raised to
 // 19 KB (2026-08-06) after the reviewed reactivity/security fixes landed (per-run owner
-// scoping, disposed-node/owner cleanup, case-insensitive URL sanitization) — ~18.1 KB now.
-const BUDGET_GZIP = 20 * 1024; // 20 KB — headroom over today's ~19.0 KB (bumped for <textarea>/<title> content binding)
+// scoping, disposed-node/owner cleanup, case-insensitive URL sanitization) — ~18.1 KB now;
+// 20 KB for <textarea>/<title> content binding.
+//
+// TEMPORARY Phase 1 budget (2026-10-04): 21 KB. The Phase 1 security/correctness fixes
+// (SEC-1 Symbol brands, CORE-1, CORE-2 shared runtime, SEC-2 tagged-template check)
+// needed real code and comments, leaving no headroom under 20 KB (~20.8 KB now). This is
+// NOT permission for uncontrolled core growth. Because this gate measures the published,
+// commented SOURCE, PERF-2's minified distribution build is meant to replace it with two
+// budgets: one for the production/minified output and one for source/module delivery.
+const BUDGET_GZIP = 21 * 1024; // 21 KB (21,504 B) — temporary Phase 1 source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They

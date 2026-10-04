@@ -44,6 +44,13 @@ If your app **doesn't use the router**, deployment is trivial — drag the folde
 to any host below and you're done. Skip to your host of choice; you don't need
 any fallback configuration.
 
+## Ship production mode
+
+Load the production entry in what you deploy so development warnings and the
+devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` subpath
+on a CDN) in your import map. Bundlers' production builds select it automatically.
+See [Production mode](concepts/production-mode.md).
+
 ## History-mode routing needs an `index.html` fallback
 
 The router uses the History API, so navigating to `/tasks/1` **in the app** never
@@ -229,7 +236,8 @@ silently run stale framework code. Two safe options:
 4. Running a **strict CSP**? Add `.zoijs-router-outlet { display: contents }`, hash the inline import
    map in `script-src`, and don't ship `modulepreload` **and** an import map together (see above).
 5. Serving vendored `@zoijs/*` as **`immutable`**? **Content-hash the URL** so re-vendoring busts caches.
-6. Upload the folder. Done.
+6. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
+7. Upload the folder. Done.
 
 ## What you do *not* need
 

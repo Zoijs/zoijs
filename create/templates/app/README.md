@@ -18,6 +18,16 @@ npm run dev
 
 Open the printed URL (it falls back to 7311–7313 if the port is busy).
 
+## Deploy
+
+This page loads the **development** entry of `@zoijs/core` (helpful warnings, devtools).
+When you deploy, change the import map in `index.html` to the **production** entry —
+same API, warnings and the devtools hook off:
+
+```html
+"@zoijs/core": "./node_modules/@zoijs/core/src/prod.js"
+```
+
 ## Project layout
 
 ```
