@@ -7,6 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./browser-tests",
+  globalSetup: "./browser-tests/global-setup.js", // second physical core copy for csp.spec.js
   fullyParallel: true,
   reporter: "list",
   // Absorb transient CI flakiness (cold server start, first module fetch).

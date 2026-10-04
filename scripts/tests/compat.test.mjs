@@ -44,17 +44,20 @@ test("ssr's peer floor includes styleObjectToCss from /server (core 1.7.0)", () 
 });
 
 test("packages needing an unreleased core capability are release blockers, not silent passes", () => {
-  const needsNext = results.filter((r) => coreImports(r.dir).some((i) => compat.capabilities[i.subpath] === "next")).map((r) => r.prefix);
-  assert.deepEqual(needsNext.sort(), ["action", "resource"], "resource/action import @zoijs/core/internal");
-  for (const prefix of needsNext) {
-    const r = results.find((x) => x.prefix === prefix);
-    if (compat.nextCore === null) {
-      assert.equal(r.blockers.length, 1, `${prefix} must be blocked until the next core version is chosen`);
-      assert.match(r.blockers[0], /@zoijs\/core\/internal.*next core release/);
-    } else {
-      assert.ok(cmp(rangeFloor(pkgJson(r.dir).peerDependencies["@zoijs/core"]), compat.nextCore) >= 0, `${prefix} floor < ${compat.nextCore}`);
-    }
+  const needsNext = (r) => coreImports(r.dir).some((i) => [i.subpath, ...i.names.map((n) => `${i.subpath}#${n}`)].some((c) => compat.capabilities[c] === "next"));
+  for (const r of results.filter(needsNext)) {
+    if (compat.nextCore === null) assert.ok(r.blockers.length > 0, `${r.prefix} must be blocked until the next core version is chosen`);
+    else assert.ok(cmp(rangeFloor(pkgJson(r.dir).peerDependencies["@zoijs/core"]), compat.nextCore) >= 0, `${r.prefix} floor < ${compat.nextCore}`);
   }
+});
+
+// Packages must never need a private core subpath: no-build apps would have to add an import-map
+// entry for it (the CORE-3 regression). resource/action report via the shared runtime instead.
+test("no package imports a core subpath beyond the public ones; resource/action import only the root", () => {
+  const PUBLIC = new Set(["@zoijs/core", "@zoijs/core/server", "@zoijs/core/devtools"]);
+  for (const r of results) for (const i of coreImports(r.dir)) assert.ok(PUBLIC.has(i.subpath), `${r.prefix} imports ${i.subpath}`);
+  for (const dir of ["resource", "action"]) assert.deepEqual([...new Set(coreImports(dir).map((i) => i.subpath))], ["@zoijs/core"], dir);
+  assert.equal(compat.capabilities["@zoijs/core/internal"], undefined, "the /internal subpath is gone");
 });
 
 test("create is blocked until the next core (with the production entry) exists, and never targets an insecure core", () => {

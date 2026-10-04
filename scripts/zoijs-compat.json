@@ -15,7 +15,6 @@
     "@zoijs/core/server#styleObjectToCss": "1.7.0",
     "@zoijs/core/server#isSafeAttributeValue": "next",
     "@zoijs/core/server#openerRel": "next",
-    "@zoijs/core/internal": "next",
     "@zoijs/core/prod": "next",
     "@zoijs/core/unsafe": "next"
   },

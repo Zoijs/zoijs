@@ -201,10 +201,10 @@ Zoijs is friendly to a strict Content Security Policy:
   Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs;
   ```
 
-  Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe. Two
-  current limits: `@zoijs/sanitize` parses with `DOMParser` without a policy, so it fails under
-  enforcement; and a second loaded copy of the core can't create another `zoijs` policy (load
-  one copy, or add `'allow-duplicates'`).
+  Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe.
+  Compatible copies of the core share one runtime and so one `zoijs` policy (created once — no
+  `'allow-duplicates'` needed). Current limit: `@zoijs/sanitize` parses with `DOMParser` without
+  a policy, so it fails under enforcement.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
 hash, or a nonce) and, if your templates use `style` attributes, `style-src-attr 'unsafe-inline'`

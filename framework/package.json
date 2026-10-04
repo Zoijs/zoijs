@@ -23,10 +23,6 @@
       "types": "./src/server.d.ts",
       "default": "./src/server.js"
     },
-    "./internal": {
-      "types": "./src/internal.d.ts",
-      "default": "./src/internal.js"
-    },
     "./unsafe": {
       "types": "./src/unsafe.d.ts",
       "default": "./src/unsafe.js"
