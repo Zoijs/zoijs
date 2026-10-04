@@ -1,57 +1,90 @@
 name: Publish
 
-# Publishes @zoijs/core to npm when the version in framework/package.json is new.
-# Pushing without bumping the version is safe — the publish step is skipped
-# (npm versions are immutable, so re-publishing the same version isn't allowed).
+# Publishes ONE package to npm, only when a release tag `<package>-v<version>` is pushed
+# (the repo's tag convention: core-v1.9.0, router-v0.6.0, create-v0.1.5, …).
+#
+# Nothing else can publish: branch pushes, pull requests and manual dispatch don't
+# trigger this workflow. Auth is npm Trusted Publishing (OIDC) — there is no long-lived
+# npm token — and npm attaches provenance to every package it publishes this way.
+# See framework/docs/releasing.md for the one-time npm/GitHub setup.
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "framework/**"
-  release:
-    types: [published]
-  workflow_dispatch:
+    tags:
+      - "*-v[0-9]*"
+
+# Least privilege by default; only the publish job is elevated (id-token).
+permissions:
+  contents: read
+
+# Never run two publishes of the same tag concurrently; never cancel one midway.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  # The full CI suite (unit + types on Node 20/22/24, browsers, tarball checks) at the
+  # tagged commit — the same workflow pull requests run, not a separate copy.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  verify:
+    name: Verify release
     runs-on: ubuntu-latest
-    permissions:
-      contents: read # Securely scoped for private repository checkouts
-      id-token: write # required for npm provenance (OIDC)
-    defaults:
-      run:
-        working-directory: framework
+    outputs:
+      dir: ${{ steps.check.outputs.dir }}
+      name: ${{ steps.check.outputs.name }}
+      version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: framework/package-lock.json
-
-      - run: npm ci
-
-      # Test gate — a broken push never publishes.
-      - run: npm test
-      - run: npm run test:types
-
-      - name: Decide whether this version needs publishing
+          fetch-depth: 0 # to prove the tag is on main
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      # Only reviewed code ships: the tagged commit must already be on main.
+      - name: Tagged commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      # Tag ↔ package.json name/version, no lifecycle scripts, clean tarball, and a peer
+      # range whose floor really provides every @zoijs/core subpath the package imports.
+      - name: Release checks
         id: check
+        run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
+      - name: Not already published
         run: |
-          NAME=$(node -p "require('./package.json').name")
-          VERSION=$(node -p "require('./package.json').version")
-          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
-            echo "$NAME@$VERSION is already on npm — skipping publish."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "$NAME@$VERSION is new — publishing."
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+          if npm view "${{ steps.check.outputs.name }}@${{ steps.check.outputs.version }}" version >/dev/null 2>&1; then
+            echo "::error::${{ steps.check.outputs.name }}@${{ steps.check.outputs.version }} is already on npm"
+            exit 1
           fi
 
-      - name: Publish to npm (with provenance)
-        if: steps.check.outputs.publish == 'true'
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  publish:
+    name: Publish ${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}
+    needs: [ci, verify]
+    runs-on: ubuntu-latest
+    # Protected environment: configure required reviewers + "tags matching *-v*" as the
+    # only allowed deployment refs in GitHub settings. It holds NO npm secret.
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write # OIDC identity for npm Trusted Publishing (+ provenance)
+    defaults:
+      run:
+        working-directory: ${{ needs.verify.outputs.dir }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm >= 11.5.1 (Node 24 bundles npm 11).
+      - name: npm supports Trusted Publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)"
+      # No install step: published packages have no runtime dependencies, and
+      # --ignore-scripts guarantees publishing executes no package scripts.
+      - name: Publish (Trusted Publishing, with provenance)
+        run: npm publish --access public --provenance --ignore-scripts

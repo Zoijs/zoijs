@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Also run as the test gate of the release workflow (publish.yml), at the tagged commit.
+  workflow_call:
+
+# Least privilege: CI only reads the repository. No job here can write to the repo,
+# packages, or releases, and none can mint an OIDC token (id-token) — only the
+# publish job in publish.yml can, and only behind the protected npm-release environment.
+permissions:
+  contents: read
 
 jobs:
   # Fast feedback: every package's unit/DOM tests + TypeScript checks, on a
@@ -19,40 +27,53 @@ jobs:
         # only exists in Node 20.19+/22.12+ — so we test 20, 22, and current 24.
         node: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      # Third-party actions are pinned to full commit SHAs (immutable); Dependabot
+      # (.github/dependabot.yml) proposes updates. The comment is the human version.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: "**/package-lock.json"
-      - run: npm run install:all
+      # Lockfile-exact installs; dependency install scripts never run (none are
+      # needed: the only ones in the tree are fsevents, macOS-only, and sharp in the
+      # private, never-installed assets package).
+      - run: npm run ci:all
       - run: npm test
       - run: npm run test:types
+      # Tarball contents + identity of every publishable package (no registry access).
+      - run: npm run release:check -- --all --offline
 
   # Real browsers are slower, so they run once in a separate job. We run inside
   # the official Playwright image, which already ships every browser and all
   # system dependencies — so we never run `playwright install --with-deps`
   # (whose apt step is flaky on the hosted runner's Microsoft repos). Node is
-  # included in the image. Pin the tag to the @playwright/test version we use.
+  # included in the image. The tag must match the @playwright/test version we use;
+  # the digest pins it immutably (update both together when bumping Playwright).
   browser:
     name: Browser (Chromium / Firefox / WebKit)
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
     # GitHub sets HOME=/github/home (owned by pwuser) for container jobs, but the
     # job runs as root — Firefox refuses to launch unless $HOME is owned by the
     # current user. Point HOME at root's own home.
     env:
       HOME: /root
     steps:
-      - uses: actions/checkout@v5
-      - run: npm run install:all
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - run: npm run ci:all
       # Ensure the browser binaries match the installed @playwright/test (no apt; the image
       # already provides the system libraries). `@playwright/test` is `^1.61.1`, so a package's
       # lockfile can resolve a NEWER 1.6.x than the pinned image (e.g. sanitize → 1.62.1) whose
       # browser builds aren't baked in — causing "Executable doesn't exist at
       # /ms-playwright/webkit-XXXX". Install for EVERY browser-testing package's own resolved
       # Playwright, so whatever each one pins is present. Same-version installs are no-ops.
+      # (An explicit command — not an install script — so it is unaffected by --ignore-scripts.)
       - name: Ensure browser binaries (per browser-testing package)
         run: |
           for pkg in framework router resource head action storage forms sanitize \
