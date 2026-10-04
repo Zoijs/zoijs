@@ -18,7 +18,7 @@ size of `framework/src/**/*.js` is what a browser fetches from a gzip/brotli CDN
 | **gzipped** | **~13.3 KB** |
 
 For comparison, React + ReactDOM is ~45 KB gzipped. `npm test` fails the build if
-the core grows past a **21 KB gzipped** budget (`bench/size.mjs --check`). That is a
+the core grows past a **22.5 KB gzipped** budget (`bench/size.mjs --check`). That is a
 **temporary Phase 1 budget** for the commented source: the Phase 1 security and
 correctness fixes needed more code than the old 20 KB margin allowed. It is not license
 for unchecked growth; PERF-2's minified build will introduce separate budgets for the

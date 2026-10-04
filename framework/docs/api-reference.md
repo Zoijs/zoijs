@@ -131,10 +131,48 @@ html`<section>${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load.</p
 ## `configure`
 
 ```
-configure({ dev }) → void
+configure({ dev?, onError? }) → void
 ```
 
 Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds). One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
+
+
+### Error monitoring: `configure({ onError })`
+
+```js
+configure({
+  onError(error, info) {
+    monitoring.capture(error, info); // Sentry, Datadog, OpenTelemetry, your own logger…
+  },
+});
+```
+
+Zoijs keeps a page running when part of it fails — a binding that throws keeps the rest
+of the UI working, a `boundary` shows its fallback, a failed `resource` shows its
+`error()`. `onError` lets you **observe** those contained failures. It receives the
+**original** thrown value (not wrapped) and `info`:
+
+| `info.kind` | What failed |
+|---|---|
+| `"binding"` | a `${() => …}` text/attribute/list binding |
+| `"effect"` | an `effect()` body |
+| `"computed"` | a `computed()` derivation (it keeps its previous value) |
+| `"cleanup"` | an `onCleanup` handler or an effect's returned cleanup |
+| `"boundary"` | a `boundary` child's setup (`info.component` is the child function's name, when it has one) |
+| `"resource"` / `"action"` | a `@zoijs/resource` fetch / `@zoijs/action` run that became its `error()` |
+
+- Each failure is reported **once**, by the layer that contained it.
+- Errors that already **escape** (a component throwing outside any `boundary`, `html([…])`,
+  event handlers, server rendering) still escape and are not reported.
+- It works in **production mode** too. Existing console logging is unchanged.
+- It's **one hook per page**, shared by every loaded copy of the core; the last
+  `configure({ onError })` wins. `configure({ onError: null })` removes it; other
+  `configure` calls leave it alone.
+- If the hook itself throws, Zoijs logs that and carries on — it never calls the hook
+  for its own failure.
+
+> **Privacy:** errors and their messages can contain application or user data. Scrub
+> anything sensitive before sending it to an external monitoring service.
 
 ---
 

@@ -25,6 +25,7 @@
 // core's public API (createState, onCleanup) — the core is unchanged.
 
 import { createState, onCleanup } from "@zoijs/core";
+import { reportError } from "@zoijs/core/internal";
 
 /**
  * Wrap a write function in reactive pending / error / done / result state.
@@ -57,9 +58,10 @@ export function action(fn) {
       pending.set(false);
       return value;
     } catch (err) {
-      if (disposed || id !== runId) return undefined;
+      if (disposed || id !== runId) return undefined; // superseded/disposed: not this action's error
       error.set(err);
       pending.set(false);
+      reportError(err, { kind: "action" }); // also observable via configure({ onError })
       return undefined;
     }
   };

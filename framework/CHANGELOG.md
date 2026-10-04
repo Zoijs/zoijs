@@ -7,6 +7,15 @@ All notable changes to Zoijs are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`configure({ onError(error, info) })` — observe errors Zoijs contains (CORE-3).** Failures Zoijs
+  catches to keep the page running — a throwing binding, `effect`, `computed` or cleanup, a `boundary`
+  child, a failed `@zoijs/resource` fetch or `@zoijs/action` run — were only visible in the console
+  (some only in dev mode), so production monitoring never saw them. The hook receives the original
+  thrown value and `{ kind, component? }` (`kind`: `binding` | `effect` | `computed` | `cleanup` |
+  `boundary` | `resource` | `action`), once per failure, in every mode. Errors that escape still
+  escape. The hook is realm-wide (shared by compatible copies); `onError: null` removes it, other
+  `configure` calls leave it unchanged. A throwing hook is logged and never re-invoked for its own
+  failure. resource/action report through a new framework-internal subpath, `@zoijs/core/internal`.
 - **Production entry: `@zoijs/core/prod` (SEC-4).** Same API as `@zoijs/core`, but a page that loads
   it starts in production mode — no development warnings, and the devtools hook never attaches.
   Bundlers' production builds select it automatically through a new `"production"` export condition

@@ -223,3 +223,19 @@ test("renders a component returned uncalled from a binding", () => {
   assert.equal(renderToString(() => html`<div>${() => (show.get() ? Child : null)}</div>`), "<div></div>");
   assert.equal(renderToString(() => html`<div>${() => () => "text"}</div>`), "<div>text</div>");
 });
+
+// CORE-3: SSR contains no errors — a failing binding or component escapes to the
+// server caller exactly as before and is not routed to onError.
+test("CORE-3: server render errors still escape to the caller and are not reported", async () => {
+  const { configure } = await import("@zoijs/core");
+  const calls = [];
+  configure({ onError: (e) => calls.push(e) });
+  try {
+    const err = new Error("render failed");
+    assert.throws(() => renderToString(() => html`<p>${() => { throw err; }}</p>`), (e) => e === err);
+    assert.throws(() => renderToString(() => { throw err; }), (e) => e === err);
+    assert.deepEqual(calls, []);
+  } finally {
+    configure({ onError: null });
+  }
+});

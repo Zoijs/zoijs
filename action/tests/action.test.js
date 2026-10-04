@@ -160,3 +160,32 @@ test("works inside an html binding (idle → saving → saved)", { skip: domSkip
   await tick();
   assert.equal(btn.textContent.trim(), "Saved");
 });
+
+// CORE-3: a failure that becomes the action's error() state is also reported to
+// configure({ onError }); run() still never throws. Superseded runs are not reported.
+test("CORE-3: a rejected run reports once; error state and run() result unchanged", async () => {
+  const { configure } = await import("@zoijs/core");
+  const calls = [];
+  configure({ onError: (error, info) => calls.push({ error, info }) });
+  try {
+    const err = new Error("save failed");
+    const save = action(() => Promise.reject(err));
+    const result = await save.run();
+    assert.equal(result, undefined, "run() still resolves (never throws)");
+    assert.equal(save.error(), err);
+    assert.equal(save.pending(), false);
+    assert.deepEqual(calls, [{ error: err, info: { kind: "action" } }]);
+
+    // superseded run: its failure is not this action's error → not reported
+    let first;
+    const slow = action((n) => (n === 1 ? new Promise((_, rej) => { first = rej; }) : Promise.resolve("ok")));
+    const p1 = slow.run(1);
+    await slow.run(2);
+    first(new Error("superseded"));
+    await p1;
+    assert.equal(slow.error(), null);
+    assert.equal(calls.length, 1);
+  } finally {
+    configure({ onError: null });
+  }
+});

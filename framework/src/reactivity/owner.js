@@ -9,6 +9,7 @@
 // These are internal helpers (not part of the public API).
 
 import { runtime as rt } from "./runtime.js";
+import { reportError } from "./env.js";
 
 /** The active owner, or null outside any scope. */
 export function getOwner() {
@@ -49,6 +50,7 @@ export function onCleanup(fn) {
       fn();
     } catch (err) {
       console.error("Zoijs: a cleanup handler threw:", err);
+      reportError(err, { kind: "cleanup" });
     }
     return;
   }
@@ -66,6 +68,7 @@ export function disposeOwner(owner) {
       owner.disposers[i]();
     } catch (err) {
       console.error("Zoijs: a cleanup handler threw:", err);
+      reportError(err, { kind: "cleanup" });
     }
   }
   owner.disposers.length = 0;

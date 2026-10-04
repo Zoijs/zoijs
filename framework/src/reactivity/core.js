@@ -15,7 +15,7 @@
 //   effect   {        observers, sources, state,         fn, isEffect:true  }
 
 import { onCleanup, getOwner, createOwner, runWithOwner, disposeOwner } from "./owner.js";
-import { isDev } from "./env.js";
+import { isDev, reportError } from "./env.js";
 import { reportCreate, reportRun, reportWrite, reportDispose } from "./devtools.js";
 import { runtime as rt } from "./runtime.js";
 
@@ -128,6 +128,7 @@ function runComputation(node) {
     threw = true;
     // Task 3/5: contain the failure so other bindings keep working.
     console.error("Zoijs: a reactive binding threw (other bindings keep working):", err);
+    reportError(err, { kind: node.kind || "computed" });
   } finally {
     rt.observer = previousObserver;
   }
@@ -160,6 +161,7 @@ function runEffectCleanup(node) {
     cleanup();
   } catch (err) {
     console.error("Zoijs: an effect cleanup threw (other bindings keep working):", err);
+    reportError(err, { kind: "cleanup" });
   }
 }
 
@@ -225,8 +227,14 @@ export function computed(fn, equals = Object.is) {
 }
 
 export function effect(fn) {
+  return createEffect(fn, "effect");
+}
+
+/** effect() tagged with the onError kind its failures report ("effect" | "binding"). */
+export function createEffect(fn, kind) {
   const node = {
     fn,
+    kind,
     observers: new Set(),
     sources: new Set(),
     state: DIRTY,

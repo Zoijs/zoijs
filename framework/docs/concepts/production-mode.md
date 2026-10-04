@@ -25,6 +25,13 @@ when you deploy:
 In development, keep `src/index.js`. If you forget, Zoijs warns once in the console
 when development mode runs on a non-`localhost` host.
 
+### Monitoring errors in production
+
+Production mode silences warnings, not failures. To see the errors Zoijs contains
+(throwing bindings, boundary fallbacks, failed resources…) in your monitoring, add
+`configure({ onError(error, info) { … } })` — it works in both modes. See
+[Error monitoring](../api-reference.md#error-monitoring-configure-onerror-).
+
 ### Overriding
 
 `configure({ dev })` still works on either entry and wins over the default — call it
