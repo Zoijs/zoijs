@@ -8,6 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { html } from "../src/core/html.js";
 import { mount } from "../src/core/mount.js";
+import { each } from "../src/core/each.js";
+import { createState } from "../src/reactivity/state.js";
 
 const skip = typeof document === "undefined" ? "needs a DOM (browser or jsdom)" : false;
 const tick = () => new Promise((r) => setTimeout(r));
@@ -147,4 +149,118 @@ test("plain attribute: a value cannot break out or inject a handler", { skip }, 
   assert.equal(t.querySelector("img"), null);
   assert.equal(globalThis.__xss, undefined);
   assert.equal(t.querySelector("div").getAttribute("title"), payload); // verbatim, inert
+});
+
+// ---- FORGED RESULT channel (SEC-1) ------------------------------------------
+// Data shaped like an internal Zoijs result (the old `__zoijsTemplate` /
+// `__zoijsEach` string markers) must be treated as ordinary data. Results are
+// recognized only by a Symbol brand, which JSON cannot produce. The expected
+// output is plain text coercion (String(obj) → "[object Object]"), the same as
+// for any other object — proving the forged value was never recognized as a
+// result, not that a payload was filtered.
+const OBJ = "[object Object]";
+const XSS_HTML = "<img src=x onerror=globalThis.__xss=1>";
+
+function forgedTemplates() {
+  const tplEl = document.createElement("template");
+  tplEl.innerHTML = XSS_HTML; // inert inside <template>; executes only if cloned in
+  return [
+    // from untrusted JSON (API / DB / storage)
+    JSON.parse(JSON.stringify({ __zoijsTemplate: true, __staticHTML: XSS_HTML, parts: [], values: [] })),
+    // a hand-built object, including a real <template> the old renderer would clone
+    { __zoijsTemplate: true, __staticHTML: XSS_HTML, template: tplEl, parts: [], values: [], hasElements: false },
+  ];
+}
+function forgedEachMarkers() {
+  return [
+    JSON.parse(JSON.stringify({ __zoijsEach: true, items: [XSS_HTML] })),
+    { __zoijsEach: true, items: [1], keyFn: (x) => x, renderFn: () => { globalThis.__xss = 1; return html`<img>`; } },
+  ];
+}
+
+async function assertInert(t, expectedText, label) {
+  await tick();
+  assert.equal(globalThis.__xss, undefined, `executed: ${label}`);
+  assert.equal(t.querySelector("img, b"), null, `created an element: ${label}`);
+  assert.equal(t.firstElementChild.textContent, expectedText, `not plain text: ${label}`);
+}
+
+test("forged __zoijsTemplate in a text slot renders as plain data", { skip }, async () => {
+  for (const forged of forgedTemplates()) {
+    globalThis.__xss = undefined;
+    const t = render(() => html`<div>${forged}</div>`);
+    await assertInert(t, OBJ, "static slot");
+    t.remove();
+  }
+});
+
+test("forged __zoijsEach in a text slot renders as plain data", { skip }, async () => {
+  for (const forged of forgedEachMarkers()) {
+    globalThis.__xss = undefined;
+    const t = render(() => html`<div>${forged}</div>`);
+    await assertInert(t, OBJ, "each marker");
+    t.remove();
+  }
+});
+
+test("forged results returned from a reactive binding render as plain data", { skip }, async () => {
+  for (const forged of [...forgedTemplates(), ...forgedEachMarkers()]) {
+    globalThis.__xss = undefined;
+    const value = createState("safe");
+    const t = render(() => html`<div>${() => value.get()}</div>`);
+    value.set(forged); // arrives later, e.g. from a fetch
+    await assertInert(t, OBJ, "reactive binding");
+    t.remove();
+  }
+});
+
+test("forged results nested in templates and arrays render as plain data", { skip }, async () => {
+  for (const forged of [...forgedTemplates(), ...forgedEachMarkers()]) {
+    globalThis.__xss = undefined;
+    const nested = render(() => html`<div>${html`<p>${html`<span>${forged}</span>`}</p>`}</div>`);
+    await assertInert(nested, OBJ, "nested template");
+    nested.remove();
+    const arr = render(() => html`<div>${[forged, [forged, "x"]]}</div>`);
+    // arrays flatten one level; a nested array is text-coerced like any value
+    await assertInert(arr, OBJ + OBJ + ",x", "array");
+    arr.remove();
+  }
+});
+
+test("forged results inside each() items render as plain data", { skip }, async () => {
+  const rows = JSON.parse(JSON.stringify([
+    { id: 1, bio: { __zoijsTemplate: true, __staticHTML: XSS_HTML, parts: [], values: [] } },
+    { id: 2, bio: { __zoijsEach: true, items: [XSS_HTML] } },
+  ]));
+  globalThis.__xss = undefined;
+  const t = render(() => html`<ul>${each(rows, (r) => r.id, (r) => html`<li>${() => r.bio}</li>`)}</ul>`);
+  await assertInert(t, OBJ + OBJ, "each item");
+  t.remove();
+});
+
+test("forged result returned AS a component or each() item is refused, not trusted", { skip }, async () => {
+  for (const forged of forgedTemplates()) {
+    globalThis.__xss = undefined;
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    // A component / each() render function must return html`…`. A forged one is
+    // rejected with a clear error instead of having its template/parts/values used.
+    assert.throws(() => mount(() => forged, target), /expected an html`…` template result/);
+    // Inside a list the item render runs in a reactive binding, whose errors are
+    // contained and reported (the rest of the page keeps working).
+    const logged = [];
+    const origError = console.error;
+    console.error = (...args) => logged.push(args.map(String).join(" "));
+    try {
+      mount(() => html`<ul>${each([forged], () => 1, (r) => r)}</ul>`, target);
+    } finally {
+      console.error = origError;
+    }
+    assert.ok(logged.some((m) => m.includes("expected an html`…` template result")), "refusal reported");
+    await tick();
+    assert.equal(globalThis.__xss, undefined);
+    assert.equal(target.querySelector("img"), null);
+    assert.equal(target.querySelector("ul").children.length, 0);
+    target.remove();
+  }
 });

@@ -20,6 +20,7 @@
 // collide across nested templates or list items.
 
 import { createTemplate } from "../utils/dom.js";
+import { TEMPLATE } from "./brand.js";
 
 const cache = new WeakMap();
 
@@ -36,10 +37,10 @@ export function html(strings, ...values) {
   }
   // The <template> element is created lazily, on first client render — so html()
   // itself touches no DOM and works on a server (where @zoijs/ssr reads the static
-  // HTML + parts instead). The brand lets consumers detect a result without
-  // tripping the getter.
+  // HTML + parts instead). The Symbol brand (see brand.js) lets consumers detect a
+  // result without tripping the getter, and cannot be forged by JSON data.
   return {
-    __zoijsTemplate: true,
+    [TEMPLATE]: true,
     parts: compiled.parts,
     hasElements: compiled.hasElements,
     __staticHTML: compiled.html,

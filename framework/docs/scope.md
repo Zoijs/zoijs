@@ -140,7 +140,7 @@ structure.** Users are expected to delete, rename, and restructure freely.
   *generates* apps that depend on `@zoijs/core`.
 - All dependence on the core is through its **public API** (`createState`,
   `onCleanup`, `html`, `mount`). No package reaches into core internals (the
-  reactive graph, owner scopes, the `__zoijsEach` marker, the scanner) — those are
+  reactive graph, owner scopes, the Symbol brands on template/`each()` results, the scanner) — those are
   explicitly non-public (`VERSIONING.md`).
 
 **Enforced, not just observed.** `scripts/check-deps.mjs` (run by the root
