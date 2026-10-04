@@ -21,6 +21,10 @@ In `index.html`, point `"@zoijs/core"` at the production entry —
 development warnings and the devtools hook are off. Keep the exact version; to upgrade,
 change it deliberately and update every URL and integrity hash together.
 
+Before going live, go through the
+[production security checklist](https://zoijs.dev/production-security) — your CSP must
+allow `https://cdn.jsdelivr.net` and your import map's hash.
+
 ## What's here
 
 - `index.html` — loads `@zoijs/core` {{ZOIJS_CORE_VERSION}} from jsDelivr (that exact version,

@@ -38,6 +38,10 @@ same API, warnings and the devtools hook off:
 "@zoijs/core": "./node_modules/@zoijs/core/src/prod.js"
 ```
 
+Then deploy the files to a static host (not the dev server) and go through the
+[production security checklist](https://zoijs.dev/production-security) — security headers,
+a Content-Security-Policy with your import map's hash, CSRF, and more.
+
 ## Type-check
 
 ```bash

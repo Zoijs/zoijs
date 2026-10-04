@@ -357,3 +357,14 @@ test("interceptLinks: respects base (in-base routed, out-of-base ignored)", { sk
   router.destroy();
   target.remove();
 });
+
+// SEC-11: pins the behavior docs/production-security.md §11 and the README describe —
+// params are decoded per segment, so an encoded slash becomes a real "/" in one param.
+// If routing changes how params decode, update those docs with it.
+test("SEC-11: params are decodeURIComponent'd per segment (documented: ..%2F → ../)", () => {
+  const router = createRouter({ "/files/:name": () => null }, { location: "/" });
+  assert.deepEqual(router.match("/files/..%2Fadmin").params, { name: "../admin" });
+  assert.deepEqual(router.match("/files/%2E%2E").params, { name: ".." });
+  assert.deepEqual(router.match("/files/bad%E0").params, { name: "bad%E0" }, "malformed escapes pass through undecoded");
+  router.destroy();
+});

@@ -207,6 +207,9 @@ function serializeAttribute(name, value) {
  * Plain `JSON.stringify` is not: a `</script>` (or `<!--`) inside a string would close
  * the tag early — an injection vector. This escapes `<`, `>`, `&`, and the two line
  * terminators that are legal in JSON but break a JS string literal (U+2028/U+2029).
+ * It does NOT escape quotes: the output belongs in a `<script>` body only — never in an
+ * HTML attribute, raw HTML, a URL, or a `<style>` block. (`type="application/json"` data
+ * blocks need no CSP allowance; an executable inline script needs a nonce.)
  *
  * Use it to hand server-fetched data to the client so a resource doesn't refetch:
  *

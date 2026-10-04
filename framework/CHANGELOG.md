@@ -48,6 +48,20 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **Production security checklist (SEC-11, documentation).** The security docs explained safe
+  rendering but not how to deploy safely: the recommended CSP lacked `object-src`, `base-uri`,
+  `form-action` and `frame-ancestors`, and there was no guidance on CSRF, credentialed requests, where
+  `serialize()` output may go, DOM clobbering, encoded router params, or per-host headers. New
+  `docs/production-security.md` is the one canonical checklist: production entry, exact versions +
+  integrity, a strict baseline CSP (`frame-ancestors 'none'`) with self-hosted vs CDN and import-map
+  hash/nonce handling, CSRF and credentials, server-side authorization, `serialize()` (script body
+  only), sanitized content, raw DOM sinks, route params, URL validation, secrets and browser storage,
+  `onError`, HTTPS, the dev server, compatible versions, and copy-paste headers for Netlify,
+  Cloudflare Pages, Vercel, nginx and Apache (and GitHub Pages' limits). It also records two current
+  limits a strict policy hits: `style` bindings are attributes (need `style-src-attr 'unsafe-inline'`),
+  and under enforced Trusted Types `@zoijs/sanitize` fails and a second core copy can't create the
+  `zoijs` policy. Package READMEs link to it; `npm run test:docs` checks it stays complete and that
+  every host recipe matches the canonical policy. No runtime change.
 - **Exact, integrity-pinned CDN guidance and truthful peer floors (SEC-7).** Docs and READMEs pointed
   at floating build-service URLs (`esm.sh/@zoijs/core@1`), which can change without a deploy, can't be
   integrity-checked, and contradicted the strict `script-src 'self'` guidance. CDN usage is now exact

@@ -49,6 +49,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 ### Reference & help
 - [API Reference](api-reference.md)
 - [Security](security.md) — safe rendering rules & CSP
+- [Production security checklist](production-security.md) — CSP & headers, CSRF, credentials, serialize, route params, secrets — read before you deploy
 - [Accessibility](accessibility.md) — the Zoijs way to accessible apps
 - [Editor Setup](editor-setup.md) — highlighting, IntelliSense, formatting, linting
 - [Examples index](examples.md)

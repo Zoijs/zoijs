@@ -111,6 +111,10 @@ It is **not** a drop-in replacement for a dedicated, independently-audited sanit
 
 Never assign untrusted data to `innerHTML` yourself: that bypasses Zoijs (and this package) entirely.
 
+**Trusted Types.** `sanitize()` parses with `DOMParser`, which is a Trusted Types sink, and doesn't use a policy — so it fails on pages that enforce `require-trusted-types-for 'script'`. Don't enable that enforcement on pages that sanitize (yet).
+
+Deploying? See the [production security checklist](../framework/docs/production-security.md#9-sanitize-untrusted-html) — it covers sanitized content alongside CSP, `serialize()`, and DOM clobbering.
+
 ## License
 
 [MIT](LICENSE) © Zoijs contributors
