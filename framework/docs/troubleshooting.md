@@ -41,6 +41,10 @@ each(() => todos.get(), (t, i) => i, …);   // ❌ index breaks on reorder
 
 That's the symptom of nodes being recreated. Make sure you key by a stable id (above) and that unchanged items keep their object reference when you update the array. See [Lists](concepts/lists.md).
 
+## "My component's setup runs again and it loses its state"
+
+You probably call it inside a live binding: `${() => show.get() ? Panel() : null}`. `Panel()` then runs as part of the condition, so any state it reads during setup re-runs the condition and rebuilds it. Return it uncalled instead — `${() => show.get() ? Panel : null}` (or `() => Panel(props)`). See [FAQ: showing a component conditionally](faq.md#showing-a-component-conditionally).
+
 ## "I get a thrown template error"
 
 Zoijs refuses to silently corrupt output. These throw with a clear message:

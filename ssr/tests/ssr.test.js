@@ -210,3 +210,16 @@ test("<textarea> content binding coexists with a dynamic attribute", () => {
   const out = renderToString(() => html`<textarea rows=${3}>${"draft"}</textarea>`);
   assert.equal(out, '<textarea rows="3">draft</textarea>');
 });
+
+// CORE-1: a binding may return a component uncalled; the server constructs it once,
+// exactly like the client renderer (one level only).
+test("renders a component returned uncalled from a binding", () => {
+  const show = createState(true);
+  const Child = () => html`<p>child</p>`;
+  const Props = ({ id }) => html`<p>#${id}</p>`;
+  assert.equal(renderToString(() => html`<div>${() => (show.get() ? Child : null)}</div>`), "<div><p>child</p></div>");
+  assert.equal(renderToString(() => html`<div>${() => (show.get() ? () => Props({ id: 7 }) : null)}</div>`), "<div><p>#7</p></div>");
+  show.set(false);
+  assert.equal(renderToString(() => html`<div>${() => (show.get() ? Child : null)}</div>`), "<div></div>");
+  assert.equal(renderToString(() => html`<div>${() => () => "text"}</div>`), "<div>text</div>");
+});
