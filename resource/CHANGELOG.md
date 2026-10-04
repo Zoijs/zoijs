@@ -2,6 +2,13 @@
 
 All notable changes to `@zoijs/resource` are documented here.
 
+## Unreleased
+
+### Release blocker
+- This version imports `@zoijs/core/internal` (onError reporting, CORE-3), which first ships in the
+  next core release. Its `@zoijs/core` peer floor must be raised to that version before release;
+  `npm run release:check` blocks the release until then (SEC-7).
+
 ## 0.2.0 — 2026-06-27
 
 ### Added

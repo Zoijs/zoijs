@@ -32,10 +32,12 @@ their own — you set them when a page renders. That's all this package does.
 npm install @zoijs/core @zoijs/head
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/head" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { title, description } from "https://esm.sh/@zoijs/head@0.1";
+import { title, description } from "@zoijs/head";
 ```
 
 ## Setting a title

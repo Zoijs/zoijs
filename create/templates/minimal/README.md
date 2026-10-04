@@ -16,13 +16,15 @@ Then open <http://localhost:7310>.
 
 ## Deploy
 
-Swap the import map URL in `index.html` for the production entry —
-`https://esm.sh/@zoijs/core@1/prod` — so development warnings and the devtools hook are off.
+In `index.html`, point `"@zoijs/core"` at the production entry —
+`{{ZOIJS_CORE_CDN}}prod.js` (its integrity hash is already in the map) — so
+development warnings and the devtools hook are off. Keep the exact version; to upgrade,
+change it deliberately and update every URL and integrity hash together.
 
 ## What's here
 
-- `index.html` — loads `@zoijs/core` from a CDN (pinned to the `v1` major) and
-  mounts `app.js`.
+- `index.html` — loads `@zoijs/core` {{ZOIJS_CORE_VERSION}} from jsDelivr (that exact version,
+  integrity-checked) and mounts `app.js`.
 - `app.js` — a counter: state, markup, and one `mount` call.
 
 That's the whole project. Edit `app.js` and reload — there is nothing to build.

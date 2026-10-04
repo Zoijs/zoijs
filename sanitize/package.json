@@ -44,7 +44,7 @@
     "no-jsx"
   ],
   "peerDependencies": {
-    "@zoijs/core": "^1.0.0"
+    "@zoijs/core": "^1.5.0"
   },
   "scripts": {
     "test": "node --test --import ./tests/setup-dom.js",

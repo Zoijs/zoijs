@@ -67,13 +67,15 @@ Or add the core package to an existing project:
 npm install @zoijs/core
 ```
 
-Or with zero install, straight from a CDN:
+Or with zero install, from a CDN — pinned to an exact version with an integrity hash for every
+module file, via an import map (copy it from the
+[Installation guide](framework/docs/installation.md#from-a-cdn)), then:
 
 ```js
-import { html, mount, createState } from "https://esm.sh/@zoijs/core@1";
+import { html, mount, createState } from "@zoijs/core";
 ```
 
-See the [Installation guide](framework/docs/installation.md) for import-map and vendoring options.
+The [Installation guide](framework/docs/installation.md) also covers npm + import maps and vendoring.
 
 ## The one rule to learn
 

@@ -25,10 +25,12 @@ You can learn the whole thing in about 2 minutes — it's `createState` that rem
 npm install @zoijs/core @zoijs/storage
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/storage" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { storage } from "https://esm.sh/@zoijs/storage@0.1";
+import { storage } from "@zoijs/storage";
 ```
 
 ## What `storage()` does

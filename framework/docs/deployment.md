@@ -27,16 +27,18 @@ transpiler, no server runtime.
 Browsers run ES modules natively, so your `<script type="module">` loads `app.js`
 directly. You get the framework one of two ways:
 
-- **From a CDN** (simplest): import from a versioned URL.
-  ```js
-  import { html, mount } from "https://esm.sh/@zoijs/core@1";
-  ```
-- **Vendored** (most control): copy the package's `src/` into your project and
-  point an [import map](installation.md) at the local files. Nothing is fetched
-  at runtime from a third party.
+- **From a CDN** (simplest): an import map pointing at **exact-version** jsDelivr file
+  URLs, with an integrity hash for every module file — see
+  [Installation → From a CDN](installation.md#from-a-cdn). Your CSP must then allow the
+  CDN: `script-src 'self' https://cdn.jsdelivr.net`.
+- **Vendored** (most control): copy the `src/` of an exact released version (from the
+  published package) into your project and point an [import map](installation.md) at the
+  local files. Nothing is fetched at runtime from a third party, so a strict
+  `script-src 'self'` works.
 
-> **Production tip:** always pin a version (`@zoijs/core@1`) or vendor the files.
-> Never ship `@latest` to users — a surprise major version could break your app.
+> **Production tip:** pin an exact version (`@1.8.0`, not `@1` or `@latest`) with integrity
+> hashes, or vendor the files. A CDN URL that floats can change what your users run without
+> a deploy — and a build service that rewrites modules can't be integrity-pinned at all.
 
 ## Deploying a static app (the easy case)
 

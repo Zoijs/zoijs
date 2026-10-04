@@ -190,7 +190,7 @@ test("scaffold(minimal) is two flat files using the CDN, no install", () => {
   assert.ok(fs.existsSync(path.join(dir, "app.js"))); // flat — no src/ folder
   assert.ok(!fs.existsSync(path.join(dir, "package.json"))); // no install needed
   assert.ok(!fs.existsSync(path.join(dir, "dev-server.mjs")));
-  assert.match(read(dir, "index.html"), /esm\.sh\/@zoijs\/core@1/); // CDN, major-pinned
+  assert.match(read(dir, "index.html"), /cdn\.jsdelivr\.net\/npm\/@zoijs\/core@\d+\.\d+\.\d+\/src\/index\.js/); // CDN, exact version
   assert.match(read(dir, "index.html"), /<title>Tiny<\/title>/);
 });
 

@@ -5,6 +5,12 @@ All notable changes to `create-zoijs` are documented here.
 ## Unreleased
 
 ### Security
+- **Generated apps pin `@zoijs/core` exactly and securely (SEC-7).** Templates allowed `^1.1.0` /
+  `^1.2.0` (older than the 1.7.0 URL-guard fixes), and the `minimal` template loaded a floating
+  `esm.sh/@zoijs/core@1` URL with no integrity check. Every template now takes its core version from
+  one file, `core-cdn.json` (an exact, published version plus a jsDelivr import map with a sha384
+  integrity hash for every module file, generated from the npm tarball and verified at release):
+  package templates get `^<that version>`, and `minimal` gets the exact, integrity-pinned import map.
 - **Hardened the scaffolded dev server (SEC-6)** (templates `app`, `basic`, `typescript`).
   It listened on every network interface, served dotfiles (`/.env`, `/.git/config`, `.npmrc`)
   and followed symlinks out of the project to anyone on the LAN, and a malformed URL such as

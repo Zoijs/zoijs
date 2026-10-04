@@ -27,9 +27,9 @@ links**. This recipe takes care of both.
 - A **GitHub repository** for your app (it can be just the app's files).
 - **GitHub Pages** available (free on public repos).
 - The `@zoijs/*` packages reachable from the browser, via either:
-  - a **CDN** (simplest) — all packages are published on npm, so
-    `https://esm.sh/@zoijs/core@1`, `https://esm.sh/@zoijs/router@0.2`, etc. work
-    out of the box; or
+  - a **CDN** (simplest) — every package is published on npm, so jsDelivr serves its
+    exact files (`https://cdn.jsdelivr.net/npm/@zoijs/<name>@<exact version>/…`), pinned
+    with integrity hashes (step 5); or
   - **vendored source** — copy each package's `src/` into your repo and point the
     import map at the local files (zero runtime dependencies; see step 5's note).
 
@@ -71,29 +71,34 @@ docs/
   style.css
 ```
 
-In `docs/index.html`, map the package names to the CDN (pinned versions):
+In `docs/index.html`, map the package names to **exact-version** jsDelivr file URLs, with an
+integrity hash for every module file. Generate the map for the exact versions you deploy
+(from a checkout of the Zoijs repo) and paste its output into `<script type="importmap">`:
 
-```html
-<script type="importmap">
-  {
-    "imports": {
-      "@zoijs/core": "https://esm.sh/@zoijs/core@1/prod",
-      "@zoijs/router": "https://esm.sh/@zoijs/router@0.2",
-      "@zoijs/resource": "https://esm.sh/@zoijs/resource@0.1",
-      "@zoijs/action": "https://esm.sh/@zoijs/action@0.1",
-      "@zoijs/head": "https://esm.sh/@zoijs/head@0.1"
-    }
-  }
-</script>
+```bash
+node scripts/cdn-importmap.mjs --prod @zoijs/core@<version> @zoijs/router@<version> \
+  @zoijs/resource@<version> @zoijs/action@<version> @zoijs/head@<version>
 ```
 
-`@zoijs/core@1/prod` is the production entry: same API, development warnings and the
-devtools hook off. The other packages import `@zoijs/core` by name, so they share it.
+The result has this shape (one `integrity` entry per module file):
+
+```text
+{
+  "imports":   { "@zoijs/core": "https://cdn.jsdelivr.net/npm/@zoijs/core@<version>/src/prod.js", "@zoijs/router": "…", … },
+  "integrity": { "<every module URL above and below them>": "sha384-<hash of that exact file>", … }
+}
+```
+
+`--prod` maps `@zoijs/core` to its production entry (development warnings and the devtools
+hook off; it needs a core release that includes `src/prod.js`). The other packages import
+`@zoijs/core` by name, so they share it. With a CDN, your CSP must allow it:
+`script-src 'self' https://cdn.jsdelivr.net` — or vendor (below) to keep `'self'` only.
 
 Use **relative** paths for your own assets (`./app.js`, `./style.css`) — an
 absolute `/style.css` would point at the domain root, not your sub-path.
 
-> **Want zero runtime dependencies?** Vendor instead: copy `framework/src` into
+> **Want zero runtime dependencies (and a strict `script-src 'self'`)?** Vendor instead:
+> from the published packages of the exact versions you deploy (`npm pack @zoijs/core@<version>`), copy core's `src` into
 > `docs/zoijs/core/`, and each single-file package (`router`, `resource`,
 > `action`, `head`) into `docs/zoijs/`, then map
 > `"@zoijs/core": "./zoijs/core/prod.js"`, `"@zoijs/router": "./zoijs/router.js"`,

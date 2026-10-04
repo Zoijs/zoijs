@@ -25,11 +25,13 @@ You can learn the whole thing in about 10 minutes.
 npm install @zoijs/core @zoijs/router
 ```
 
-Or with no install, straight from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/router" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
+import { html, mount } from "@zoijs/core";
+import { createRouter } from "@zoijs/router";
 ```
 
 ## The whole idea
