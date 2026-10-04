@@ -29,7 +29,9 @@ const SRC = join(root, "framework", "src");
 // NOT permission for uncontrolled core growth. Because this gate measures the published,
 // commented SOURCE, PERF-2's minified distribution build is meant to replace it with two
 // budgets: one for the production/minified output and one for source/module delivery.
-const BUDGET_GZIP = 21 * 1024; // 21 KB (21,504 B) — temporary Phase 1 source budget, see above
+// Raised to 22.5 KB (2026-10-04) for SEC-4 (production entry) + CORE-3 (onError):
+// ~21.96 KB now (~300 B of CORE-3 is code), leaving room for the remaining Phase 1 items.
+const BUDGET_GZIP = 22.5 * 1024; // 22.5 KB (23,040 B) — temporary Phase 1 source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They

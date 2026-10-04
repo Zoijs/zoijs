@@ -12,7 +12,7 @@
 // Cleanup is owned: render() creates an owner scope; every effect, listener, and
 // nested render registers into it, so disposing the owner tears everything down.
 
-import { effect, untrack } from "../reactivity/effect.js";
+import { createEffect, untrack } from "../reactivity/effect.js";
 import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
@@ -21,6 +21,7 @@ import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } f
 import { isTemplateResult, isEachResult } from "./brand.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
+const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
 const noop = () => {};
 
 // A bound `style` STRING carrying one of these is a smell: CSS can exfiltrate data

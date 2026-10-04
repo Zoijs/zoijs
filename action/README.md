@@ -133,3 +133,9 @@ nothing more.
 ## License
 
 [MIT](LICENSE) © Zoijs contributors
+
+## Error monitoring
+
+A failure that becomes `error()` is also reported to the app's
+`configure({ onError })` hook from `@zoijs/core`, as `{ kind: "action" }` with the original
+error (superseded or post-unmount results are ignored, so they aren't reported).

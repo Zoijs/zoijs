@@ -114,7 +114,7 @@ import {
 - `createState(value)` — a reactive value (`get` / `set` / `peek`).
 - `computed(fn)` — a lazy, cached, **value-gated** derived value (`get` / `peek`).
 - `effect(fn)` — a side effect that re-runs when a value it reads changes; returns `{ dispose }` and may return a per-run cleanup.
-- `configure({ dev })` — toggle development mode (warnings, devtools hook). Starts `true` on `@zoijs/core`, `false` on the production entry `@zoijs/core/prod`.
+- `configure({ dev, onError })` — toggle development mode (warnings, devtools hook; starts `true` on `@zoijs/core`, `false` on the production entry `@zoijs/core/prod`), and observe contained errors with `onError(error, { kind })`.
 - `onCleanup(fn)` — register teardown for a component or list item (timers, subscriptions).
 
 Plus the **`ref`** binding (`html\`<input ref=${(el) => el.focus()} />\``) — no export; it's a template

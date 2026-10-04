@@ -21,6 +21,7 @@
 // unchanged.
 
 import { createState, onCleanup } from "@zoijs/core";
+import { reportError } from "@zoijs/core/internal";
 
 /**
  * Wrap an async fetcher in reactive loading / data / error state.
@@ -56,13 +57,20 @@ export function resource(fetcher, options) {
     try {
       promise = Promise.resolve(fetcher());
     } catch (err) {
-      settle(id, () => error.set(err)); // fetcher threw synchronously
+      settle(id, () => fail(err)); // fetcher threw synchronously
       return;
     }
     promise.then(
       (value) => settle(id, () => data.set(value)),
-      (err) => settle(id, () => error.set(err))
+      (err) => settle(id, () => fail(err))
     );
+  };
+
+  // A failure that becomes this resource's error state is also reported to
+  // configure({ onError }). Stale/superseded/disposed results are ignored, so not reported.
+  const fail = (err) => {
+    error.set(err);
+    reportError(err, { kind: "resource" });
   };
 
   // Ignore results from disposed resources or from a load that has been

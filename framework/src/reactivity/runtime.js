@@ -5,7 +5,7 @@ const P = 1;
 const PRE = "zoijs.runtime@";
 const KEY = Symbol.for(PRE + P);
 const g = globalThis;
-const make = () => ({ protocol: P, observer: null, owner: null, queue: new Set(), scheduled: false, dev: true, inspector: null });
+const make = () => ({ protocol: P, observer: null, owner: null, queue: new Set(), scheduled: false, dev: true, inspector: null, onError: null, reporting: false });
 
 let rt = g[KEY];
 const created = !rt || rt.protocol !== P;

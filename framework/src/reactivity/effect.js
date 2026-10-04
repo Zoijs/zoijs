@@ -4,4 +4,4 @@
 //
 // Implemented by the shared reactive core (see core.js).
 
-export { effect, untrack } from "./core.js";
+export { effect, createEffect, untrack } from "./core.js";

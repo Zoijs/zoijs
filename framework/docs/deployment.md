@@ -237,6 +237,7 @@ silently run stale framework code. Two safe options:
    map in `script-src`, and don't ship `modulepreload` **and** an import map together (see above).
 5. Serving vendored `@zoijs/*` as **`immutable`**? **Content-hash the URL** so re-vendoring busts caches.
 6. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
+   Want failures in your monitoring? Add `configure({ onError })` (works in production).
 7. Upload the folder. Done.
 
 ## What you do *not* need
