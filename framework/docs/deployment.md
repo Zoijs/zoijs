@@ -53,6 +53,12 @@ devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` 
 on a CDN) in your import map. Bundlers' production builds select it automatically.
 See [Production mode](concepts/production-mode.md).
 
+## Security headers
+
+Send a Content-Security-Policy and a few other headers from your host. The canonical policy
+and copy-paste `_headers` / `vercel.json` / nginx / Apache recipes (plus what GitHub Pages
+can't do) are in the [production security checklist](production-security.md#17-set-and-verify-deployment-headers).
+
 ## History-mode routing needs an `index.html` fallback
 
 The router uses the History API, so navigating to `/tasks/1` **in the app** never
@@ -238,9 +244,11 @@ silently run stale framework code. Two safe options:
 4. Running a **strict CSP**? Add `.zoijs-router-outlet { display: contents }`, hash the inline import
    map in `script-src`, and don't ship `modulepreload` **and** an import map together (see above).
 5. Serving vendored `@zoijs/*` as **`immutable`**? **Content-hash the URL** so re-vendoring busts caches.
-6. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
+6. Sending **security headers**? Use the [production security checklist](production-security.md)
+   and verify the live response with `curl -sI`.
+7. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
    Want failures in your monitoring? Add `configure({ onError })` (works in production).
-7. Upload the folder. Done.
+8. Upload the folder. Done.
 
 ## What you do *not* need
 

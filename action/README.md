@@ -130,6 +130,15 @@ By design, to stay tiny: no form library, validation, mutation cache, query
 invalidation, optimistic updates, retries, or SSR. It's the button-state helper,
 nothing more.
 
+## Security: cookies, CSRF, and credentials
+
+`action` runs your function — it adds no credentials, headers, or CSRF tokens of its own,
+and it doesn't replace server-side protection. If your API uses cookies, the server must
+protect state-changing requests against CSRF; use `credentials: "include"` only for an
+intended cross-origin API whose CORS allows your exact origin; and enforce authorization
+on the server. See [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) and
+[credentials](https://zoijs.dev/production-security#6-configure-credentials-deliberately) in the production security checklist.
+
 ## License
 
 [MIT](LICENSE) © Zoijs contributors

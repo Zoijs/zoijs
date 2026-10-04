@@ -134,6 +134,11 @@ By design, to stay tiny: no global store, no provider/context, no cross-tab sync
 no TTL/expiration, no encryption, no `sessionStorage`/IndexedDB, no custom
 serializers, and no schema validation. It's the 90%-case persistence helper.
 
+**Not for secrets.** `localStorage` is readable by every script on your origin, so an
+XSS bug anywhere exposes it. Store preferences, drafts, and UI state — never passwords,
+API keys, or session tokens (prefer server-set `HttpOnly` cookies for sessions). See
+[secrets](https://zoijs.dev/production-security#13-keep-secrets-off-the-client) in the production security checklist.
+
 ## License
 
 [MIT](LICENSE) © Zoijs contributors

@@ -146,7 +146,7 @@ Start at **[zoijs.dev](https://zoijs.dev)** — or browse the docs in this repo:
 
 - [Installation](framework/docs/installation.md) · [Your First App](framework/docs/first-app.md) · [Core Concepts](framework/docs/concepts/core-concepts.md)
 - Concepts: [State](framework/docs/concepts/state.md) · [Computed](framework/docs/concepts/computed.md) · [Bindings](framework/docs/concepts/bindings.md) · [Events](framework/docs/concepts/events.md) · [Lists](framework/docs/concepts/lists.md) · [Cleanup](framework/docs/concepts/cleanup.md)
-- [Tutorials](framework/docs/README.md#tutorials-build-something) · [API Reference](framework/docs/api-reference.md) · [Security](framework/docs/security.md) · [Troubleshooting](framework/docs/troubleshooting.md) · [FAQ](framework/docs/faq.md)
+- [Tutorials](framework/docs/README.md#tutorials-build-something) · [API Reference](framework/docs/api-reference.md) · [Security](framework/docs/security.md) · [Production security checklist](framework/docs/production-security.md) · [Troubleshooting](framework/docs/troubleshooting.md) · [FAQ](framework/docs/faq.md)
 - Going to production: [Ecosystem guide](framework/docs/ecosystem.md) · [Deployment](framework/docs/deployment.md) · [Deploy to GitHub Pages (recipe)](framework/docs/recipes/deploy-task-board-github-pages.md) · [Task Board example](examples/task-board)
 - Coming from another framework? [React](framework/docs/migration/from-react.md) · [Vue](framework/docs/migration/from-vue.md) · [Solid](framework/docs/migration/from-solid.md) · [Lit](framework/docs/migration/from-lit.md) · [vanilla JS](framework/docs/migration/from-vanilla.md)
 
@@ -294,7 +294,7 @@ npm run test:browser # all Playwright suites + the Task Board demo
 
 ## Security
 
-Zoijs is secure by default. To report a vulnerability, please follow the [Security Policy](framework/SECURITY.md) (do not open public issues for vulnerabilities).
+Zoijs is secure by default — see the [security model](framework/docs/security.md), and before deploying, the [production security checklist](framework/docs/production-security.md). To report a vulnerability, please follow the [Security Policy](framework/SECURITY.md) (do not open public issues for vulnerabilities).
 
 ## License
 

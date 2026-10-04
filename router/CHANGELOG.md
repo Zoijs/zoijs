@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## Unreleased
+
+### Documentation
+- **Route params are documented as untrusted data (SEC-11).** Params are decoded per segment, so an
+  encoded slash survives (`/files/..%2Fadmin` → `params.name === "../admin"`); validate and encode them
+  before using them in paths, URLs, or permission checks, and authorize on the server. A test pins
+  the documented decoding. No behavior change.
+
 ## 0.5.0 — 2026-08-06
 
 ### Changed

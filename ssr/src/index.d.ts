@@ -38,7 +38,11 @@ export function hydrate(component: Component, target: Element | string): () => v
  * doesn't refetch:
  *
  * ```js
- * `<script>window.__DATA__ = ${serialize(data)}</script>`
+ * `<script type="application/json" id="app-data">${serialize(data)}</script>`
+ * // client: JSON.parse(document.getElementById("app-data").textContent)
  * ```
+ *
+ * Only for a `<script>` element's body — quotes are NOT escaped, so never place the
+ * output in an HTML attribute, raw HTML, a URL, or a `<style>` block.
  */
 export function serialize(value: unknown): string;

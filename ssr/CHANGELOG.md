@@ -4,6 +4,12 @@ All notable changes to `@zoijs/ssr` are documented here.
 
 ## Unreleased
 
+### Documentation
+- **`serialize()` placement is now explicit (SEC-11).** Its output belongs in a `<script>` body only —
+  quotes aren't escaped, so never in an attribute, raw HTML, a URL, or `<style>`. The README now leads
+  with a `<script type="application/json">` data block (no CSP allowance needed) and notes that the
+  executable `window.__DATA__ = …` form needs a per-request nonce under a strict CSP. No behavior change.
+
 ### Fixed
 - **Peer range now `@zoijs/core ^1.7.0` (was `^1.6.0`) (SEC-7).** ssr imports `styleObjectToCss` from
   `@zoijs/core/server`, which first shipped in core 1.7.0 — under 1.6.0 the module failed to link.

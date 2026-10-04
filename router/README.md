@@ -148,6 +148,15 @@ function UserPage(params) {
 
 Params are always strings (convert with `Number(params.id)` if you need a number).
 
+**Params are untrusted data.** They come from the URL, are decoded with
+`decodeURIComponent` after the path is split into segments, and an encoded slash
+survives decoding: with `"/files/:name"`, the URL `/files/..%2Fadmin` gives
+`params.name === "../admin"`. Rendering a param is safe (it's text); before using one
+in an API path, filesystem path, redirect, or permission check, validate it against
+the format you expect and `encodeURIComponent` it when building URLs. The server must
+authorize every request — a client-side route check is not access control. See
+[route params](https://zoijs.dev/production-security#11-treat-router-parameters-as-data) in the production security checklist.
+
 ## Navigation from code
 
 ```js
@@ -165,7 +174,8 @@ router.query(); // → { q: "hello", page: "2" }
 ```
 
 `query()` is reactive — read it inside a binding (`${() => router.query().q}`)
-and it updates when the URL changes.
+and it updates when the URL changes. Query values are decoded, attacker-controlled
+strings — treat them like params.
 
 ## Hosting under a sub-path (`base`)
 

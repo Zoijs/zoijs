@@ -58,7 +58,7 @@ mode, later copies join it, and `configure()` from any copy applies to all of th
 
 ## Recommendation
 
-Develop on `@zoijs/core` (the warnings catch real bugs early) and deploy with `@zoijs/core/prod` — or let your bundler's production build pick it for you.
+Develop on `@zoijs/core` (the warnings catch real bugs early) and deploy with `@zoijs/core/prod` — or let your bundler's production build pick it for you. Production mode is one item on the [production security checklist](../production-security.md); go through the rest before you ship.
 
 ---
 

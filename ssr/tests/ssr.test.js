@@ -193,6 +193,17 @@ test("serialize embeds into a <script> that evaluates to the original data", () 
   assert.deepEqual(sandbox.__DATA__, data);
 });
 
+// SEC-11: the documented placement contract — a <script> body only (JSON data block or
+// executable script). Quotes are deliberately NOT escaped, which is why the docs forbid
+// attributes/URLs/style; if this ever changes, update docs/production-security.md §8.
+test("SEC-11: serialize output is a valid JSON data-block body and never closes the script", () => {
+  const data = { a: "</SCRIPT><!-- x --></script >", b: "<script>", q: `"'`, sep: LS + PS };
+  const out = serialize(data);
+  assert.ok(!/<\/script/i.test(out) && !out.includes("<!--"), "can't close the element or open a comment");
+  assert.deepEqual(JSON.parse(out), data, "a type=application/json block parses back with JSON.parse");
+  assert.ok(out.includes('"'), "quotes are not escaped: not attribute-safe (as documented)");
+});
+
 // ---- raw-text content binding (<textarea>/<title>) ---------------------------
 
 test("renders <textarea> sole ${} as escaped element content", () => {

@@ -4,6 +4,11 @@ All notable changes to `@zoijs/sanitize` are documented here.
 
 ## Unreleased
 
+### Documentation
+- **Trusted Types limitation documented (SEC-11).** `sanitize()` parses with `DOMParser` (a Trusted
+  Types sink) without a policy, so it fails on pages enforcing `require-trusted-types-for 'script'`.
+  The README now says so and links to the production security checklist.
+
 ### Security
 - **Sanitized content can no longer clobber page globals (SEC-8).** `id` and `name` survived
   sanitization, and browsers expose both as named properties — so `<a id="__DATA__" name="config">`

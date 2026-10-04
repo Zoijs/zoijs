@@ -2,6 +2,9 @@
 
 Zoijs is **secure by default**. The safe path is the only path you'll normally use — you have to go out of your way to do something dangerous, and several dangerous things are simply blocked.
 
+This page explains the rendering model. To deploy, use the
+[production security checklist](production-security.md).
+
 ## Threat model
 
 Untrusted data (user input, API responses, URL params, stored content) flows into your templates. The goal: that data can **never** become executable script, markup, an event handler, or a dangerous URL.
@@ -118,11 +121,19 @@ Zoijs is friendly to a strict Content Security Policy:
   Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs;
   ```
 
-A recommended baseline:
+  Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe. Two
+  current limits: `@zoijs/sanitize` parses with `DOMParser` without a policy, so it fails under
+  enforcement; and a second loaded copy of the core can't create another `zoijs` policy (load
+  one copy, or add `'allow-duplicates'`).
 
-```
-Content-Security-Policy: default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs;
-```
+Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
+hash, or a nonce) and, if your templates use `style` attributes, `style-src-attr 'unsafe-inline'`
+(a `style=${…}` binding is applied as an attribute).
+
+**The full production policy** — `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`,
+`frame-ancestors 'none'`, the self-hosted vs CDN differences, and copy-paste headers for
+Netlify, Cloudflare Pages, Vercel, nginx, Apache, and GitHub Pages — is in the
+[production security checklist](production-security.md#4-set-a-strict-content-security-policy).
 
 ## Enforcement (CI gates)
 
@@ -147,3 +158,4 @@ A change that weakens any of these fails the build.
 - `on*` and `srcdoc` attributes are blocked from data; dynamic tag/attribute *names* throw.
 - No `eval`, no Virtual DOM, no raw-HTML API. CSP- and Trusted-Types-friendly.
 - The one rule that keeps you safe: **let Zoijs render your data — never hand untrusted data to `innerHTML` yourself.**
+- Deploying? Go through the [production security checklist](production-security.md) — CSP and headers, CSRF, credentials, `serialize()`, route params, secrets, and monitoring.

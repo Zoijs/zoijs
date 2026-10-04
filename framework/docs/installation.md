@@ -62,7 +62,8 @@ openssl dgst -sha384 -binary package/src/index.js | openssl base64 -A   # → sh
 
 **Content Security Policy.** Loading from a CDN means your CSP must allow it:
 `script-src 'self' https://cdn.jsdelivr.net` (plus the import map's hash for the inline map).
-For a strict `script-src 'self'`, vendor the files instead (below).
+For a strict `script-src 'self'`, vendor the files instead (below). The full policy and host
+header recipes are in the [production security checklist](production-security.md#cdn-vs-self-hosted).
 
 ## npm + import map
 

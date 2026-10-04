@@ -72,27 +72,40 @@ visible change and no flash**. It returns an `unmount()`, like `mount`.
 `renderToString` is synchronous, so a [`@zoijs/resource`](https://zoijs.dev/resource)
 renders its loading state on the server. To skip the client-side refetch (and the
 flash), render with the data you already fetched, then hand it to the client with
-**`serialize`** — a JSON serializer that is safe to embed in a `<script>` (it escapes
-`<`, `>`, `&`, and the U+2028/U+2029 line terminators, so a `</script>` in your data
+**`serialize`** — a JSON serializer whose output is safe inside a `<script>` element (it
+escapes `<`, `>`, `&`, and the U+2028/U+2029 line terminators, so a `</script>` in your data
 can't break out):
 
 ```js
 import { renderToString, serialize } from "@zoijs/ssr";
 
-// server: fetch, render with the value, embed it
+// server: fetch, render with the value, embed it in a JSON data block
 const data = { user: await getUser() };
 const body = renderToString(() => App(data), { hydratable: true });
-res.end(`<div id="app">${body}</div>
-  <script>window.__DATA__ = ${serialize(data)}</script>
+res.end(`<script type="application/json" id="app-data">${serialize(data)}</script>
+  <div id="app">${body}</div>
   <script type="module" src="/client.js"></script>`);
 ```
 
 ```js
-// client: seed the resource — it starts settled and does NOT refetch
+// client: read it, then seed the resource — it starts settled and does NOT refetch
 import { resource } from "@zoijs/resource";
+const data = JSON.parse(document.getElementById("app-data").textContent);
 const user = resource(() => fetch("/api/user").then((r) => r.json()),
-                      { initial: window.__DATA__.user });
+                      { initial: data.user });
 ```
+
+**Where the output may go.** `serialize()` output is for the body of a `<script>` element,
+as above. It escapes `<`, `>`, `&`, U+2028 and U+2029 — not quotes — so do not move the
+string into HTML attributes, raw HTML, URLs, `<style>` blocks, or any other context.
+
+A `type="application/json"` block isn't executed, so it needs nothing from a strict
+Content-Security-Policy. The executable form — `<script>window.__DATA__ = ${serialize(data)}</script>` —
+is equally safe to embed, but as an inline script it needs a per-request CSP nonce. Put the
+data block before any user content: `@zoijs/sanitize` already namespaces ids in sanitized
+content (so it can't claim `app-data` or `__DATA__`), but that complements safe serialization
+rather than replacing it. See [`serialize()`](https://zoijs.dev/production-security#8-embed-serialize-output-only-in-a-script-body)
+in the production security checklist.
 
 Because the server rendered with the same value the client seeds with, the markup
 matches and hydration is seamless. (Wiring this per-request automatically — loaders —
