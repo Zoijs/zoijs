@@ -48,6 +48,16 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **Hardened release supply chain (SEC-5).** Every package (all 14) now publishes only from CI,
+  only when a `<package>-v<version>` tag on `main` is pushed, after the full CI suite passes — no
+  more laptop publishing. Publishing uses npm Trusted Publishing (OIDC) from a protected
+  `npm-release` environment, so there is no long-lived `NPM_TOKEN`, and every package gets npm
+  provenance. Workflows default to `contents: read` (only the publish job can mint an OIDC token);
+  third-party actions are pinned to commit SHAs and the Playwright image to a digest, kept current
+  by Dependabot; CI installs with `npm ci --ignore-scripts` from the committed lockfiles. A new
+  `scripts/release-check.mjs` verifies tag ↔ version, no lifecycle scripts, clean tarball contents,
+  and that a package's `@zoijs/core` peer floor provides every core subpath it imports. Maintainer
+  setup (npm trusted publishers, environment protection) is in `docs/releasing.md`.
 - **`html` now only compiles tagged-template literals (SEC-2).** Calling it as a function —
   `html(["<img src=x onerror=alert(1)>"])` — compiled the array as markup: a hidden `innerHTML` that
   also passed the `zoijs` Trusted Types policy, on the client and under `@zoijs/ssr`. `html` now requires

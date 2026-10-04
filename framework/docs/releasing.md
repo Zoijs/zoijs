@@ -1,26 +1,80 @@
 # Releasing
 
-How to cut a release across the Zoijs packages. Short version: **the core publishes
-itself on push; everything else is a manual `npm publish`; then sync the docs-site CDN
-pins.**
+How to cut a release of any Zoijs package. Short version: **bump the version, merge to
+`main`, push a `<package>-v<version>` tag — CI tests and publishes it. Nobody publishes
+from a laptop.** Then sync the docs-site CDN pins.
 
-## How each package publishes
+## How a package is published
 
-- **`@zoijs/core`** — *automatic*. Pushing a change under `framework/**` to `main` runs
-  [`publish.yml`](../../.github/workflows/publish.yml): it runs the tests and publishes
-  **only if `framework/package.json`'s version is new** (npm versions are immutable, so an
-  un-bumped push is a safe no-op). To release the core: bump its version, push, done. CI
-  uses the `NPM_TOKEN` secret.
-- **Every other package** — *manual*. The optional packages, `create-zoijs`, and
-  `@zoijs/eslint-plugin` are published by hand from their own directory:
+Every one of the 14 packages (`core`, `router`, `resource`, `action`, `head`, `forms`,
+`storage`, `i18n`, `ssr`, `sanitize`, `testing`, `devtools`, `eslint-plugin`, `create`)
+publishes the same way, through [`publish.yml`](../../.github/workflows/publish.yml):
 
-  ```sh
-  cd <package> && npm publish --access public
-  ```
+1. **Bump** the package's `version`, update its `CHANGELOG.md`/README, and merge to `main`
+   through a reviewed pull request (CI must be green).
+2. **Tag** the merge commit with the package and version — the existing convention:
 
-  `--access public` is required (scoped `@zoijs/*` packages default to private). You run
-  these under your own `npm login` — the CI token only covers the core. **Never share or
-  paste an npm OTP/token into a tool or chat;** run the publish yourself.
+   ```sh
+   git tag core-v1.9.0        # router-v0.6.0, eslint-plugin-v0.4.0, create-v0.1.5, …
+   git push origin core-v1.9.0
+   ```
+
+3. **CI does the rest** — only a tag matching `*-v<digit>…` triggers it:
+   - the **full CI suite** (unit + types on Node 20/22/24, real browsers, tarball checks)
+     runs at the tagged commit — the same workflow pull requests run;
+   - **verify**: the tagged commit must be on `main`; `scripts/release-check.mjs` checks the
+     tag matches the package's `name`/`version`, that the package has no npm lifecycle
+     scripts, that its tarball has no tests/secrets/local config, and that the **lowest core
+     version its peer range allows exports every `@zoijs/core/*` subpath it imports**; and the
+     version must not already be on npm;
+   - **publish**: runs in the protected **`npm-release`** environment (a maintainer approves
+     it), with `npm publish --access public --provenance --ignore-scripts`.
+
+Branch pushes, pull requests (including from forks) and manual runs cannot publish. Run the
+same checks locally any time: `npm run release:check -- core-v1.9.0` (add `--offline` to
+skip the npm-registry checks) or `npm run release:check -- --all --offline`.
+
+## Security model
+
+- **No long-lived npm token.** Publishing uses **npm Trusted Publishing**: GitHub Actions
+  mints a short-lived OIDC identity for the publish job (`id-token: write` exists on that
+  one job only) and npm accepts it only from this repository, this workflow and the
+  `npm-release` environment. There is no `NPM_TOKEN` secret to steal.
+- **Provenance.** npm attaches a signed provenance statement (which repo, commit and
+  workflow built it) to every package published this way; it's shown on npmjs.com.
+- **Least privilege.** Every workflow defaults to `contents: read`; checkouts don't
+  persist credentials; no job uses `pull_request_target`.
+- **Immutable dependencies.** Actions are pinned to full commit SHAs (with a `# vX.Y.Z`
+  comment) and the Playwright image by `sha256` digest. Dependabot proposes action-pin
+  updates; bump the Playwright image tag + digest together with `@playwright/test`.
+- **Reproducible installs.** CI installs with `npm ci --ignore-scripts` (`npm run ci:all`):
+  exactly the committed lockfiles, and no dependency install scripts. (None are needed —
+  the only ones in the tree are `fsevents`, macOS-only, and `sharp` in the private,
+  never-installed `assets` package.) Publishing runs no scripts either.
+
+## One-time setup (outside the repository)
+
+These can't be configured from repository files; a maintainer does them once:
+
+1. **npm → each package → Settings → Trusted Publisher → GitHub Actions**: owner `Zoijs`,
+   repository `zoijs`, workflow `publish.yml`, environment `npm-release`. Do this for all
+   14 packages (all already exist on npm, so no first publish is needed).
+2. Then, per package, **Settings → Publishing access → "Require two-factor authentication
+   and disallow tokens"**, and **revoke the old `NPM_TOKEN`** automation token on npm and
+   delete the `NPM_TOKEN` repository secret on GitHub.
+3. **GitHub → Settings → Environments → `npm-release`**: required reviewer(s); deployment
+   branches/tags limited to tags matching `*-v*`; no secrets.
+4. **GitHub → Settings → Rules**: protect tags matching `*-v*` (only maintainers may create
+   or delete them) and keep `main` requiring review from Code Owners (`.github/` is owned).
+
+## Emergencies
+
+There is no supported laptop-publish path. If CI publishing is unavailable and a security
+fix can't wait: use a **granular, single-package, short-expiry** npm token created for that
+one publish, run `npm run ci:all && npm test && npm run release:check -- <tag>` on a clean
+checkout of the tagged commit, publish with `npm publish --access public --ignore-scripts`,
+then **revoke the token immediately** and note it in the CHANGELOG. (A laptop publish has no
+provenance.) Never share or paste an npm OTP/token into a tool or chat.
 
 ## Order
 
@@ -28,17 +82,17 @@ Each optional package only **peer-depends on `@zoijs/core`**, so they're indepen
 one another and can publish in any order. The single ordering rule:
 
 > If a package raises its **required core version**, publish `@zoijs/core` first so the new
-> peer range is satisfiable for installers.
+> peer range is satisfiable for installers. (The release check enforces this: it fails if
+> the floor of a package's core peer range isn't on npm yet, or lacks a subpath it imports.)
 
 (Today only `@zoijs/ssr` pins `^1.6.0`; core 1.6.0 is already live, so there's nothing to
 sequence.)
 
-## Before publishing
+## Before tagging
 
-- Root `npm test` is green — gates (supply-chain, doc-coverage, size) plus every package.
-  (CI runs this for the core.)
-- The package's `version`, `CHANGELOG.md`, and README are updated.
-- `npm publish --dry-run` to eyeball the tarball contents.
+- The package's `version`, `CHANGELOG.md`, and README are updated and merged to `main`.
+- Its `@zoijs/core` peer range starts at a core version that really has what it imports.
+- `npm run release:check -- <package>-v<version>` passes locally.
 
 ## After publishing: sync the docs site
 
@@ -64,38 +118,3 @@ Rules:
    deploy.
 4. Packages the site doesn't load at runtime — `@zoijs/ssr`, `@zoijs/testing`,
    `@zoijs/devtools`, `@zoijs/eslint-plugin`, `create-zoijs` — have **no pin to touch**.
-
-## Worked example
-
-A multi-package release (the state as of 2026-06-27):
-
-| Package | npm | publish | site pin |
-|---|---|---|---|
-| `@zoijs/core` | 1.6.0 | — (already live via CI) | `@1` ✓ no change |
-| `@zoijs/eslint-plugin` | — | **0.2.0 (first publish)** | n/a |
-| `@zoijs/head` | 0.1.0 | 0.1.1 | `@0.1` ✓ auto |
-| `@zoijs/resource` | 0.1.0 | 0.2.0 | `@0.1 → @0.2` (optional, after publish) |
-| `@zoijs/router` | 0.2.0 | 0.3.0 | `@0.2 → @0.3` (optional, after publish) |
-| `@zoijs/ssr` | 0.2.0 | 0.3.0 | n/a |
-| `create-zoijs` | 0.1.3 | 0.1.4 | n/a |
-
-1. **Push** this branch — CI re-runs the core's tests and skips its publish (1.6.0 already
-   on npm). No-op for the core, by design.
-2. **Publish the manual packages** (any order) — from the repo root, `npm publish <folder>`
-   packs that folder, so no `cd` is needed:
-
-   ```sh
-   npm publish ./eslint-plugin --access public
-   npm publish ./head          --access public
-   npm publish ./resource      --access public
-   npm publish ./router        --access public
-   npm publish ./ssr           --access public
-   npm publish ./create        --access public
-   ```
-
-   If npm prompts for a one-time password, append `--otp=<6-digit code>`. To avoid OTP
-   prompts entirely, put an **Automation** (or Granular) token in `~/.npmrc` as
-   `//registry.npmjs.org/:_authToken=<token>` — Automation tokens bypass 2FA. Preview any
-   of them first with `--dry-run` in place of `--access public`.
-3. **Sync the site**: bump `@zoijs/router@0.2 → @0.3` (and optionally `@zoijs/resource@0.1
-   → @0.2`) in `prerender.mjs`, `npm run build`, deploy. Everything else is in-range.
