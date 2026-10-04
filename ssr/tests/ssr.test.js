@@ -250,3 +250,33 @@ test("CORE-3: server render errors still escape to the caller and are not report
     configure({ onError: null });
   }
 });
+
+// ---- CORE-4: compiler edge cases render the same on the server ----------------------
+
+test("CORE-4: an unquoted binding before `/>` keeps its exact value on the server", () => {
+  const url = "/x.png";
+  assert.equal(renderToString(() => html`<img src=${url}/>`), '<img src="/x.png"/>');
+  assert.equal(renderToString(() => html`<img src=${url} />`), '<img src="/x.png"/>');
+  assert.equal(renderToString(() => html`<input value=${"v"}/>`), '<input value="v"/>');
+  assert.equal(renderToString(() => html`<a href=${"/a"}/${"b"}>x</a>`), '<a href="/a/b">x</a>', "a slash between holes is value text");
+});
+
+test("CORE-4: reserved sigils are refused under renderToString too (before any output)", () => {
+  for (const tpl of [() => html`<input .value=${"x"}>`, () => html`<b ?hidden=${true}></b>`, () => html`<b @click=${() => {}}></b>`]) {
+    assert.throws(() => renderToString(tpl), /Zoijs template: unsupported bound attribute/);
+  }
+});
+
+test("CORE-4: mixed-value character references are decoded once, then escaped as data", () => {
+  // Server output is HTML (re-escaped); a browser parsing it yields the same value the
+  // client sets with setAttribute: "Tom & Ann", "<a>", "é".
+  assert.equal(renderToString(() => html`<div title="Tom &amp; ${"Ann"}"></div>`), '<div title="Tom &amp; Ann"></div>');
+  assert.equal(renderToString(() => html`<div title="&lt;${"a"}&#x3E;"></div>`), '<div title="<a>"></div>');
+  assert.equal(renderToString(() => html`<div title="&eacute;${""}"></div>`), '<div title="é"></div>');
+  assert.equal(renderToString(() => html`<a href="/s?a=1&b=${"2"}">x</a>`), '<a href="/s?a=1&amp;b=2">x</a>');
+  assert.throws(() => renderToString(() => html`<div title="&hellip;${1}"></div>`), /unsupported character reference/);
+});
+
+test("CORE-4: the URL guard sees the decoded value on the server", () => {
+  assert.equal(renderToString(() => html`<a href="java&#115;cript:${"alert(1)"}">x</a>`), "<a>x</a>");
+});

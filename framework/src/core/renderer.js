@@ -31,6 +31,16 @@ const noop = () => {};
 const SUSPICIOUS_STYLE = /url\s*\(|expression\s*\(|\/\*|<\/style|javascript:/i;
 const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
 
+// Arrays / plain objects on ordinary attributes stringify to "a,b" / "[object Object]":
+// warn once per element in dev. Rendering is unchanged; URL, Date, … have real toStrings.
+const objWarned = styleWarned && new WeakSet();
+function warnStringified(el, name, v) {
+  if (isDev() && v && typeof v === "object" && (Array.isArray(v) || v.toString === Object.prototype.toString) && objWarned && !objWarned.has(el)) {
+    objWarned.add(el);
+    console.warn(`Zoijs: attribute "${name}" got an object/array, stringified as "${v}"`);
+  }
+}
+
 /**
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
  * @param {Element} [hydrateRoot]  when given, bind to this EXISTING server-rendered
@@ -165,7 +175,9 @@ function bindAttribute(el, attr, values) {
     let result = attr.strings[0];
     for (let i = 0; i < attr.holes.length; i++) {
       const hv = values[attr.holes[i]];
-      result += (typeof hv === "function" ? hv() : hv) + attr.strings[i + 1];
+      const v = typeof hv === "function" ? hv() : hv;
+      warnStringified(el, attr.name, v);
+      result += v + attr.strings[i + 1];
     }
     return result;
   };
@@ -528,7 +540,10 @@ function applyAttribute(el, name, value) {
   if (lname.startsWith("xlink:")) {
     // SVG namespaced attribute (e.g. xlink:href).
     if (value === false || value == null) el.removeAttributeNS(XLINK_NS, lname.slice(6));
-    else el.setAttributeNS(XLINK_NS, lname, toText(value));
+    else {
+      warnStringified(el, name, value);
+      el.setAttributeNS(XLINK_NS, lname, toText(value));
+    }
     return;
   }
   if (value === false || value == null) {
@@ -536,6 +551,7 @@ function applyAttribute(el, name, value) {
   } else if (value === true) {
     el.setAttribute(name, "");
   } else {
+    warnStringified(el, name, value);
     el.setAttribute(name, toText(value));
   }
 }

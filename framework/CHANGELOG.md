@@ -27,6 +27,23 @@ All notable changes to Zoijs are documented here. The format is based on
   development mode. Security and correctness checks are unaffected by the mode.
 
 ### Fixed
+- **Template-compiler edge cases (CORE-4).** Each now compiles correctly or fails while compiling
+  `html\`…\``, on the client and under `@zoijs/ssr`:
+  - `<img src=${url}/>` — the `/` of `/>` was appended to an unquoted binding (`"/x.png/"`; an
+    `onclick=${fn}/>` threw). It now self-closes the tag; slashes inside a value are kept.
+  - Lit-style `.prop=${…}`, `?attr=${…}` and `@event=${…}` (and other non-HTML names such as
+    `[x]=`) compiled, then threw `InvalidCharacterError` at render (`@click` silently *called* the
+    handler as a reactive getter; SSR emitted the bogus attribute). They are now refused at compile
+    time — in every mode, before any DOM or `<template>` work — with the supported form in the message.
+    An invalid template is never cached.
+  - Character references in the static text of a mixed attribute (`title="Tom &amp; ${name}"`) were
+    set literally (`Tom &amp;amp; Ann`). They are decoded at compile time as the HTML parser does
+    (numeric, `&amp; &lt; &gt; &quot; &apos;`, the Latin-1 names, and the no-`;` legacy rules);
+    references that can't be decoded exactly (`&hellip;`, `&#0;`, C1 `&#128;`) throw instead of
+    being guessed. URL checks see the decoded value.
+  - Development mode now warns (once per element) when an array or plain object is bound to an
+    ordinary attribute and becomes `"a,b"` / `"[object Object]"`. Rendering is unchanged; `style`
+    objects, refs, handlers, and values with their own `toString` (`URL`, `Date`) don't warn.
 - **Multiple copies of `@zoijs/core` on one page now share one reactive runtime (CORE-2).** The
   tracking context, owner scope, effect queue, dev flag and devtools inspector were per-module-copy,
   so a second copy (CDN + bundled, an import-map duplicate, a UI kit bundling its own core) silently
