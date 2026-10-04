@@ -7,18 +7,18 @@
 //   import { configure } from "@zoijs/core";
 //   configure({ dev: false }); // production
 
-let dev = true;
+import { runtime as rt } from "./runtime.js";
 
 /**
  * @param {{ dev?: boolean }} options
  */
 export function configure(options) {
   if (options && typeof options.dev === "boolean") {
-    dev = options.dev;
+    rt.dev = options.dev;
   }
 }
 
 /** @returns {boolean} true in development mode */
 export function isDev() {
-  return dev;
+  return rt.dev;
 }

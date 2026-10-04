@@ -68,6 +68,12 @@ Two `each` items returned the same key. Keys must be unique. (Warnings only show
 
 Zoijs contains the error so other bindings keep working, and logs it. Fix the throwing function; check the stack trace in the console.
 
+## "I see `ZJS201: incompatible copies of @zoijs/core`" / "two copies of Zoijs are loaded"
+
+Several **compatible** copies of `@zoijs/core` on one page (a CDN copy plus a bundled one, a component library that bundled its own core) are fine: every 1.x copy in the same JavaScript realm joins one shared reactive runtime, so state, effects, and cleanups work across them. They don't share across iframes or workers — each realm has its own.
+
+`ZJS201` (dev mode) means a copy speaking a **different runtime protocol** — in practice a different major version — is loaded too. Those copies can't share reactivity: state from one won't update bindings from the other. Load a single major version (dedupe your dependencies / import map). Library authors: declare `@zoijs/core` as a `peerDependency` and don't bundle it.
+
 ## "Warnings are noisy in production"
 
 Turn them off: `configure({ dev: false })` before `mount`. See [Production mode](concepts/production-mode.md).

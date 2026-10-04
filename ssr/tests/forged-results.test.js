@@ -128,3 +128,17 @@ test("templates from an independent copy of the core render on the server", asyn
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// SEC-2: html() called with an array is rejected on the server too — it never
+// compiles the array as markup, so no attacker HTML reaches the output.
+test("html() with an array throws instead of compiling markup on the server", () => {
+  const p = "<img src=x onerror=alert(1)>";
+  const withRaw = [p];
+  withRaw.raw = Object.freeze([p]);
+  for (const strings of [[p], Object.freeze(withRaw), JSON.parse(`["${p}"]`)]) {
+    let out = null;
+    assert.throws(() => { out = renderToString(() => html(strings)); }, /ZJS010/);
+    assert.equal(out, null, "no output produced");
+  }
+  assert.equal(renderToString(() => html`<p>${p}</p>`), "<p>&lt;img src=x onerror=alert(1)&gt;</p>");
+});

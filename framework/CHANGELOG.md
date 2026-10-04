@@ -7,6 +7,15 @@ All notable changes to Zoijs are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Multiple copies of `@zoijs/core` on one page now share one reactive runtime (CORE-2).** The
+  tracking context, owner scope, effect queue, dev flag and devtools inspector were per-module-copy,
+  so a second copy (CDN + bundled, an import-map duplicate, a UI kit bundling its own core) silently
+  split the graph: state from one copy never updated bindings or effects from the other, and its
+  cleanups never ran. They now live on one runtime object per JavaScript realm, keyed by
+  `Symbol.for("zoijs.runtime@1")` (the runtime protocol): every compatible copy joins it, the first
+  copy's object is never replaced, and `configure({ dev })` is a single realm-wide setting. A copy with
+  a different runtime protocol keeps its own runtime and logs `ZJS201` in dev mode instead of mixing.
+  No API changes.
 - **A conditionally shown component no longer rebuilds when state read during its setup changes (CORE-1).**
   A live binding can now return a component **uncalled** — `${() => show.get() ? Child : null}`, or
   `() => Child(props)` for props. Zoijs constructs it once, untracked, under the binding's owner, so
@@ -19,6 +28,15 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **`html` now only compiles tagged-template literals (SEC-2).** Calling it as a function —
+  `html(["<img src=x onerror=alert(1)>"])` — compiled the array as markup: a hidden `innerHTML` that
+  also passed the `zoijs` Trusted Types policy, on the client and under `@zoijs/ssr`. `html` now requires
+  the exact strings object the engine passes a tag (a frozen array with an own, non-enumerable, frozen
+  `raw`), checked once per call site before parsing, and throws `ZJS010` otherwise. Arrays from data or
+  ordinary code (JSON, `split`, spread, hand-assigned `raw`, frozen copies) can't pass. A template object
+  rebuilt deliberately with `Object.defineProperty` is indistinguishable at runtime, so the new
+  `@zoijs/eslint-plugin` rule `no-html-call` (in `recommended`, error) flags any direct call. Documented
+  `html\`…\`` usage is unchanged.
 - **Template results and `each()` markers can no longer be forged by data (SEC-1).** Zoijs
   recognized its own result objects by string properties (`__zoijsTemplate: true`,
   `__zoijsEach: true`), which JSON from an API, database, or storage can reproduce. Under

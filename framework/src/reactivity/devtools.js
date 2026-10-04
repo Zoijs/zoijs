@@ -19,8 +19,7 @@
 // subpath `@zoijs/core/devtools`, by tooling, never by application code.
 
 import { isDev } from "./env.js";
-
-let inspector = null;
+import { runtime as rt } from "./runtime.js";
 
 // A small stack lets the renderer tag the node(s) created while it wires a DOM
 // binding with the DOM they update (e.g. { kind:"text", el }); see labelNext.
@@ -32,32 +31,32 @@ const labels = [];
  */
 export function attachInspector(next) {
   if (!isDev() || !next) return () => {};
-  inspector = next;
-  if (inspector.onAttach) inspector.onAttach();
+  rt.inspector = next;
+  if (rt.inspector.onAttach) rt.inspector.onAttach();
   return () => {
-    if (inspector === next) inspector = null;
+    if (rt.inspector === next) rt.inspector = null;
   };
 }
 
 /** True while an inspector is attached — a cheap guard for optional extra work. */
 export function inspecting() {
-  return inspector !== null;
+  return rt.inspector !== null;
 }
 
 // ---- engine-side reports — each a no-op unless an inspector is attached -------
 
 export function reportCreate(node, kind) {
-  if (!inspector) return;
-  inspector.onCreate(node, kind, labels.length ? labels[labels.length - 1] : undefined);
+  if (!rt.inspector) return;
+  rt.inspector.onCreate(node, kind, labels.length ? labels[labels.length - 1] : undefined);
 }
 export function reportRun(node) {
-  if (inspector) inspector.onRun(node);
+  if (rt.inspector) rt.inspector.onRun(node);
 }
 export function reportWrite(node) {
-  if (inspector) inspector.onWrite(node);
+  if (rt.inspector) rt.inspector.onWrite(node);
 }
 export function reportDispose(node) {
-  if (inspector) inspector.onDispose(node);
+  if (rt.inspector) rt.inspector.onDispose(node);
 }
 
 /**
@@ -67,7 +66,7 @@ export function reportDispose(node) {
  * inspector is attached.
  */
 export function labelNext(label, run) {
-  if (!inspector) return run();
+  if (!rt.inspector) return run();
   labels.push(label);
   try {
     return run();

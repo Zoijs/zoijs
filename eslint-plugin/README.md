@@ -131,12 +131,14 @@ a real screen reader — they catch the mistakes that are cheap to catch at auth
 
 Defense-in-depth on top of the runtime's secure-by-default rendering (inert text, URL
 scheme allowlisting, blocked event-handler attributes). These catch the two residual
-footguns the runtime can't sanitize for you. See the [security guide](https://zoijs.dev/security).
+footguns the runtime can't sanitize for you, plus a direct-call check the runtime can't
+fully enforce. See the [security guide](https://zoijs.dev/security).
 
 | Rule | Flags | Level |
 |---|---|---|
 | `no-target-blank-without-rel` | a `target="_blank"` link with no `rel="noopener"` (reverse tabnabbing) | error |
 | `no-dynamic-style` | a `style` attribute bound from a dynamic value (CSS injection / data exfiltration) | warn |
+| `no-html-call` | calling `html` as a function (`html([...])`, `html.call(…)`) instead of as a tagged template — a raw-markup path | error |
 
 ```js
 html`<a href=${url} target="_blank">Docs</a>`               // ✗ no-target-blank-without-rel
@@ -144,6 +146,7 @@ html`<a href=${url} target="_blank" rel="noopener">Docs</a>`// ✓
 html`<div style=${cssString}>…</div>`                       // ✗ no-dynamic-style
 html`<div class=${() => (active ? "on" : "")}>…</div>`      // ✓ bind a class instead
 html`<div style="color:red">…</div>`                        // ✓ static style is fine
+html([userHtml])                                            // ✗ no-html-call (throws at runtime too)
 ```
 
 Both are narrow: only a *static* `target="_blank"` is flagged (a dynamic `target`/`rel`
