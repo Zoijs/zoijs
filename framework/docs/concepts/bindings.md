@@ -65,9 +65,9 @@ html`<input type="checkbox" checked=${() => done.get()} />`;
 
 ### URLs are checked
 
-URL attributes (`href`, `src`, …), every `srcset` candidate, and meta-refresh URLs reject dangerous
-schemes like `javascript:` automatically, and `target="_blank"` links get `rel="noopener noreferrer"`.
-`<base>` can't be bound (write it in the source). See [Security](../security.md#urls-are-scheme-validated).
+URL attributes (`href`, `src`, …) reject dangerous schemes like `javascript:` automatically. From the
+next release, so do every `srcset` candidate and meta-refresh URLs, `target="_blank"` links get
+`rel="noopener noreferrer"`, and `<base>` can't be bound (write it in the source). See [Security](../security.md#urls-are-scheme-validated).
 
 ### Reaching the element: `ref`
 

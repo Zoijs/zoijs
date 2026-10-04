@@ -32,9 +32,9 @@ Everything marked "enforced in CI" runs on every push and pull request via
 
 | Requirement | ✅ | Evidence |
 |---|---|---|
-| Secure by default (no opt-in needed) | ✅ | Inert text, URL-scheme allowlist, function-only handlers, no raw-HTML sink — [`docs/security.md`](security.md) |
+| Secure by default (no opt-in needed) | ✅ | Inert text, URL-scheme allowlist, function-only handlers; raw HTML only through the explicit, lint-flagged `unsafeHTML()` opt-in (`@zoijs/core/unsafe`, next release) — [`docs/security.md`](security.md) |
 | XSS resistance is tested, not assumed | ✅ | [`tests/xss-corpus.test.js`](../tests/xss-corpus.test.js), [`tests/security.test.js`](../tests/security.test.js), [`browser-tests/security.spec.js`](../browser-tests/security.spec.js) |
-| CSP / Trusted-Types compatible | ✅ | [`browser-tests/csp.spec.js`](../browser-tests/csp.spec.js) (real-browser gate) |
+| Strict script CSP / Trusted Types | ✅ | [`browser-tests/csp.spec.js`](../browser-tests/csp.spec.js) (real-browser gate). Documented allowances: inline import-map hash/nonce, `style-src-attr 'unsafe-inline'` for `style` bindings; `@zoijs/sanitize` fails under enforced Trusted Types — [production security](production-security.md) |
 | One escaping implementation (server = client) | ✅ | `@zoijs/ssr` reuses core predicates — [`src/server.js`](../src/server.js), [RFC 0008](rfcs/0008-ssr.md) |
 | No `eval` / `new Function` / runtime compilation | ✅ | Greppable absence; CSP gate above proves it |
 | Disclosure policy + supported versions | ✅ | [`SECURITY.md`](../SECURITY.md) (private reporting, 72h ack) |
@@ -43,7 +43,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 
 | Requirement | ✅ | Evidence |
 |---|---|---|
-| Unit / DOM coverage | ✅ | 150 core tests (jsdom) — enforced in CI (`npm test`) |
+| Unit / DOM coverage | ✅ | 300+ core tests (jsdom) plus every package's suite — enforced in CI (`npm test`) |
 | Real cross-browser tests | ✅ | Chromium / Firefox / WebKit via Playwright — [`browser-tests/`](../browser-tests/), enforced in CI (`test:browser`) |
 | Type tests | ✅ | [`types/type-tests.ts`](../types/type-tests.ts) |
 | First-party testing tools | ✅ | [`@zoijs/testing`](../../testing/README.md) — drives the real DOM, zero deps |
@@ -54,7 +54,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 |---|---|---|
 | Fine-grained updates, no Virtual DOM | ✅ | One value → one node; setup runs once — [`docs/concepts/`](concepts/) |
 | Minimal DOM moves on reorder | ✅ | LIS reconciliation — [`tests/lis.test.js`](../tests/lis.test.js) (move-count gate) |
-| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check` (≤ 16 KB gz client) — enforced in CI |
+| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check` — a temporary Phase 1 budget on the gzipped, commented client source (27,136 B), enforced in CI; production/minified budgets come with PERF-2 |
 | Reproducible benchmarks | ✅ | [`bench/`](../../bench/) (size + DOM micro-benchmarks) |
 
 ### 5. Supply chain

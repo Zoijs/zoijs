@@ -7,7 +7,8 @@
 // Replaces `npx serve`, which resolved (and could download) a mutable package version at test
 // time, outside the lockfiles. Node built-ins only: no install, no network, deterministic.
 // Serves files under <root> on 127.0.0.1 with correct MIME types and `Cache-Control: no-store`;
-// a directory serves its index.html; anything else (missing, outside <root>) is a 404.
+// a directory serves its index.html; anything else (missing, outside <root>, or a dotfile /
+// dot-directory such as .git/ or .env) is a 404.
 // GET /__ready answers 200 — Playwright's webServer.url waits on it (most roots have no index).
 //
 // Every suite has its own port so suites can run concurrently (enforced by
@@ -52,7 +53,8 @@ const server = createServer(async (req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, "http://127.0.0.1").pathname);
     if (pathname === "/__ready") return send(res, 200, "ok");
     let file = resolve(ROOT, "." + pathname);
-    if (pathname.includes("\0") || !inside(file)) return send(res, 404, "Not found");
+    const dotSegment = pathname.split(/[\\/]+/).some((s) => s.startsWith("."));
+    if (pathname.includes("\0") || dotSegment || !inside(file)) return send(res, 404, "Not found");
     if ((await stat(file)).isDirectory()) file = join(file, "index.html");
     send(res, 200, await readFile(file), TYPES[extname(file)] || "application/octet-stream");
   } catch {

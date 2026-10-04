@@ -163,6 +163,8 @@ on the server. See [CSRF](https://zoijs.dev/production-security#5-protect-state-
 
 ## Error monitoring
 
+*(Next release; reports arrive only with core 1.9.0 or later — older cores have no shared runtime, so nothing is reported.)*
+
 A failure that becomes `error()` is also reported to the app's
 `configure({ onError })` hook from `@zoijs/core`, as `{ kind: "resource" }` with the original
 error (superseded or post-unmount results are ignored, so they aren't reported).

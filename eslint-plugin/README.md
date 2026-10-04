@@ -130,9 +130,13 @@ a real screen reader — they catch the mistakes that are cheap to catch at auth
 ### Security rules
 
 Defense-in-depth on top of the runtime's secure-by-default rendering (inert text, URL
-scheme allowlisting, blocked event-handler attributes). These catch the two residual
-footguns the runtime can't sanitize for you, plus a direct-call check the runtime can't
-fully enforce. See the [security guide](https://zoijs.dev/security).
+scheme allowlisting, blocked event-handler attributes). `no-dynamic-style` catches the one
+dynamic-attribute path the runtime doesn't sanitize; `no-html-call` and `no-unsafe-html`
+make raw-markup paths visible in review. `no-target-blank-without-rel` matters most on
+`@zoijs/core` 1.8.0 and older: from the next core release the runtime adds
+`rel="noopener noreferrer"` to every `target="_blank"` link itself, and the rule keeps that
+intent explicit in source (and in markup the runtime never sees, such as `unsafeHTML()`
+strings you author). See the [security guide](https://zoijs.dev/security).
 
 | Rule | Flags | Level |
 |---|---|---|

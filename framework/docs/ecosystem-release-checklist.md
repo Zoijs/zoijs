@@ -16,7 +16,7 @@ broader public-launch status see [`launch-checklist.md`](launch-checklist.md).
 ## Published packages — ✅ all live on npm
 
 All seven packages are on the public registry. Each optional package
-peer-depends on `@zoijs/core ^1.0.0`, is MIT licensed, ships `src/` + README +
+peer-depends on `@zoijs/core ^1.0.0` (at launch — today each package's floor is the first core providing what it imports; see its `package.json` and `scripts/zoijs-compat.json`), is MIT licensed, ships `src/` + README +
 LICENSE + CHANGELOG, and is `type: module` with `sideEffects: false`.
 
 | Package | Version | Install | npm |
