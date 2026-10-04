@@ -16,6 +16,10 @@ import { inspect } from "@zoijs/devtools";
 inspect(); // floating panel, bottom-right
 ```
 
+(No-build import map? `@zoijs/devtools` imports `@zoijs/core/devtools`, so map that too, from the
+same core version — `node scripts/cdn-importmap.mjs @zoijs/core@<v> @zoijs/devtools@<v>` in the
+Zoijs repo generates it with integrity.)
+
 That's it. A small panel docks in the corner and lists every **state**, **computed**,
 and **effect** in your app. Change something and watch a node flash; hover a binding
 to **outline the one DOM node it updates**.

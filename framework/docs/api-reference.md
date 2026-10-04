@@ -134,10 +134,12 @@ html`<section>${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load.</p
 configure({ dev?, onError? }) → void
 ```
 
-Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds). One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
+Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds) *(next release — on 1.8.0 every app starts in development mode; call `configure({ dev: false })`)*. One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
 
 
 ### Error monitoring: `configure({ onError })`
+
+*(Next release.)*
 
 ```js
 configure({
@@ -188,6 +190,37 @@ Register a teardown function for the current component or list item. It runs whe
 const id = setInterval(tick, 1000);
 onCleanup(() => clearInterval(id));
 ```
+
+---
+
+## `unsafeHTML` (`@zoijs/core/unsafe`)
+
+*(Next release — not in 1.8.0.)*
+
+```
+import { unsafeHTML } from "@zoijs/core/unsafe";
+unsafeHTML(value: string | TrustedHTML) → UnsafeHTMLResult
+```
+
+Not part of the main entry. Renders `value` as **raw markup** in a content position —
+`` html`<article>${unsafeHTML(trusted)}</article>` `` or reactively `${() => unsafeHTML(src.get())}`.
+**It bypasses escaping and does not sanitize**: only pass content you have independently
+established as trusted; untrusted HTML goes through [`@zoijs/sanitize`](../../sanitize/README.md).
+
+- Accepts a string or a genuine `TrustedHTML` (checked with `trustedTypes.isHTML`); anything else
+  throws a `TypeError`. Under enforced Trusted Types, a string is refused when inserted.
+- Content positions only: in an attribute (including `href`, `style`, `on*`, `ref`) or
+  `<textarea>`/`<title>` content it throws; the result can't be converted to a string.
+- Development mode warns once that a string bypasses escaping; production doesn't.
+- Rendered by `@zoijs/ssr` as unescaped output — a `<script>` in it executes when the
+  server-rendered page loads (on the client, through a `<template>`, scripts are inert).
+  Trusted raw HTML used during SSR may contain executable markup: don't pass content you
+  wouldn't be willing to emit directly into the response.
+- None of Zoijs's attribute/URL guards (`javascript:`, `srcset`, `<base>`, `target="_blank"`
+  opener protection) apply inside the markup.
+- No build step: add an exact, integrity-pinned `"@zoijs/core/unsafe"` entry to your import map only
+  when you use it (`node scripts/cdn-importmap.mjs @zoijs/core@<version> --unsafe`).
+- See [Security](security.md#unsafehtml--the-one-escape-hatch).
 
 ---
 

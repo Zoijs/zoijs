@@ -297,3 +297,19 @@ test("CORE-3: a failure after the owning component is disposed is not reported",
     configure({ onError: null });
   }
 });
+
+// Reporting goes through the core's shared runtime (no @zoijs/core/internal import). With no
+// reporter — a core older than 1.9 has no runtime — a failure still lands in error(), quietly.
+test("without a runtime reporter, a failed fetch still sets error() and nothing throws", async () => {
+  const rt = globalThis[Symbol.for("zoijs.runtime@1")];
+  const saved = rt.report;
+  rt.report = undefined;
+  try {
+    const err = new Error("offline");
+    const r = resource(() => Promise.reject(err));
+    await new Promise((res) => setTimeout(res, 0));
+    assert.equal(r.error(), err);
+  } finally {
+    rt.report = saved;
+  }
+});

@@ -17,8 +17,8 @@ import { labelNext } from "../reactivity/devtools.js";
 import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
-import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } from "../utils/security.js";
-import { isTemplateResult, isEachResult } from "./brand.js";
+import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
+import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
@@ -30,6 +30,16 @@ const noop = () => {};
 // the safe object form. Deduped per element so a reactive style can't spam.
 const SUSPICIOUS_STYLE = /url\s*\(|expression\s*\(|\/\*|<\/style|javascript:/i;
 const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+
+// Arrays / plain objects on ordinary attributes stringify to "a,b" / "[object Object]":
+// warn once per element in dev. Rendering is unchanged; URL, Date, … have real toStrings.
+const objWarned = styleWarned && new WeakSet();
+function warnStringified(el, name, v) {
+  if (isDev() && v && typeof v === "object" && (Array.isArray(v) || v.toString === Object.prototype.toString) && objWarned && !objWarned.has(el)) {
+    objWarned.add(el);
+    console.warn(`Zoijs: attribute "${name}" got an object/array, stringified as "${v}"`);
+  }
+}
 
 /**
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
@@ -117,7 +127,13 @@ function bindChild(anchor, value) {
   else insertStaticContent(anchor, value);
 }
 
+// unsafeHTML() is content-only: refused in any attribute, before URL/name checks.
+const rawInAttr = (name) => {
+  throw new TypeError(`Zoijs: unsafeHTML() can't be bound to attribute "${name}"`);
+};
+
 function bindAttribute(el, attr, values) {
+  for (const h of attr.holes) if (isUnsafeHTML(values[h])) rawInAttr(attr.name);
   if (attr.name === "ref") {
     // A callback ref. Only a single ${fn} is meaningful; anything else (a string,
     // a number, a multi-part value) is rejected by bindRef without touching the DOM.
@@ -150,29 +166,30 @@ function bindAttribute(el, attr, values) {
     return;
   }
 
-  if (attr.whole) {
-    // A single ${} as the whole value → pass the raw value (preserves booleans,
-    // numbers, property types for value/checked).
-    const raw = values[attr.holes[0]];
-    if (typeof raw === "function")
-      labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, raw())));
-    else applyAttribute(el, attr.name, raw);
-    return;
-  }
+  // One write per part: a target/rel pair (SEC-9, computed together) or a single attribute.
+  const write = attr.opener
+    ? () => {
+        const t = partValue(el, attr.target, values);
+        applyAttribute(el, "target", t);
+        applyAttribute(el, "rel", openerRel(t, attr.rel && partValue(el, attr.rel, values)));
+      }
+    : () => applyAttribute(el, attr.name, partValue(el, attr, values), attr.check);
+  if (attr.holes.some((h) => typeof values[h] === "function")) labelNext({ kind: "attr", el, name: attr.name }, () => effect(write));
+  else write();
+}
 
-  // Multi-part value (static text + one or more holes) → always a joined string.
-  const compute = () => {
-    let result = attr.strings[0];
-    for (let i = 0; i < attr.holes.length; i++) {
-      const hv = values[attr.holes[i]];
-      result += (typeof hv === "function" ? hv() : hv) + attr.strings[i + 1];
-    }
-    return result;
-  };
-  const reactive = attr.holes.some((h) => typeof values[h] === "function");
-  if (reactive)
-    labelNext({ kind: "attr", el, name: attr.name }, () => effect(() => applyAttribute(el, attr.name, compute())));
-  else applyAttribute(el, attr.name, compute());
+// A part's current value: a whole ${} passes the raw value (booleans, numbers, property types
+// for value/checked); static text + holes is always a joined string.
+function partValue(el, attr, values) {
+  const read = (h) => (typeof values[h] === "function" ? values[h]() : values[h]);
+  if (attr.whole) return read(attr.holes[0]);
+  let result = attr.strings[0];
+  for (let i = 0; i < attr.holes.length; i++) {
+    const v = read(attr.holes[i]);
+    warnStringified(el, attr.name, v);
+    result += v + attr.strings[i + 1];
+  }
+  return result;
 }
 
 // A callback ref: hand the real element to user code AFTER the current render is
@@ -287,7 +304,20 @@ function renderChild(value) {
     const r = render(value);
     return { nodes: [...r.node.childNodes], dispose: r.dispose };
   }
+  if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html), dispose: noop };
   return { nodes: [document.createTextNode(toText(value))], dispose: noop };
+}
+
+// unsafeHTML(): the one raw-markup path. The value reaches the sink as given (never via
+// the zoijs policy), so enforced Trusted Types refuse a string and take the app's TrustedHTML.
+function rawNodes(markup) {
+  const t = document.createElement("template");
+  try {
+    t.innerHTML = markup;
+  } catch (cause) {
+    throw new TypeError("Zoijs: Trusted Types are enforced — pass unsafeHTML() a TrustedHTML", { cause });
+  }
+  return [...t.content.childNodes];
 }
 
 // ---- keyed list binding ------------------------------------------------------
@@ -489,7 +519,8 @@ function stringifyKey(key) {
 
 // ---- attribute binding -------------------------------------------------------
 
-function applyAttribute(el, name, value) {
+function applyAttribute(el, name, value, check) {
+  if (isUnsafeHTML(value)) rawInAttr(name);
   if (!isSafeAttributeName(name)) {
     if (isDev()) console.warn(`Zoijs: refusing to bind unsafe attribute "${name}"`);
     return;
@@ -500,8 +531,9 @@ function applyAttribute(el, name, value) {
   // href). The original `name` is kept for setAttribute so case-SENSITIVE SVG attributes
   // (viewBox, preserveAspectRatio, …) are preserved verbatim.
   const lname = name.toLowerCase();
-  if (URL_ATTRS.has(lname) && !isSafeUrl(toText(value))) {
-    if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}": ${value}`);
+  // URLs, srcset, meta refresh, SVG animation (shared with SSR); refused in every mode.
+  if (!isSafeAttributeValue(lname, value, check)) {
+    if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}"`);
     return;
   }
   if (lname === "style") {
@@ -528,7 +560,10 @@ function applyAttribute(el, name, value) {
   if (lname.startsWith("xlink:")) {
     // SVG namespaced attribute (e.g. xlink:href).
     if (value === false || value == null) el.removeAttributeNS(XLINK_NS, lname.slice(6));
-    else el.setAttributeNS(XLINK_NS, lname, toText(value));
+    else {
+      warnStringified(el, name, value);
+      el.setAttributeNS(XLINK_NS, lname, toText(value));
+    }
     return;
   }
   if (value === false || value == null) {
@@ -536,6 +571,7 @@ function applyAttribute(el, name, value) {
   } else if (value === true) {
     el.setAttribute(name, "");
   } else {
+    warnStringified(el, name, value);
     el.setAttribute(name, toText(value));
   }
 }

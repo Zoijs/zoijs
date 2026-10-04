@@ -250,3 +250,95 @@ test("CORE-3: server render errors still escape to the caller and are not report
     configure({ onError: null });
   }
 });
+
+// ---- CORE-4: compiler edge cases render the same on the server ----------------------
+
+test("CORE-4: an unquoted binding before `/>` keeps its exact value on the server", () => {
+  const url = "/x.png";
+  assert.equal(renderToString(() => html`<img src=${url}/>`), '<img src="/x.png"/>');
+  assert.equal(renderToString(() => html`<img src=${url} />`), '<img src="/x.png"/>');
+  assert.equal(renderToString(() => html`<input value=${"v"}/>`), '<input value="v"/>');
+  assert.equal(renderToString(() => html`<a href=${"/a"}/${"b"}>x</a>`), '<a href="/a/b">x</a>', "a slash between holes is value text");
+});
+
+test("CORE-4: reserved sigils are refused under renderToString too (before any output)", () => {
+  for (const tpl of [() => html`<input .value=${"x"}>`, () => html`<b ?hidden=${true}></b>`, () => html`<b @click=${() => {}}></b>`]) {
+    assert.throws(() => renderToString(tpl), /Zoijs template: unsupported bound attribute/);
+  }
+});
+
+test("CORE-4: mixed-value character references are decoded once, then escaped as data", () => {
+  // Server output is HTML (re-escaped); a browser parsing it yields the same value the
+  // client sets with setAttribute: "Tom & Ann", "<a>", "é".
+  assert.equal(renderToString(() => html`<div title="Tom &amp; ${"Ann"}"></div>`), '<div title="Tom &amp; Ann"></div>');
+  assert.equal(renderToString(() => html`<div title="&lt;${"a"}&#x3E;"></div>`), '<div title="<a>"></div>');
+  assert.equal(renderToString(() => html`<div title="&eacute;${""}"></div>`), '<div title="é"></div>');
+  assert.equal(renderToString(() => html`<a href="/s?a=1&b=${"2"}">x</a>`), '<a href="/s?a=1&amp;b=2">x</a>');
+  assert.throws(() => renderToString(() => html`<div title="&hellip;${1}"></div>`), /unsupported character reference/);
+});
+
+test("CORE-4: the URL guard sees the decoded value on the server", () => {
+  assert.equal(renderToString(() => html`<a href="java&#115;cript:${"alert(1)"}">x</a>`), "<a>x</a>");
+});
+
+// ---- SEC-3: unsafeHTML() is the only unescaped output path -----------------------------
+
+import { unsafeHTML } from "@zoijs/core/unsafe";
+
+test("SEC-3: unsafeHTML emits raw markup; the same string as plain data is escaped", () => {
+  const markup = "<b>x</b><img src=x onerror=alert(1)>";
+  assert.equal(
+    renderToString(() => html`<div>${unsafeHTML(markup)}</div><div>${markup}</div>`),
+    '<div><b>x</b><img src=x onerror=alert(1)></div><div>&lt;b&gt;x&lt;/b&gt;&lt;img src=x onerror=alert(1)&gt;</div>'
+  );
+  assert.equal(renderToString(() => html`<p>${() => unsafeHTML("<i>r</i>")}</p>`), "<p><i>r</i></p>", "reactive slot");
+  assert.equal(renderToString(() => html`<p>${[unsafeHTML("<i>1</i>"), "<i>2</i>"]}</p>`), "<p><i>1</i>&lt;i&gt;2&lt;/i&gt;</p>");
+});
+
+test("SEC-3: hydratable output keeps the slot markers around raw markup", () => {
+  assert.equal(renderToString(() => html`<p>${unsafeHTML("<i>r</i>")}</p>`, { hydratable: true }), "<p><!--zoijs:[--><i>r</i><!--zoijs--></p>");
+});
+
+test("SEC-3: refused in attributes on the server too (incl. events/refs, which SSR drops)", () => {
+  const u = unsafeHTML("<b>x</b>");
+  for (const tpl of [
+    () => html`<div title=${u}></div>`,
+    () => html`<div title="a ${u}"></div>`,
+    () => html`<a href=${unsafeHTML("javascript:alert(1)")}>x</a>`,
+    () => html`<b onclick=${u}></b>`,
+    () => html`<b ref=${u}></b>`,
+    () => html`<textarea>${u}</textarea>`,
+    () => html`<a href=${() => u}>x</a>`,
+  ]) {
+    assert.throws(() => renderToString(tpl), /can't be bound to attribute|content-only, never a string/);
+  }
+});
+
+test("SEC-3: JSON look-alikes are escaped data, never raw", () => {
+  const forged = JSON.parse('{"__zoijsUnsafeHTML":true,"zoijs.unsafe-html":true,"Symbol(zoijs.unsafe-html)":true,"html":"<b>x</b>"}');
+  assert.equal(renderToString(() => html`<p>${forged}</p>`), "<p>[object Object]</p>");
+});
+
+// ---- SEC-9: wider URL guards + opener protection, enforced in the server HTML ----------
+
+test("SEC-9: <base> bindings and bound meta http-equiv are refused on the server", () => {
+  assert.throws(() => renderToString(() => html`<base href=${"/x/"}>`), /on <base> is not supported/);
+  assert.throws(() => renderToString(() => html`<meta http-equiv=${"refresh"} content="0">`), /binding "http-equiv" on <meta>/);
+  assert.equal(renderToString(() => html`<base href="/app/"><p>${"x"}</p>`), '<base href="/app/"><p>x</p>');
+});
+
+test("SEC-9: meta refresh, srcset and SVG animation URLs are checked like the client", () => {
+  const J = "javascript:alert(1)";
+  assert.equal(renderToString(() => html`<meta http-equiv="refresh" content=${"0;url=/next"}>`), '<meta http-equiv="refresh" content="0;url=/next">');
+  assert.equal(renderToString(() => html`<meta http-equiv="refresh" content=${"0; URL='" + J + "'"}>`), '<meta http-equiv="refresh">');
+  assert.equal(renderToString(() => html`<img srcset=${"/a.png 1x, /b.png 2x"}>`), '<img srcset="/a.png 1x, /b.png 2x">');
+  assert.equal(renderToString(() => html`<img srcset=${"/a.png 1x, " + J.toUpperCase() + " 2x"}>`), "<img>");
+  assert.equal(renderToString(() => html`<svg><a><set attributeName="href" to=${J}></set></a></svg>`), '<svg><a><set attributeName="href"></set></a></svg>');
+});
+
+test("SEC-9: target=_blank is emitted with noopener noreferrer, merged into the app's rel", () => {
+  assert.equal(renderToString(() => html`<a target="_blank" href=${"/x"} rel="external">x</a>`), '<a href="/x" target="_blank" rel="external noopener noreferrer">x</a>');
+  assert.equal(renderToString(() => html`<a rel=${"noopener"} target=${"_blank"}>x</a>`), '<a target="_blank" rel="noopener noreferrer">x</a>');
+  assert.equal(renderToString(() => html`<a target=${"_self"} rel="external">x</a>`), '<a target="_self" rel="external">x</a>');
+  assert.equal(renderToString(() => html`<form target="_blank" action=${"/go"}></form>`), '<form action="/go" target="_blank" rel="noopener noreferrer"></form>');
+});

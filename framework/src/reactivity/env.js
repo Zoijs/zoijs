@@ -22,24 +22,8 @@ export function configure(options) {
   }
 }
 
-/**
- * Hand an error Zoijs caught/contained to the app's onError hook (realm-wide, every
- * mode). The hook never receives its own failures (logged instead), and an error
- * raised while it runs is logged rather than re-reported — no recursion.
- */
-export function reportError(error, info) {
-  const hook = rt.onError;
-  if (!hook) return;
-  if (rt.reporting) return void console.error("Zoijs: error raised inside onError (not re-reported):", error);
-  rt.reporting = true;
-  try {
-    hook(error, info);
-  } catch (hookError) {
-    console.error("Zoijs: the onError hook threw:", hookError);
-  } finally {
-    rt.reporting = false;
-  }
-}
+/** Hand a contained error to the app's onError hook (realm-wide, every mode) — see runtime.report. */
+export const reportError = (error, info) => rt.report(error, info);
 
 /** @returns {boolean} true in development mode */
 export function isDev() {

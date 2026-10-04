@@ -7,16 +7,17 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./browser-tests",
+  globalSetup: "./browser-tests/global-setup.js", // second physical core copy for csp.spec.js
   fullyParallel: true,
   reporter: "list",
   // Absorb transient CI flakiness (cold server start, first module fetch).
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: "http://localhost:7310",
+    baseURL: "http://127.0.0.1:7310",
   },
   webServer: {
-    command: "npx serve -l 7310 .",
-    url: "http://localhost:7310",
+    command: "node ../scripts/test-server.mjs . 7310",
+    url: "http://127.0.0.1:7310/__ready",
     reuseExistingServer: !process.env.CI,
     timeout: 180000,
   },

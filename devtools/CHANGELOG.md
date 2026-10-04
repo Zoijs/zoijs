@@ -2,6 +2,13 @@
 
 All notable changes to `@zoijs/devtools` are documented here.
 
+## Unreleased
+
+### Documentation
+- **No-build import maps must map `@zoijs/core/devtools`.** The package imports that core subpath,
+  so the README now says to map it from the same core version (`scripts/cdn-importmap.mjs` in the
+  Zoijs repo adds it automatically, with integrity). README only — no code change.
+
 ## 0.1.0 — 2026-06-26
 
 Initial release — a reactive-graph inspector for Zoijs.

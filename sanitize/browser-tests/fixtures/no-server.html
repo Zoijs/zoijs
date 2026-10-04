@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Zoijs — sanitize from a no-build import map (no-server)</title>
+    <!-- Control: the same map WITHOUT "@zoijs/core/server" — must fail to load, proving the entry is required. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "/framework/src/index.js",
+          "@zoijs/sanitize": "/sanitize/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./no-build.js"></script>
+  </body>
+</html>

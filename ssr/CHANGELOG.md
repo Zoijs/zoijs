@@ -4,7 +4,31 @@ All notable changes to `@zoijs/ssr` are documented here.
 
 ## Unreleased
 
+### Security
+- **SEC-9 guards in server HTML.** Bound `srcset`/`imagesrcset` candidates, meta-refresh content and
+  SVG animation URLs go through the same check as the client (`isSafeAttributeValue` from
+  `@zoijs/core/server`), and `target="_blank"` is emitted with `rel="noopener noreferrer"` merged into
+  the app's rel — the HTML is safe before hydration. Requires the next core release (new `/server`
+  exports), so the peer floor rises with it; `release:check` blocks ssr until then.
+
+### Added
+- **Renders `unsafeHTML()` results (SEC-3).** A result from `@zoijs/core/unsafe` in a content
+  position is emitted unescaped — the only unescaped output path; plain strings are still escaped. In
+  any attribute (including events and refs, which SSR otherwise drops) it throws, mirroring the client.
+  Recognized by its `Symbol.for` brand, so no new core export and no higher peer floor.
+
+### Fixed
+- **Uncalled components in reactive bindings render like the client (CORE-1).** A binding that
+  returns a component uncalled — `${() => show.get() ? Child : null}`, or `() => Child(props)` —
+  renders that component's markup (previously its function source text), matching the client and
+  hydrating cleanly.
+
 ### Documentation
+- **`unsafeHTML()` on the server.** The README now states that its markup is written into the
+  response verbatim, that none of the attribute/URL guards apply to it, and that a `<script>` in it
+  **executes** when the server-rendered page loads (client-side insertion leaves scripts inert).
+- **Install line shows the real peer range** (`^1.7.0`, was `^1.5.0`), and the guards list marks the
+  next-release SEC-9 checks.
 - **`serialize()` placement is now explicit (SEC-11).** Its output belongs in a `<script>` body only —
   quotes aren't escaped, so never in an attribute, raw HTML, a URL, or `<style>`. The README now leads
   with a `<script type="application/json">` data block (no CSP allowance needed) and notes that the

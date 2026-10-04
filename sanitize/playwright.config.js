@@ -11,11 +11,11 @@ export default defineConfig({
   reporter: "list",
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: "http://localhost:3700",
+    baseURL: "http://127.0.0.1:3800",
   },
   webServer: {
-    command: "npx serve -l 3700 ..",
-    url: "http://localhost:3700",
+    command: "node ../scripts/test-server.mjs .. 3800",
+    url: "http://127.0.0.1:3800/__ready",
     reuseExistingServer: !process.env.CI,
     timeout: 180000,
   },

@@ -18,6 +18,8 @@ export {
   escapeAttr,
   isSafeUrl,
   isSafeAttributeName,
+  isSafeAttributeValue,
+  openerRel,
   URL_ATTRS,
   styleObjectToCss,
 } from "./utils/security.js";

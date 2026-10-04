@@ -56,7 +56,7 @@ methods** (reactive — read them inside `${() => …}`) and two writers:
 
 | Method | Kind | Description |
 |---|---|---|
-| `t(key, vars?)` | reader | Translate `key`. Fills `{placeholders}` from `vars`; selects a plural by `vars.count`. Dotted keys (`"nav.home"`) walk nested tables. A missing key returns the key itself, so gaps are obvious. |
+| `t(key, vars?)` | reader | Translate `key`. Fills `{placeholders}` from `vars`' **own** properties (inherited names like `{constructor}` stay as written); selects a plural by `vars.count`. Dotted keys (`"nav.home"`) walk nested tables, again by own properties only. A missing key returns the key itself, so gaps are obvious. |
 | `has(key)` | reader | Whether `key` resolves in the current or fallback locale. |
 | `locale()` | reader | The current locale tag. |
 | `n(value, options?)` | reader | A number via `Intl.NumberFormat` in the current locale. |

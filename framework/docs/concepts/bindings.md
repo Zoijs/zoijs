@@ -36,6 +36,12 @@ html`<button disabled=${() => busy.get()}>Save</button>`; // boolean attribute
 - **Strings** set the attribute.
 - **`true`** sets a present-but-empty boolean attribute (`disabled`).
 - **`false` / `null` / `undefined`** remove the attribute entirely.
+- **Numbers** and other values are converted with `String()`. An **array or plain object**
+  becomes `"a,b"` / `"[object Object]"` — almost always a mistake, so development mode warns.
+  Use `style=${{ … }}` (the [object form](../security.md#a-note-on-style)) for styles.
+- Name attributes the HTML way. Lit-style prefixes (`.value=`, `?disabled=`, `@click=`) aren't
+  supported and throw when the template compiles: `value`/`checked` already use the property,
+  booleans use `true`/`false` as above, and events use `onclick=${handler}`.
 
 ### Partial and multiple holes work
 
@@ -43,6 +49,10 @@ html`<button disabled=${() => busy.get()}>Save</button>`; // boolean attribute
 html`<div class="card ${() => theme.get()} ${() => size.get()}">...</div>`;
 html`<a href=${() => base.get()} title="Go to ${() => page.get()}">link</a>`;
 ```
+
+Static text around a hole is HTML: character references in it are decoded like any attribute
+value (`title="Tom &amp; ${() => name.get()}"` → `Tom & Ann`). Values from `${}` are data and are
+never decoded.
 
 ### Form values use the property
 
@@ -55,7 +65,9 @@ html`<input type="checkbox" checked=${() => done.get()} />`;
 
 ### URLs are checked
 
-URL attributes (`href`, `src`, …) reject dangerous schemes like `javascript:` automatically.
+URL attributes (`href`, `src`, …) reject dangerous schemes like `javascript:` automatically. From the
+next release, so do every `srcset` candidate and meta-refresh URLs, `target="_blank"` links get
+`rel="noopener noreferrer"`, and `<base>` can't be bound (write it in the source). See [Security](../security.md#urls-are-scheme-validated).
 
 ### Reaching the element: `ref`
 

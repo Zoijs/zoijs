@@ -81,3 +81,18 @@ jobs:
             npm --prefix "$pkg" exec -- playwright install chromium firefox webkit
           done
       - run: npm run test:browser
+
+  # ONE stable check for branch protection: "CI passed" succeeds only if every unit/type matrix
+  # leg AND the real-browser job succeeded (a skipped or cancelled job fails it too). Require
+  # this check in the main-branch ruleset (docs/releasing.md → "Merge gate") so a pull request
+  # can't merge with a red Browser job. The individual job names above stay unchanged.
+  gate:
+    name: CI passed
+    if: ${{ always() }}
+    needs: [unit, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unit and browser jobs both succeeded
+        run: |
+          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}"
+          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success"

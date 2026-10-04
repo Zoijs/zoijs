@@ -48,8 +48,8 @@ That's a complete, working app. No bundler, no JSX, no config.
 - 🚫 **No build step** — a `<script type="module">` is the whole toolchain.
 - ✍️ **No JSX** — write real HTML in template literals.
 - ⚡ **No Virtual DOM** — fine-grained, direct DOM updates; cost scales with what changed, not app size.
-- 🤏 **Tiny API** — seven functions, learnable in ~30 minutes.
-- 🔒 **Secure by default** — inert text, URL-scheme guards, no `eval`, CSP- and Trusted-Types-friendly.
+- 🤏 **Tiny API** — nine functions in the main entry, learnable in ~30 minutes.
+- 🔒 **Secure by default** — inert text, URL-scheme guards, no `eval`; supports a strict script CSP and Trusted Types (allowances [documented](framework/docs/production-security.md)).
 - 🧩 **Plain web skills** — native events, native CSS, native DOM. Nothing bespoke to memorize.
 - 🧪 **Battle-tested** — 100+ unit tests, real-browser tests on Chromium/Firefox/WebKit, and TypeScript definitions.
 
@@ -135,7 +135,7 @@ import { html, mount, createState, computed, each, configure, onCleanup } from "
 | `createState(value)` | A reactive value — `get` / `set` / `peek` |
 | `computed(fn)` | A lazy, cached, value-gated derived value |
 | `each(items, keyFn, renderFn)` | Keyed list rendering |
-| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod`) |
+| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod` *(next release)*) |
 | `onCleanup(fn)` | Teardown for a component or list item |
 
 Full details in the **[API Reference](framework/docs/api-reference.md)**.
@@ -189,7 +189,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
 | [`@zoijs/ssr`](ssr) | Render a component to an HTML string + in-place hydration (SSR / static prerender) + `serialize` for server→client data. No DOM, no deps. |
-| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported alternative to a raw-HTML sink. |
+| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported path for untrusted HTML (trusted raw markup uses `unsafeHTML()`, next release). |
 | [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |

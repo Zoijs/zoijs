@@ -48,8 +48,8 @@ any fallback configuration.
 
 ## Ship production mode
 
-Load the production entry in what you deploy so development warnings and the
-devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` subpath
+Load the production entry *(next release; on 1.8.0 call `configure({ dev: false })`)* in what you
+deploy so development warnings and the devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` subpath
 on a CDN) in your import map. Bundlers' production builds select it automatically.
 See [Production mode](concepts/production-mode.md).
 
@@ -192,8 +192,9 @@ real-world traps are worth knowing. Each was hit by a production Zoijs app; all 
 ### A strict `style-src 'self'` and the router outlet
 
 Under `style-src 'self'` the browser blocks **inline `style="…"` attributes** (and they show up in
-pre-rendered HTML, so the block is visible on first load). Zoijs is built to avoid inline styles, with
-one thing to know: `@zoijs/router`'s `view()` outlet.
+pre-rendered HTML, so the block is visible on first load). Zoijs itself doesn't add inline styles,
+with two things to know: your own `style=${…}` bindings are set as `style` attributes, so they need
+`style-src-attr 'unsafe-inline'` (or use classes instead); and `@zoijs/router`'s `view()` outlet:
 
 - On **`@zoijs/router` ≥ 0.5.0** the outlet is a class (`<div class="zoijs-router-outlet">`), not an
   inline style. Add one CSS rule to keep it layout-transparent:
@@ -247,7 +248,7 @@ silently run stale framework code. Two safe options:
 6. Sending **security headers**? Use the [production security checklist](production-security.md)
    and verify the live response with `curl -sI`.
 7. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
-   Want failures in your monitoring? Add `configure({ onError })` (works in production).
+   Want failures in your monitoring? Add `configure({ onError })` (works in production) *(next release)*.
 8. Upload the folder. Done.
 
 ## What you do *not* need

@@ -13,7 +13,15 @@
 
 ---
 
-`@zoijs/sanitize` is an **optional** package. Zoijs has **no raw-HTML API** by design — a string in a text slot is inert text, and there is deliberately no `unsafeHTML`. But real apps still need to render *rich* HTML they mostly trust: the output of a markdown renderer, a CMS body, an email preview. That boundary is the single most security-critical spot in a front end. `sanitize()` makes it a **supported, tested** path instead of one you solve alone.
+`@zoijs/sanitize` is an **optional** package. In Zoijs a string in a text slot is always inert text. But real apps still need to render *rich* HTML they don't control: the output of a markdown renderer, a CMS body, an email preview. That boundary is the single most security-critical spot in a front end. `sanitize()` makes it a **supported, tested** path instead of one you solve alone.
+
+Which one to use:
+
+| Markup | Use |
+|---|---|
+| Your own, written in code | `` html`…` `` |
+| From users, APIs, databases, URLs, storage — anything not fully trusted | `sanitize()` (this package) |
+| Raw HTML you have independently established as trusted, rendered as-is | `unsafeHTML()` from `@zoijs/core/unsafe` *(next core release)* — **bypasses escaping, never sanitizes**; never pass it untrusted input |
 
 ## Install
 
@@ -21,9 +29,56 @@
 npm install @zoijs/core @zoijs/sanitize
 ```
 
-Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/sanitize" at
-**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
-package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
+Or with no install, from a CDN. `@zoijs/sanitize` imports **`@zoijs/core/server`** (the core's
+shared URL and attribute checks), so the import map needs **three** entries — `@zoijs/core`,
+`@zoijs/core/server` and `@zoijs/sanitize` — all exact-version jsDelivr file URLs from **one**
+core version, with an integrity hash for every module file. Without the `@zoijs/core/server`
+entry the page fails with *Failed to resolve module specifier "@zoijs/core/server"*.
+
+Generate the map for the versions you use (in the Zoijs repo; it hashes the published npm
+tarballs and adds `@zoijs/core/server` automatically):
+
+```bash
+node scripts/cdn-importmap.mjs @zoijs/core@<version> @zoijs/sanitize@<version>
+```
+
+<details>
+<summary>The generated map for <code>@zoijs/core@1.8.0</code> + <code>@zoijs/sanitize@0.1.0</code> (published versions)</summary>
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@zoijs/core": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/index.js",
+    "@zoijs/sanitize": "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.1.0/src/index.js",
+    "@zoijs/core/server": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/server.js"
+  },
+  "integrity": {
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/boundary.js": "sha384-IQ7MJEJQjcYemF3C0nXUzhmtJMYLIfdJ74lHQ+NgDHkhxP0q0fWc3hp7J+8NmdA5",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/each.js": "sha384-dmivZrBb98RiAQA6JDBpWM+90WXrKGV16K2+MznUr65Dwe7QYMno0fCzqWVqtjuR",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/html.js": "sha384-eokPtOg2OKALqYTTvuT4VuV4qkA7PjqZCVv/Z4wDtJK1W8hJnEM4NTrv2xiVSO3U",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/mount.js": "sha384-eAm8c9K1SY4j66NnZ4pc4exzlek7iG67di9hU5U9S3PnaZnElkqRGpzOy2z4Uz2h",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/renderer.js": "sha384-U8lmuwr3m1X9VByHoEz7+llyNTBojEBIes+OzkM/OndBfgO5JaeqyaBfHngv48Rl",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/index.js": "sha384-dDKK+RVA9Pj7X7aJvv0zgepWNZQi9W20zZ1JgACZ4EbIQ9LjvLsss8gsQGiyvcRb",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/computed.js": "sha384-nlAK86Jy1IR3yFSePE38l6cjZqcu5SdnYRVQxJh/+2YQL3WhTHdZ18yCKeKL4ffm",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/core.js": "sha384-ZarTqipGKQj1fDd4f458q/elWtGRImklba48F0lhYFV0WlPkMUAWnlVOjW6C+VZh",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/devtools.js": "sha384-2d17bQWgg87At3C1G8xbB/I099QSMQSQLdH3U0NTrQ0CTCUncYr965cZK+CCGVvg",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/effect.js": "sha384-Dybr242NFaaG2ZUoDbSPm7jaU+o2D0JMA98LmTG0vsGF88sL6f98DqEWk7A4LR/+",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/env.js": "sha384-kvYgg7qYJH6PqBIb/I3zh1pucmlVrkB8hlWVEJGp8T0mh6yshsLexn1/fP8iAawg",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/owner.js": "sha384-UTiqLh7+HkGpqCBR4bhLhb/mfpD3Fr3KLM1N49aejUYABa7bkcTIW6eK/AlAD40m",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/state.js": "sha384-w2HVkiWmSdb8h7qqr4OViqHJrDqlD/oInr+5Lal+lSvXWu3SPuZv35WWDPsEOgUq",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/server.js": "sha384-KzR4hGdiMl4Ep/PMsCCgaCmGzveYZRKHHvpzxHcK5t1gQ5F6YSCmAjDzf7/gRwhC",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/utils/dom.js": "sha384-ggrwnqwnZJfeQXMM46YlzkiNtYXk+WsvUMqdSdPypC4WWl6xflaRN8HEsVjbpC64",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/utils/security.js": "sha384-YJPoeU3TzidNo/muNyzoZp9Tgre6kzpTocT5VxvVyIFTvD5qeXE53PVJr29TcbHx",
+    "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.1.0/src/index.js": "sha384-npYLxQ2rycUQIRr6yfzgpQ2tLLbGVZnkRaz6Iz5TjWqUFkY3iKooOeZMK01Wvm02"
+  }
+}
+</script>
+```
+
+</details>
+
+See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
 import { sanitize } from "@zoijs/sanitize";
@@ -60,6 +115,8 @@ sanitize('<p onclick="steal()">Hi <strong>there</strong> <script>evil()</script>
 5. **No DOM clobbering.** Browsers expose elements by `id` (and some by `name`) as properties of `window`, `document` and forms — so untrusted `<a id="__DATA__">` could shadow `window.__DATA__` (the pattern [`serialize()`](../ssr) data uses) or a config global. Sanitized content therefore lives in its own namespace: `name` is always removed, and every `id` gets a prefix (below).
 
 ## IDs and in-page links
+
+*(Next release — `@zoijs/sanitize` 0.1.0 keeps ids as written and leaves `name`.)*
 
 Every `id` in sanitized content is prefixed with **`user-content-`**, and the references that point at ids are rewritten to match, so in-page links and accessibility relationships keep working:
 

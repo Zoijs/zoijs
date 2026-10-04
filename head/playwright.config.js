@@ -12,11 +12,11 @@ export default defineConfig({
   // Absorb transient CI flakiness (cold server start, first module fetch).
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: "http://localhost:3300",
+    baseURL: "http://127.0.0.1:3300",
   },
   webServer: {
-    command: "npx serve -l 3300 ..",
-    url: "http://localhost:3300",
+    command: "node ../scripts/test-server.mjs .. 3300",
+    url: "http://127.0.0.1:3300/__ready",
     reuseExistingServer: !process.env.CI,
     timeout: 180000,
   },

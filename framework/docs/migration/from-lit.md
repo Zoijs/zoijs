@@ -40,7 +40,7 @@ mount(Counter, "#app");
 
 - **No class / Web Component required.** A component is just a function; `mount` renders into any DOM element. (You *can* render into a custom element if you want.)
 - **Reactivity is built in.** Instead of `LitElement` reactive properties, use `createState`/`computed`. Changing state updates the DOM automatically.
-- **Binding syntax is HTML-native.** Zoijs uses `onclick=` (not `@click=`) and handles boolean/property attributes by name (`disabled`, `value`, `checked`) rather than `?`/`.` prefixes.
+- **Binding syntax is HTML-native.** Zoijs uses `onclick=` (not `@click=`) and handles boolean/property attributes by name (`disabled`, `value`, `checked`) rather than `?`/`.` prefixes. Lit's `.prop=`, `?attr=` and `@event=` are **not supported**: a template using them throws a clear error when it compiles (not later, in the DOM), naming the form to use instead. For a property other than `value`/`checked`, set it in a [`ref`](../concepts/refs.md) callback.
 - **Reads in templates need `() =>`** to be live: `${() => count.get()}`.
 
 ## What's familiar

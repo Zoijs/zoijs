@@ -1,4 +1,4 @@
-// SEC-6 — the scaffolded dev server (app / basic / typescript templates).
+// SEC-6 — the scaffolded dev server (app / basic / typescript / minimal templates).
 //
 // Spawns the real dev-server.mjs in a throwaway project and talks to it over raw
 // TCP (so paths reach the server exactly as written, unnormalized). Verifies it
@@ -15,7 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const templates = join(dirname(fileURLToPath(import.meta.url)), "..", "templates");
-const SERVER_TEMPLATES = ["app", "basic", "typescript"];
+const SERVER_TEMPLATES = ["app", "basic", "typescript", "minimal"];
 
 test("every template ships the same (hardened) dev server", () => {
   const [first, ...rest] = SERVER_TEMPLATES.map((t) => readFileSync(join(templates, t, "dev-server.mjs"), "utf8"));
@@ -154,4 +154,36 @@ test("dev server binds to loopback only by default; ZOIJS_HOST opts into the LAN
   assert.equal((await raw(exposed.port, "/", lan)).status, 200, "explicit opt-in is reachable on the LAN");
   assert.match(exposed.out(), /Listening on 0\.0\.0\.0/, "and prints a warning");
   assert.equal((await raw(exposed.port, "/.env", lan)).status, 404, "dotfiles stay blocked even when exposed");
+});
+
+// The generated minimal app, end to end: scaffold it, run the server its `dev` script names,
+// and fetch what the browser would — nothing to install, nothing downloaded.
+test("generated minimal app: `npm run dev`'s server serves the app and its pinned import map", async (t) => {
+  const { scaffold } = await import("../bin/create-zoijs.js");
+  const base = mkdtempSync(join(os.tmpdir(), "zoijs-minimal-"));
+  const proj = join(base, "tiny");
+  scaffold({ name: "tiny", template: "minimal", targetDir: proj });
+  const pkg = JSON.parse(readFileSync(join(proj, "package.json"), "utf8"));
+  assert.equal(pkg.scripts.dev, "node dev-server.mjs");
+  const { child, port } = await startServer(proj);
+  t.after(() => { child.kill(); rmSync(base, { recursive: true, force: true }); });
+
+  const index = await raw(port, "/");
+  assert.equal(index.status, 200);
+  assert.ok(index.headers["content-type"].startsWith("text/html"));
+  const map = JSON.parse(/<script type="importmap">([\s\S]*?)<\/script>/.exec(index.body)[1]);
+  const core = map.imports["@zoijs/core"];
+  assert.match(core, /^https:\/\/cdn\.jsdelivr\.net\/npm\/@zoijs\/core@\d+\.\d+\.\d+\/src\/index\.js$/, "exact version");
+  assert.match(map.integrity[core], /^sha384-/, "the entry is integrity-pinned");
+  for (const url of Object.keys(map.integrity)) assert.ok(url.startsWith(core.slice(0, core.indexOf("/src/") + 5)), url);
+  assert.match(index.body, /src="\.\/app\.js"/);
+
+  const app = await raw(port, "/app.js");
+  assert.equal(app.status, 200);
+  assert.ok(app.headers["content-type"].startsWith("text/javascript"));
+  assert.match(app.body, /from "@zoijs\/core"/);
+  assert.equal((await raw(port, "/package.json")).status, 200);
+
+  // Production guidance still points at the production entry.
+  assert.match(readFileSync(join(proj, "README.md"), "utf8"), /prod\.js/);
 });

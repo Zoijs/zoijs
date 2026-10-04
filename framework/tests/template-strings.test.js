@@ -126,18 +126,18 @@ test("the check runs on a cache miss only; repeated call sites reuse the compile
   assert.equal(isTemplateResult(a) && isTemplateResult(b), true);
 });
 
-test("templates from another copy of the core still work, and that copy rejects arrays too", { skip }, () => {
+test("templates from another copy of the core still work, and that copy rejects arrays too", { skip }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "zoijs-sec2-"));
   try {
     cpSync(join(dirname(fileURLToPath(import.meta.url)), "..", "src"), dir, { recursive: true });
-    return import(pathToFileURL(join(dir, "index.js")).href).then((B) => {
-      assert.throws(() => B.html([XSS]), REJECT);
-      const root = document.createElement("div");
-      mount(() => B.html`<p>${"from B"}</p>`, root);
-      assert.equal(root.textContent, "from B");
-    });
+    // Awaited so the copy outlives its whole module graph (cleanup used to race the nested imports).
+    const B = await import(pathToFileURL(join(dir, "index.js")).href);
+    assert.throws(() => B.html([XSS]), REJECT);
+    const root = document.createElement("div");
+    mount(() => B.html`<p>${"from B"}</p>`, root);
+    assert.equal(root.textContent, "from B");
   } finally {
-    setTimeout(() => rmSync(dir, { recursive: true, force: true }));
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

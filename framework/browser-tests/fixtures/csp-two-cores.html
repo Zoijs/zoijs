@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Two physical copies of @zoijs/core under ENFORCED Trusted Types, WITHOUT 'allow-duplicates':
+      copy A is /src/, copy B is /browser-tests/fixtures/core-copy/ (made by global-setup.js).
+      They share one runtime, so copy B must reuse copy A's `zoijs` policy — a second
+      createPolicy("zoijs") would be refused and copy B couldn't render.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs;"
+    />
+    <title>Zoijs — two core copies under Trusted Types</title>
+  </head>
+  <body>
+    <div id="a"></div>
+    <div id="b"></div>
+    <div id="mixed"></div>
+    <script type="module" src="./csp-two-cores.js"></script>
+  </body>
+</html>

@@ -58,3 +58,28 @@ test("a string handler is not wired up or executed", async ({ page }) => {
   });
   expect(result).toBe(false);
 });
+
+// SEC-9: a Zoijs-rendered target="_blank" link (bound or static target, the app's own rel kept)
+// opens without exposing window.opener and without a Referer.
+test("target=_blank links open with no window.opener and no referrer", async ({ page }) => {
+  const rels = await page.evaluate(async () => {
+    const { html, mount } = await import("/src/index.js");
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    mount(
+      () => html`<a id="bound" href="/browser-tests/fixtures/opener-target.html" target=${"_blank"} rel="external">bound</a>
+        <a id="static" target="_blank" href=${"/browser-tests/fixtures/opener-target.html"}>static</a>`,
+      target
+    );
+    return [...target.querySelectorAll("a")].map((a) => a.getAttribute("rel"));
+  });
+  expect(rels).toEqual(["external noopener noreferrer", "noopener noreferrer"]);
+
+  for (const id of ["#bound", "#static"]) {
+    const [popup] = await Promise.all([page.waitForEvent("popup"), page.click(id)]);
+    await popup.waitForLoadState();
+    expect(await popup.evaluate(() => window.opener)).toBeNull();
+    expect(await popup.evaluate(() => document.referrer)).toBe("");
+    await popup.close();
+  }
+});

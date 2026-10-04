@@ -26,14 +26,24 @@ Zoijs is **secure by default**; the full model is documented in
 [`docs/security.md`](docs/security.md). In brief:
 
 - Dynamic text renders as **inert** Text nodes (XSS-safe).
+- `html` compiles only tagged-template literals — your static markup, never runtime
+  strings (`html([...])` throws `ZJS010`).
 - URL attributes use a scheme allowlist (control-char resistant); `data:` is
-  restricted to raster images.
+  restricted to raster images. Bound `srcset`, meta-refresh `content` and SVG
+  animation values are URL-checked, a bound `<base>` is refused, and
+  `target="_blank"` always gets `rel="noopener noreferrer"` *(next release)*.
 - Event handlers must be function references; `on*` and `srcdoc` are blocked
   from data.
-- No `eval` / `new Function`; CSP- and Trusted-Types-friendly.
-- There is **no raw-HTML rendering API**.
+- No `eval` / `new Function`. Works under a strict script CSP and enforced Trusted
+  Types, with documented allowances (see [`docs/production-security.md`](docs/production-security.md)).
+- Untrusted HTML has one supported path, `@zoijs/sanitize`. Trusted raw HTML has one
+  explicit, greppable opt-in, `unsafeHTML()` from `@zoijs/core/unsafe` *(next release)*,
+  which **bypasses escaping and every guard above** by design.
 
 When evaluating a report, the key question is whether **untrusted data** can
 become script, markup, a handler, or a dangerous URL through a **documented,
-supported** API. Bypasses that require the developer to hand untrusted data to
-`innerHTML` themselves (outside Zoijs) are out of scope.
+supported** API. Out of scope: bypasses that require the developer to hand untrusted
+data to `innerHTML` themselves (outside Zoijs), or to `unsafeHTML()` — whose contract is
+that the caller has established the markup as trusted (including any `<script>` it
+contains, which executes when server-rendered). A way to reach `unsafeHTML`'s behavior
+*without* calling it is in scope.

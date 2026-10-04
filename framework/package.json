@@ -23,9 +23,9 @@
       "types": "./src/server.d.ts",
       "default": "./src/server.js"
     },
-    "./internal": {
-      "types": "./src/internal.d.ts",
-      "default": "./src/internal.js"
+    "./unsafe": {
+      "types": "./src/unsafe.d.ts",
+      "default": "./src/unsafe.js"
     }
   },
   "files": [
@@ -70,7 +70,7 @@
     "test:unit": "node --test",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
-    "dev": "npx serve -l 7310 ."
+    "dev": "node ../scripts/test-server.mjs . 7310"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

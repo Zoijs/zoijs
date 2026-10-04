@@ -18,6 +18,9 @@ The core guarantee: **dynamic values fill text and attribute *slots* only — th
 | `${() => value}` in text | rendered as an **inert Text node** (escaped) | ✅ always |
 | `attr=${() => value}` | set via `setAttribute` (or property for `value`/`checked`) | ✅ |
 | URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `data`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
+| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` *(next release)* | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
+| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` *(next release)* | **compile error** | ✅ data can't steer resolution/navigation |
+| `target="_blank"` on `<a>`/`<area>`/`<form>` *(next release)* | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
 | `onclick=${fn}` | `addEventListener` with a **function reference** | ✅ strings ignored |
 
 ### Text is always escaped
@@ -40,6 +43,34 @@ Allowed: `http`, `https`, `mailto`, `tel`, relative URLs, and raster `data:image
 html`<a href=${() => url}>link</a>`;
 // url = "javascript:alert(1)"  →  href is not set.
 ```
+
+The same check covers every URL a bound value can carry, in every mode (dev or production), on
+the client and in `@zoijs/ssr`. A refused value is not set (development mode warns, naming the
+attribute but not the value). *(Next release — core 1.8.0 checks only the URL attributes above.)*
+
+- **`srcset` / `imagesrcset`** — each candidate URL is checked (parsed as HTML does, so a
+  `data:image/…` URL keeps its commas); one unsafe candidate refuses the whole value.
+- **`<meta http-equiv="refresh" content=${…}>`** — the refresh URL (`0;url=…`, `0;URL='…'`, or
+  `0 …`) is found the way the browser finds it and checked; a value that isn't a valid refresh is
+  refused rather than guessed. Binding `http-equiv` itself is a compile error.
+- **SVG `<animate>`/`<set>`** — `from`/`to`/`by`/`values` are checked when the (static)
+  `attributeName` is a URL attribute such as `href`; binding `attributeName` is a compile error.
+- **`<base>`** — can't be bound at all (compile error), however safe the value looks: it changes
+  how every relative URL on the page resolves. Write it in the source (`<base href="/app/">`), or
+  use the router's `base` option.
+
+### `target="_blank"` opens without `window.opener`
+
+*(Next release.)*
+
+A Zoijs-rendered `<a>`, `<area>`, or `<form>` whose `target` is `_blank` — bound or written
+statically — always gets `rel` tokens `noopener` (the new page can't reach `window.opener`) and
+`noreferrer` (no `Referer` header is sent, a privacy default). They are merged into your own
+tokens (`rel="external"` → `external noopener noreferrer`), never duplicated, kept in place when
+`rel` updates, and dropped again if `target` changes away from `_blank` — whatever the attribute
+order. (Modern browsers already imply `noopener` for `_blank`; this makes it explicit everywhere,
+including server HTML.) Static markup elsewhere is your code and isn't rewritten — and
+`unsafeHTML()` markup is inserted exactly as written.
 
 ### Event handlers are functions, never strings
 
@@ -89,9 +120,66 @@ These either **throw a clear error** or are **blocked**:
 | `<script>${x}</script>` / `<style>${x}</style>` | throws | never interpolate into script/style (injection surface) |
 | `onclick="a ${fn}"` (multi-part handler) | throws | `onclick=${fn}` |
 | `html([...])` / `html(strings)` (calling `html` as a function) | throws `ZJS010` | write a tagged template; for untrusted HTML use `@zoijs/sanitize` |
-| `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML` |
+| `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML`; for trusted markup use `unsafeHTML()` (reviewable, Trusted-Types-aware) |
+| `title=${unsafeHTML(…)}` (or any attribute) | throws | `unsafeHTML()` is for content positions only |
 
-There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely need to render *rich* HTML you broadly trust (e.g. markdown or CMS output), use the optional [`@zoijs/sanitize`](../../sanitize/README.md) package: `sanitize(dirtyHtml)` parses the string inertly and returns **safe DOM nodes** (allowlist-based, reusing the same URL/attribute guards described above) that drop straight into a text binding — `html\`<article>${() => sanitize(body)}</article>\``. For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
+## Markup, untrusted HTML, and trusted raw HTML
+
+There are exactly three ways markup reaches the page:
+
+| Source | Use | What happens |
+|---|---|---|
+| Markup you write | `` html`…` `` | static structure from your source; every `${}` value is data |
+| Untrusted HTML (users, a CMS, markdown) | [`@zoijs/sanitize`](../../sanitize/README.md): `` html`<article>${() => sanitize(body)}</article>` `` | parsed inertly, allowlist-filtered, returned as **safe DOM nodes** |
+| HTML you have deliberately established as trusted | `unsafeHTML()` from **`@zoijs/core/unsafe`** | inserted **raw** — no escaping, no filtering |
+
+For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited
+sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
+
+### `unsafeHTML()` — the one escape hatch
+
+> **`unsafeHTML()` bypasses normal escaping. Never pass API, database, URL, storage, or user input
+> to it unless that content has been independently established as trusted.** It does not sanitize.
+
+```js
+import { unsafeHTML } from "@zoijs/core/unsafe";
+
+// Markup your own build or publishing pipeline produced and controls end to end.
+html`<article>${unsafeHTML(trustedCmsFragment)}</article>`;
+```
+
+If the CMS content can be written by users or third parties, it is **untrusted** — use
+`sanitize()` instead. Don't wrap `sanitize()` output in `unsafeHTML()`: `sanitize()` already returns
+DOM nodes that render directly.
+
+How it's fenced in:
+
+- **Opt-in by import.** It is only exported from `@zoijs/core/unsafe` — never from `@zoijs/core` —
+  so every use is a visible import, `grep -R unsafeHTML` finds them all, and the
+  [`zoijs/no-unsafe-html`](../../eslint-plugin/README.md) lint rule warns on each one (keep a
+  reviewed use with `// eslint-disable-next-line zoijs/no-unsafe-html -- <why it's trusted>`).
+  The default entry never loads it.
+- **Data can't impersonate it.** Results carry a Symbol brand (like `html` results), so JSON or
+  other data shaped like one renders as text.
+- **Content positions only.** It works where a child value goes (`${…}` between tags, including
+  `${() => unsafeHTML(src.get())}`, which replaces its nodes on change). In an attribute, a URL, an
+  event handler, a `ref`, or `<textarea>`/`<title>` content it throws instead of being stringified;
+  `<script>`/`<style>` holes remain compile errors.
+- **Trusted Types.** It accepts a string or a real `TrustedHTML`, and passes the value to the DOM
+  as-is — never through Zoijs's own `zoijs` policy. On a page that enforces Trusted Types, a plain
+  string is therefore refused (a clear `TypeError` when it's inserted); create the `TrustedHTML`
+  with your own policy (`trusted-types zoijs my-app`). Without Trusted Types, a string works, and
+  development mode warns once that it bypasses escaping.
+- **No guards apply.** Inside the markup, event-handler attributes, `javascript:` links, `srcset`,
+  `<base>`, meta refresh and `target="_blank"` without `rel` are all inserted as written — none of
+  the URL, opener or attribute protections run. That is the point, and the risk.
+- **Client vs. server `<script>`.** Inserted on the client (through a `<template>`), `<script>`
+  elements are inert and don't run. **Server-rendered** by `@zoijs/ssr`, the markup is written
+  into the HTML response verbatim (it is the only unescaped output; Node has no `TrustedHTML`,
+  so a string is accepted) — and a `<script>` in it **executes when the page loads**.
+  Trusted raw HTML used during SSR may contain executable markup. `unsafeHTML()` means
+  exactly what it says; do not pass content you would not be willing to emit directly into the
+  response.
 
 ### A note on `style`
 
@@ -121,10 +209,11 @@ Zoijs is friendly to a strict Content Security Policy:
   Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs;
   ```
 
-  Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe. Two
-  current limits: `@zoijs/sanitize` parses with `DOMParser` without a policy, so it fails under
-  enforcement; and a second loaded copy of the core can't create another `zoijs` policy (load
-  one copy, or add `'allow-duplicates'`).
+  Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe.
+  From the next release (core 1.9.0), compatible copies of the core share one runtime and so
+  one `zoijs` policy (created once — no `'allow-duplicates'` needed); with core 1.8.0 and
+  older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. Current limit: `@zoijs/sanitize` parses with `DOMParser` without
+  a policy, so it fails under enforcement.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
 hash, or a nonce) and, if your templates use `style` attributes, `style-src-attr 'unsafe-inline'`
@@ -156,6 +245,6 @@ A change that weakens any of these fails the build.
 
 - Text → inert, escaped. URLs → scheme-checked. Handlers → functions only.
 - `on*` and `srcdoc` attributes are blocked from data; dynamic tag/attribute *names* throw.
-- No `eval`, no Virtual DOM, no raw-HTML API. CSP- and Trusted-Types-friendly.
+- No `eval`, no Virtual DOM. One explicit raw-HTML opt-in, `unsafeHTML()` from `@zoijs/core/unsafe`, for trusted markup only. CSP- and Trusted-Types-friendly.
 - The one rule that keeps you safe: **let Zoijs render your data — never hand untrusted data to `innerHTML` yourself.**
 - Deploying? Go through the [production security checklist](production-security.md) — CSP and headers, CSRF, credentials, `serialize()`, route params, secrets, and monitoring.

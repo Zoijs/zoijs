@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/head` are documented here.
 
+## Unreleased
+
+### Documentation
+- **CDN guidance uses exact, integrity-pinned URLs (SEC-7).** The README's no-install example
+  imported a floating `esm.sh/@zoijs/head@0.1` URL; it now maps `@zoijs/core` and `@zoijs/head` to
+  exact-version jsDelivr files with integrity hashes in an import map and imports by name. README
+  only — no code change.
+
 ## 0.1.1 — 2026-06-26
 
 ### Fixed

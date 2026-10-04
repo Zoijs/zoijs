@@ -47,7 +47,8 @@ the core's public API, with **no core changes**:
   server→client data (SSR + static prerender), no DOM, zero deps.
 - `@zoijs/sanitize` — turn an untrusted HTML string (markdown/CMS output) into safe
   DOM nodes for a text binding; allowlist-based, reuses the core's URL/attribute
-  guards. The supported alternative to a raw-HTML sink (which Zoijs does not have).
+  guards. The supported path for untrusted HTML; trusted raw markup has its own explicit
+  opt-in, `unsafeHTML()` from `@zoijs/core/unsafe` (next release), which never sanitizes.
 - `@zoijs/eslint-plugin` — the reactive-binding rule (auto-fixable) plus a few a11y rules (dev-only, zero deps).
 - `create-zoijs` — the starter CLI (`npm create zoijs@latest`).
 

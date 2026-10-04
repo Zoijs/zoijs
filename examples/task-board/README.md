@@ -18,12 +18,16 @@ step, no JSX, and no global store.
 
 ## Run it
 
-From the repository root:
+From this folder:
 
 ```bash
-npx serve -l 3500 .
-# then open http://localhost:3500/examples/task-board/
+npm run dev
+# then open http://localhost:3500/examples/task-board/   (keep the trailing slash)
 ```
+
+`npm run dev` serves the repository root with the repo's own static server
+(`scripts/test-server.mjs` — Node built-ins only, `127.0.0.1` only, nothing to install or
+download). It is development tooling, not a production server.
 
 It uses an **import map** (in `index.html`) to point the `@zoijs/*` names at the
 local package sources — so it runs straight from source with no install or build.

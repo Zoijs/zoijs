@@ -18,7 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // Each package's authoritative public surface is its types entry. Extra subpaths
 // (e.g. the core's dev-only devtools hook) are checked against the same README.
 const PACKAGES = [
-  { dir: "framework", entries: ["src/index.d.ts", "src/devtools.d.ts"] },
+  { dir: "framework", entries: ["src/index.d.ts", "src/devtools.d.ts", "src/unsafe.d.ts"] },
   { dir: "router", entries: ["src/index.d.ts"] },
   { dir: "resource", entries: ["src/index.d.ts"] },
   { dir: "head", entries: ["src/index.d.ts"] },

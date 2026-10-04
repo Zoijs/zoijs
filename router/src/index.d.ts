@@ -47,6 +47,13 @@ export interface RouterOptions {
    * load that route's data before rendering.
    */
   location?: string;
+  /**
+   * Decode `%2F` in params into `/`? Default `true` (the original behavior). With `false`
+   * an encoded slash stays encoded — `/files/..%2Fadmin` gives `params.name === "..%2Fadmin"`,
+   * never `"../admin"` — while every other escape (`%20`, `%C3%A9`, …) still decodes. Use it
+   * when params feed paths, API URLs, or identifiers. Params are untrusted data either way.
+   */
+  decodeSlash?: boolean;
 }
 
 /** A router created by {@link createRouter}. */
@@ -55,7 +62,11 @@ export interface Router {
   view(): Element;
   /** An `<a>` that navigates without a full page reload. */
   link(path: string, text: string): TemplateResult;
-  /** Navigate programmatically (pushes a history entry). */
+  /**
+   * Navigate programmatically (pushes a history entry). Takes an app path (`"/users/1"`,
+   * `"?tab=2"`, `"#top"`); an absolute URL, any scheme, or `//host` throws a `TypeError` —
+   * use `location.assign()` to leave the app.
+   */
   go(path: string): void;
   /** The current path (reactive). */
   path(): string;

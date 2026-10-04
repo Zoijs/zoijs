@@ -2,6 +2,21 @@
 
 All notable changes to `@zoijs/i18n` are documented here.
 
+## Unreleased
+
+### Changed
+- **The source is plain text again.** The formatter cache key was built with a literal NUL byte in
+  `src/index.js`, so `grep`, `file` and some review tools treated the file as binary. It is now the
+  `"\u0000"` escape — the identical string at runtime, so caching is unchanged. A test pins both.
+
+### Security
+- **Own-property lookups (SEC-10).** Interpolation used `key in vars`, so `{constructor}`,
+  `{toString}` or `{__proto__}` resolved to `Object.prototype` members (and `t("constructor")`
+  returned a function's source). Variables and dotted message keys now resolve from own properties
+  only — inherited names stay as written / show the key; null-prototype objects work; an explicitly
+  owned `constructor` key is still used. A dotted key no longer walks into a message string
+  (`t("hi.length")` is a missing key, not `"14"`).
+
 ## 0.1.0 — 2026-06-26
 
 Initial release — tiny, reactive internationalization for Zoijs.

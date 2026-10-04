@@ -34,11 +34,15 @@ import { html, mount, createState, onCleanup } from "@zoijs/core";
 /**
  * Create a router from a `{ pattern: component }` map.
  * @param {Record<string, (params: Record<string,string>) => any>} routes
- * @param {{ base?: string, location?: string }} [options]
+ * @param {{ base?: string, location?: string, interceptLinks?: boolean, decodeSlash?: boolean }} [options]
  */
 export function createRouter(routes, options = {}) {
   const { matchers, notFound } = compile(routes);
   const base = normalizeBase(options.base); // "" when hosting at the root
+  // Params are decoded per segment. With decodeSlash: false an encoded slash (%2F) stays
+  // encoded, so "/files/..%2Fadmin" gives "..%2Fadmin", not "../admin" (SEC-10). Default true
+  // (the original behavior); prefer false when params feed paths, API URLs, or identifiers.
+  const keepSlash = options.decodeSlash === false;
 
   // Server-rendering only: a request URL path ("/users/42?tab=posts"), used instead
   // of `window.location` when there is no browser. This is what makes routed SSR
@@ -210,7 +214,7 @@ export function createRouter(routes, options = {}) {
       let ok = true;
       for (let i = 0; i < m.segs.length; i++) {
         const seg = m.segs[i];
-        if (seg.name) params[seg.name] = safeDecode(parts[i]);
+        if (seg.name) params[seg.name] = safeDecode(keepSlash ? parts[i].replace(/%2f/gi, "%252F") : parts[i], parts[i]);
         else if (seg.literal !== parts[i]) {
           ok = false;
           break;
@@ -222,6 +226,7 @@ export function createRouter(routes, options = {}) {
   };
 
   const go = (to) => {
+    assertAppPath(to);
     if (typeof window === "undefined") return; // navigation is a client-only action
     const target = toBrowser(String(to));
     if (target === currentUrl()) return; // already here — don't spam history
@@ -344,10 +349,22 @@ function parseQuery(search) {
   return out;
 }
 
-function safeDecode(value) {
+// go() navigates within the app (pushState), so it only takes app paths ("/x", "?q", "#h",
+// "x"). An absolute URL, any scheme (javascript: included), or a protocol-relative "//host"
+// (or "/\host" — browsers read "\" as "/") is refused with a clear, deterministic error rather
+// than the browser's opaque SecurityError (SEC-10). To leave the app use location.assign().
+function assertAppPath(to) {
+  const s = String(to).replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s) || /^[\\/]{2}/.test(s)) {
+    throw new TypeError('@zoijs/router: go() only navigates within the app — pass a path like "/page" (use location.assign() or a plain <a> for other URLs)');
+  }
+}
+
+// Malformed escapes → the segment exactly as it appeared in the URL (`raw`).
+function safeDecode(value, raw = value) {
   try {
     return decodeURIComponent(value);
   } catch {
-    return value;
+    return raw;
   }
 }

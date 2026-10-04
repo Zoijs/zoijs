@@ -13,7 +13,7 @@
 //   theme.peek();       // read without subscribing
 //
 // No global store, no provider, no cross-tab sync, no TTL, no custom serializer,
-// no schema. Built entirely on the core's public API (createState) — the core is
+// no schema library — but an optional `validate` hook for what comes back (SEC-10). Built entirely on the core's public API (createState) — the core is
 // unchanged.
 
 import { createState } from "@zoijs/core";
@@ -34,9 +34,15 @@ function getStore() {
  * A persistent, reactive value backed by localStorage. Behaves like
  * createState, but reads its initial value from storage and writes on every set.
  * @param {string} key            the localStorage key
- * @param {any}    initialValue   used when the key is missing or unreadable
+ * @param {any}    initialValue   used when the key is missing, unreadable, or fails `validate`
+ * @param {{ validate?: (value: unknown) => boolean }} [options]
+ *   validate: checks the value restored from storage (which anyone with access to the
+ *   browser — or an XSS bug — can edit). Return true to accept it; false (or throwing)
+ *   falls back to initialValue. The stored item is left as is until the next set().
+ *   Values you set() are your own and aren't validated.
  */
-export function storage(key, initialValue) {
+export function storage(key, initialValue, options) {
+  const validate = options && options.validate;
   let store = getStore();
   let initial = initialValue;
 
@@ -45,9 +51,10 @@ export function storage(key, initialValue) {
       const raw = store.getItem(key);
       if (raw !== null && raw !== undefined) {
         try {
-          initial = JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          if (!validate || validate(parsed) === true) initial = parsed;
         } catch {
-          initial = initialValue; // corrupt JSON → fall back, never throw
+          initial = initialValue; // corrupt JSON or a throwing validator → fall back, never throw
         }
       }
     } catch {

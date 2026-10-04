@@ -189,3 +189,19 @@ test("CORE-3: a rejected run reports once; error state and run() result unchange
     configure({ onError: null });
   }
 });
+
+// Reporting goes through the core's shared runtime (no @zoijs/core/internal import). With no
+// reporter — a core older than 1.9 has no runtime — a failure still lands in error(), quietly.
+test("without a runtime reporter, a failed run still sets error() and run() resolves undefined", async () => {
+  const rt = globalThis[Symbol.for("zoijs.runtime@1")];
+  const saved = rt.report;
+  rt.report = undefined;
+  try {
+    const err = new Error("nope");
+    const a = action(() => Promise.reject(err));
+    assert.equal(await a.run(), undefined);
+    assert.equal(a.error(), err);
+  } finally {
+    rt.report = saved;
+  }
+});

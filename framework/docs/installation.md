@@ -52,7 +52,7 @@ copy of the core.
 
 **Generating the map for another version.** In the Zoijs repo,
 `node scripts/cdn-importmap.mjs @zoijs/core@<version> [@zoijs/router@<version> …]` prints it
-(add `--prod` to map the production entry). Without the repo, compute each file's hash from
+(add `--prod` to map the production entry, from the next core release). Without the repo, compute each file's hash from
 the published package — never from a CDN response you haven't pinned:
 
 ```bash

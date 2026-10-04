@@ -27,4 +27,18 @@ export interface PersistentState<T> extends State<T> {}
  * theme.peek();       // read without subscribing
  * ```
  */
-export function storage<T>(key: string, initialValue: T): PersistentState<T>;
+export function storage<T>(key: string, initialValue: T, options?: StorageOptions): PersistentState<T>;
+
+/** Options for {@link storage}. */
+export interface StorageOptions {
+  /**
+   * Check the value restored from localStorage — browser storage is user-editable, not
+   * trusted. Return `true` to accept it; `false` (or throwing) falls back to `initialValue`
+   * (the stored item is left until the next `set`). Values you `set` aren't validated.
+   *
+   * ```ts
+   * const theme = storage("theme", "light", { validate: (v) => v === "light" || v === "dark" });
+   * ```
+   */
+  validate?: (value: unknown) => boolean;
+}
