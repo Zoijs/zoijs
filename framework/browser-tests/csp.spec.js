@@ -27,3 +27,22 @@ test("renders and reacts under a strict Trusted-Types CSP with no violations", a
   await expect(button).toHaveText("1");
   expect(await page.evaluate(() => window.__violations)).toEqual([]);
 });
+
+// SEC-3: unsafeHTML() under ENFORCED Trusted Types — the app's TrustedHTML renders; a plain
+// string is refused with Zoijs's clear error (one blocked sink, nothing rendered), proving the
+// raw path never borrows the `zoijs` policy.
+test("unsafeHTML: TrustedHTML renders, a plain string is refused under enforced Trusted Types", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Trusted Types is implemented in Chromium only");
+
+  await page.goto("/browser-tests/fixtures/csp-unsafe.html");
+  await page.waitForFunction(() => window.__unsafe && window.__unsafe.done);
+
+  const state = await page.evaluate(() => window.__unsafe);
+  expect(state.error).toBeNull();
+  await expect(page.locator("#trusted b.raw")).toHaveText("trusted");
+  expect(state.string).toMatch(/Trusted Types are enforced — pass unsafeHTML\(\) a TrustedHTML/);
+  await expect(page.locator("#string b")).toHaveCount(0);
+  const violations = await page.evaluate(() => window.__violations);
+  expect(violations).toHaveLength(1); // the refused string assignment, nothing else
+  expect(violations[0]).toContain("require-trusted-types-for");
+});

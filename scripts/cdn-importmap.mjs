@@ -13,6 +13,8 @@
 // module in each entry's graph gets an entry: browsers apply import-map integrity to
 // any module fetch whose URL is listed, including relative imports.
 // `--prod` maps @zoijs/core to its production entry (src/prod.js) instead of index.js.
+// `--unsafe` also maps "@zoijs/core/unsafe" (the opt-in raw-HTML escape hatch, src/unsafe.js)
+// with integrity — only for apps that use unsafeHTML(); default maps never include it.
 
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -49,7 +51,7 @@ function graph(pkgDir, entry) {
   return [...seen].sort();
 }
 
-export function buildImportMap(specs, { prod = false } = {}) {
+export function buildImportMap(specs, { prod = false, unsafe = false } = {}) {
   const work = mkdtempSync(join(tmpdir(), "zoijs-cdn-"));
   try {
     const imports = {};
@@ -72,6 +74,11 @@ export function buildImportMap(specs, { prod = false } = {}) {
       }
       const base = `${CDN}${name}@${version}/`;
       imports[name] = base + entry;
+      if (unsafe && name === "@zoijs/core") {
+        if (!existsSync(join(dir, "src/unsafe.js"))) throw new Error(`@zoijs/core@${version} has no @zoijs/core/unsafe entry (src/unsafe.js)`);
+        entries.push("src/unsafe.js");
+        imports["@zoijs/core/unsafe"] = base + "src/unsafe.js";
+      }
       const files = [...new Set(entries.flatMap((e) => graph(dir, e)))].sort();
       for (const f of files) integrity[base + f] = sri(readFileSync(join(dir, f)));
       packages[name] = { version, entries, files: files.length };
@@ -92,14 +99,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (checkFile) {
     const saved = JSON.parse(readFileSync(checkFile, "utf8"));
     const specs = Object.entries(saved.packages).map(([n, p]) => `${n}@${p.version}`);
-    const fresh = buildImportMap(specs, { prod: saved.prod });
+    const fresh = buildImportMap(specs, { prod: saved.prod, unsafe: !!saved.unsafe });
     const ok = JSON.stringify(fresh.integrity) === JSON.stringify(saved.integrity) && JSON.stringify(fresh.imports) === JSON.stringify(saved.imports);
     console.log(ok ? `✔ ${checkFile} matches the published ${specs.join(", ")}` : `✖ ${checkFile} does not match the published ${specs.join(", ")} — regenerate it`);
     process.exit(ok ? 0 : 1);
   }
   const specs = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--write");
-  const map = buildImportMap(specs, { prod: flag("--prod") });
-  const out = { prod: flag("--prod"), ...map };
+  const map = buildImportMap(specs, { prod: flag("--prod"), unsafe: flag("--unsafe") });
+  const out = { prod: flag("--prod"), ...(flag("--unsafe") ? { unsafe: true } : {}), ...map };
   if (writeFile) {
     writeFileSync(writeFile, JSON.stringify(out, null, 2) + "\n");
     console.log(`✔ wrote ${writeFile} (${Object.keys(map.integrity).length} integrity entries)`);

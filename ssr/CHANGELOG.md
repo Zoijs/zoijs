@@ -4,6 +4,12 @@ All notable changes to `@zoijs/ssr` are documented here.
 
 ## Unreleased
 
+### Added
+- **Renders `unsafeHTML()` results (SEC-3).** A result from `@zoijs/core/unsafe` in a content
+  position is emitted unescaped — the only unescaped output path; plain strings are still escaped. In
+  any attribute (including events and refs, which SSR otherwise drops) it throws, mirroring the client.
+  Recognized by its `Symbol.for` brand, so no new core export and no higher peer floor.
+
 ### Documentation
 - **`serialize()` placement is now explicit (SEC-11).** Its output belongs in a `<script>` body only —
   quotes aren't escaped, so never in an attribute, raw HTML, a URL, or `<style>`. The README now leads

@@ -29,6 +29,14 @@ import {
 } from "@zoijs/core/server";
 import { mount } from "@zoijs/core";
 
+// unsafeHTML() results (@zoijs/core/unsafe). The Symbol.for key IS the brand protocol, so
+// checking it here needs no new core export (and no higher peer floor).
+const UNSAFE_HTML = Symbol.for("zoijs.unsafe-html");
+const isUnsafeHTML = (v) => v != null && typeof v === "object" && v[UNSAFE_HTML] === true;
+const rawInAttr = (name) => {
+  throw new TypeError(`Zoijs: unsafeHTML() is content-only — it can't be bound to attribute "${name}"`);
+};
+
 const CHILD_MARKER = "<!--zoijs-->";
 const ELEMENT_MARKER = " data-zoijs-bind";
 const SLOT_START = "<!--zoijs:[-->"; // marks where a child slot's content begins
@@ -72,6 +80,8 @@ function renderValue(value) {
   if (value == null || value === true || value === false) return ""; // render nothing
   if (isTemplateResult(value)) return renderTemplate(value);
   if (isEachMarker(value)) return renderEach(value);
+  // The caller asserted this markup is trusted: the only unescaped output path.
+  if (isUnsafeHTML(value)) return String(value.html);
   if (Array.isArray(value)) {
     let out = "";
     for (const v of value) out += renderValue(v);
@@ -154,10 +164,13 @@ function renderTemplate(result) {
 function renderAttributes(attrs, values) {
   let out = "";
   for (const attr of attrs) {
+    if (attr.holes.some((h) => isUnsafeHTML(values[h]))) rawInAttr(attr.name); // mirrors the client
     if (attr.event) continue; // event handlers are wired on the client
     if (attr.name === "ref") continue; // ref is a client-only binding
     if (attr.content) continue; // raw-text content binding — emitted as element content below
-    out += serializeAttribute(attr.name, computeAttribute(attr, values));
+    const value = computeAttribute(attr, values);
+    if (isUnsafeHTML(value)) rawInAttr(attr.name);
+    out += serializeAttribute(attr.name, value);
   }
   return out;
 }

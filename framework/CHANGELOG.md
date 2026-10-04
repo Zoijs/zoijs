@@ -7,6 +7,19 @@ All notable changes to Zoijs are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`@zoijs/core/unsafe` — one explicit raw-HTML opt-in (SEC-3).** `unsafeHTML(value)` renders a
+  string or `TrustedHTML` as raw markup in a content position (`${unsafeHTML(trusted)}`, or reactively
+  `${() => unsafeHTML(src.get())}`, which replaces and cleans up its nodes). **It bypasses escaping and
+  does not sanitize** — only for content you have established as trusted; untrusted HTML still goes
+  through `@zoijs/sanitize`. It replaces the unreviewable `ref` + `innerHTML` workaround: it lives only
+  on its own subpath (never exported from `@zoijs/core`, never loaded by the default entry), results are
+  Symbol-branded (JSON can't forge them; `Symbol.for`, so compatible copies interoperate), it throws in
+  any attribute/URL/handler/`ref`/raw-text position and can't be stringified, and `<script>`/`<style>`
+  holes stay compile errors. The value goes to the DOM as given — never through the `zoijs` Trusted
+  Types policy — so pages enforcing Trusted Types must pass their own `TrustedHTML` (a plain string is
+  refused with a clear error). Development mode warns once when a string is passed. `@zoijs/ssr`
+  emits it unescaped. Lint rule `zoijs/no-unsafe-html` (warn) flags every use. Default rendering is
+  unchanged: data is still always inert.
 - **`configure({ onError(error, info) })` — observe errors Zoijs contains (CORE-3).** Failures Zoijs
   catches to keep the page running — a throwing binding, `effect`, `computed` or cleanup, a `boundary`
   child, a failed `@zoijs/resource` fetch or `@zoijs/action` run — were only visible in the console

@@ -24,7 +24,7 @@ Copy this into your release process.
 - [ ] **Credentials** — `credentials: "include"` appears only where cross-origin cookies are intended, and the server's CORS allows exactly those origins. [→ 6](#6-configure-credentials-deliberately)
 - [ ] **Authorization on the server** — no data or action is protected only by hidden UI or a client-side route check. [→ 7](#7-authorize-on-the-server)
 - [ ] **`serialize()` only in a script body** — never in an attribute, URL, style, or raw HTML. [→ 8](#8-embed-serialize-output-only-in-a-script-body)
-- [ ] **Untrusted HTML goes through `@zoijs/sanitize`** — never `innerHTML`. [→ 9](#9-sanitize-untrusted-html) · [→ 10](#10-avoid-raw-dom-sinks)
+- [ ] **Untrusted HTML goes through `@zoijs/sanitize`** — never `innerHTML`; every `unsafeHTML()` use is reviewed (`grep -R unsafeHTML`, lint rule `zoijs/no-unsafe-html`). [→ 9](#9-sanitize-untrusted-html) · [→ 10](#10-avoid-raw-dom-sinks)
 - [ ] **Route params are validated** before they reach a path, URL, or permission decision. [→ 11](#11-treat-router-parameters-as-data)
 - [ ] **URLs you build are validated** — redirects, API URLs, URLs handed to other libraries. [→ 12](#12-validate-the-urls-your-code-builds)
 - [ ] **No secrets in the browser** — nothing in modules, import maps, config, or storage is secret. [→ 13](#13-keep-secrets-off-the-client)
@@ -207,6 +207,8 @@ static template strings — and `html()` refuses runtime arrays and data (`ZJS01
 - **One copy of `@zoijs/core` per page.** Each copy tries to create the `zoijs` policy; a
   second copy's attempt is refused by `trusted-types zoijs` and its rendering fails. Map every
   package to one core (an import map does this), or add `'allow-duplicates'`.
+- `unsafeHTML()` never uses the `zoijs` policy: pass it a `TrustedHTML` from your own policy
+  (add that policy's name to `trusted-types`); a plain string is refused.
 - Trusted Types complements correct input handling and CSP — it doesn't validate your data,
   and it doesn't make your own code's sinks safe; it only makes them fail loudly.
 
@@ -314,7 +316,7 @@ clobbering), and `getElementById` returns the first match. So:
 |---|---|
 | Your markup | `` html`…` `` tagged templates. Interpolated values are always data. |
 | HTML from users, a CMS, markdown | [`@zoijs/sanitize`](../../sanitize/README.md): `` html`<article>${() => sanitize(body)}</article>` `` |
-| Raw HTML you deliberately trust | No first-class API today. Build elements, or sanitize it too. |
+| Raw HTML you have independently established as trusted | `unsafeHTML()` from `@zoijs/core/unsafe` *(next release)* — **bypasses escaping**; never for API, database, URL, storage or user input |
 
 `html` can't be used as an HTML parser: calling it as a function with runtime data —
 strings, arrays, JSON — throws `ZJS010` *(next release)*. `sanitize()` is allowlist-based,
@@ -322,6 +324,13 @@ reuses Zoijs's URL guards, removes `name`, and namespaces ids and same-document 
 (`#fragment`, `headers`, ARIA ids) so sanitized content can't clobber page globals
 *(next release)*. Pass `idPrefix` to change the prefix. For fully adversarial input in
 high-value contexts, prefer an independently audited sanitizer such as DOMPurify.
+
+**`unsafeHTML()`** is the one sanctioned raw-HTML route, for markup you control end to end (your own
+build output, a fragment your trusted backend renders). It does not sanitize. Every use is an import
+from `@zoijs/core/unsafe`, so review them with `grep -R unsafeHTML` and the `zoijs/no-unsafe-html`
+lint warning; keep reviewed ones with an `eslint-disable-next-line … -- <reason>` comment. Under
+enforced Trusted Types it needs a `TrustedHTML` from your own policy — a plain string is refused.
+Details: [Security → `unsafeHTML()`](security.md#unsafehtml--the-one-escape-hatch).
 
 ## 10. Avoid raw DOM sinks
 
@@ -331,7 +340,11 @@ Zoijs can't protect code that bypasses it. Never give untrusted data to:
 - `DOMParser.parseFromString`, `Range.createContextualFragment`;
 - `eval`, `new Function`, string `setTimeout`/`setInterval`;
 - a DOM node you build from untrusted data and return from a binding (Zoijs inserts nodes
-  as-is).
+  as-is);
+- `unsafeHTML()` — its whole purpose is to skip escaping.
+
+If you need trusted raw markup, use `unsafeHTML()` rather than `ref` + `innerHTML`: it's
+reviewable, lint-flagged, and respects Trusted Types.
 
 The `zoijs/no-html-call` lint rule (in `recommended`) flags direct `html(…)` calls.
 

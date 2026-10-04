@@ -191,6 +191,30 @@ onCleanup(() => clearInterval(id));
 
 ---
 
+## `unsafeHTML` (`@zoijs/core/unsafe`)
+
+```
+import { unsafeHTML } from "@zoijs/core/unsafe";
+unsafeHTML(value: string | TrustedHTML) → UnsafeHTMLResult
+```
+
+Not part of the main entry. Renders `value` as **raw markup** in a content position —
+`` html`<article>${unsafeHTML(trusted)}</article>` `` or reactively `${() => unsafeHTML(src.get())}`.
+**It bypasses escaping and does not sanitize**: only pass content you have independently
+established as trusted; untrusted HTML goes through [`@zoijs/sanitize`](../../sanitize/README.md).
+
+- Accepts a string or a genuine `TrustedHTML` (checked with `trustedTypes.isHTML`); anything else
+  throws a `TypeError`. Under enforced Trusted Types, a string is refused when inserted.
+- Content positions only: in an attribute (including `href`, `style`, `on*`, `ref`) or
+  `<textarea>`/`<title>` content it throws; the result can't be converted to a string.
+- Development mode warns once that a string bypasses escaping; production doesn't.
+- Rendered by `@zoijs/ssr` as unescaped output.
+- No build step: add an exact, integrity-pinned `"@zoijs/core/unsafe"` entry to your import map only
+  when you use it (`node scripts/cdn-importmap.mjs @zoijs/core@<version> --unsafe`).
+- *(Next release — not in 1.8.0.)* See [Security](security.md#unsafehtml--the-one-escape-hatch).
+
+---
+
 ## TypeScript
 
 Type definitions ship in [`src/index.d.ts`](../src/index.d.ts); editors discover them automatically.

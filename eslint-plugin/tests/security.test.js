@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import noTargetBlankWithoutRel from "../src/rules/no-target-blank-without-rel.js";
 import noDynamicStyle from "../src/rules/no-dynamic-style.js";
 import noHtmlCall from "../src/rules/no-html-call.js";
+import noUnsafeHtml from "../src/rules/no-unsafe-html.js";
 
 RuleTester.describe = describe;
 RuleTester.it = it;
@@ -66,5 +67,33 @@ ruleTester.run("no-html-call", noHtmlCall, {
     { code: "html.call(null, ['<b>x</b>'])", errors: [{ messageId: "directCall" }] },
     { code: "html.apply(null, [['<b>x</b>']])", errors: [{ messageId: "directCall" }] },
     { code: "Reflect.apply(html, null, [['<b>x</b>']])", errors: [{ messageId: "directCall" }] },
+  ],
+});
+
+ruleTester.run("no-unsafe-html", noUnsafeHtml, {
+  valid: [
+    "html`<p>${value}</p>`",
+    'import { html } from "@zoijs/core"; html`<div>${sanitize(body)}</div>`',
+    'import { sanitize } from "@zoijs/sanitize";',
+    "const unsafe = 1; unsafe(x)", // a different name
+    'import x from "@zoijs/core/unsafe-ish";', // a different module
+  ],
+  invalid: [
+    {
+      code: 'import { unsafeHTML } from "@zoijs/core/unsafe"; html`<article>${unsafeHTML(trusted)}</article>`',
+      errors: [{ messageId: "importUnsafe" }, { messageId: "callUnsafe" }],
+    },
+    {
+      code: 'import { unsafeHTML as raw } from "@zoijs/core/unsafe"; raw(x);',
+      errors: [{ messageId: "importUnsafe" }, { messageId: "callUnsafe" }],
+    },
+    {
+      code: 'import * as U from "@zoijs/core/unsafe"; U.unsafeHTML(x);',
+      errors: [{ messageId: "importUnsafe" }, { messageId: "callUnsafe" }],
+    },
+    { code: 'const m = await import("@zoijs/core/unsafe");', errors: [{ messageId: "importUnsafe" }] },
+    { code: 'export { unsafeHTML } from "@zoijs/core/unsafe";', errors: [{ messageId: "importUnsafe" }] },
+    { code: 'export * from "@zoijs/core/unsafe";', errors: [{ messageId: "importUnsafe" }] },
+    { code: "unsafeHTML(markup)", errors: [{ messageId: "callUnsafe" }] }, // e.g. via a re-export
   ],
 });
