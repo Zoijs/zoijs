@@ -24,10 +24,12 @@ You can learn the whole thing in about 5 minutes.
 npm install @zoijs/core @zoijs/resource
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/resource" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { resource } from "https://esm.sh/@zoijs/resource@0.1";
+import { resource } from "@zoijs/resource";
 ```
 
 ## What a resource is
@@ -146,6 +148,23 @@ suspense, optimistic updates, or infinite queries. (Basic SSR hand-off is suppor
 via `{ initial }` above; per-request data loaders are not.) If you need those, reach
 for a dedicated data library — this is the 90%-case helper.
 
+## Security: cookies, CSRF, and credentials
+
+`resource` runs your function — it adds no credentials, headers, or CSRF tokens of its own,
+and it doesn't replace server-side protection. If your API uses cookies, the server must
+protect state-changing requests against CSRF; use `credentials: "include"` only for an
+intended cross-origin API whose CORS allows your exact origin; and enforce authorization
+on the server. See [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) and
+[credentials](https://zoijs.dev/production-security#6-configure-credentials-deliberately) in the production security checklist.
+
 ## License
 
 [MIT](LICENSE) © Zoijs contributors
+
+## Error monitoring
+
+*(Next release; reports arrive only with core 1.9.0 or later — older cores have no shared runtime, so nothing is reported.)*
+
+A failure that becomes `error()` is also reported to the app's
+`configure({ onError })` hook from `@zoijs/core`, as `{ kind: "resource" }` with the original
+error (superseded or post-unmount results are ignored, so they aren't reported).

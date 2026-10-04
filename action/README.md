@@ -80,6 +80,19 @@ Rule of thumb: loading a page → `resource`. Clicking a button → `action`.
 | `result()` | The latest successful result (reactive) |
 | `reset()` | Clear pending, error, done, and result |
 
+`action(fn, { exclusive: true })` *(next release)* — for non-idempotent writes (a payment, a POST that
+creates a record). While a run is pending, `run()` doesn't call `fn` again; it returns the
+pending run's promise (its arguments are ignored). The lock is taken before `fn` starts, so
+a double-click in the same tick can't slip through, and it's released when the run succeeds
+or fails (or on `reset()`). Joined calls aren't errors and aren't reported to `onError`.
+
+```js
+const pay = action((order) => fetch("/api/pay", { method: "POST", body: JSON.stringify(order) }), { exclusive: true });
+```
+
+It prevents overlapping runs in this page — not server-side replays or retries. Make the
+endpoint idempotent too (e.g. an idempotency key); a disabled button is not authorization.
+
 ## Showing pending state
 
 Disable the button and change its label while running:
@@ -130,6 +143,23 @@ By design, to stay tiny: no form library, validation, mutation cache, query
 invalidation, optimistic updates, retries, or SSR. It's the button-state helper,
 nothing more.
 
+## Security: cookies, CSRF, and credentials
+
+`action` runs your function — it adds no credentials, headers, or CSRF tokens of its own,
+and it doesn't replace server-side protection. If your API uses cookies, the server must
+protect state-changing requests against CSRF; use `credentials: "include"` only for an
+intended cross-origin API whose CORS allows your exact origin; and enforce authorization
+on the server. See [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) and
+[credentials](https://zoijs.dev/production-security#6-configure-credentials-deliberately) in the production security checklist.
+
 ## License
 
 [MIT](LICENSE) © Zoijs contributors
+
+## Error monitoring
+
+*(Next release; reports arrive only with core 1.9.0 or later — older cores have no shared runtime, so nothing is reported.)*
+
+A failure that becomes `error()` is also reported to the app's
+`configure({ onError })` hook from `@zoijs/core`, as `{ kind: "action" }` with the original
+error (superseded or post-unmount results are ignored, so they aren't reported).

@@ -2,6 +2,45 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## Unreleased
+
+### Security
+- **Generated apps pin `@zoijs/core` exactly and securely (SEC-7).** Templates allowed `^1.1.0` /
+  `^1.2.0` (older than the 1.7.0 URL-guard fixes), and the `minimal` template loaded a floating
+  `esm.sh/@zoijs/core@1` URL with no integrity check. Every template now takes its core version from
+  one file, `core-cdn.json` (an exact, published version plus a jsDelivr import map with a sha384
+  integrity hash for every module file, generated from the npm tarball and verified at release):
+  package templates get `^<that version>`, and `minimal` gets the exact, integrity-pinned import map.
+- **Hardened the scaffolded dev server (SEC-6)** (templates `app`, `basic`, `typescript`).
+  It listened on every network interface, served dotfiles (`/.env`, `/.git/config`, `.npmrc`)
+  and followed symlinks out of the project to anyone on the LAN, and a malformed URL such as
+  `/%E0` crashed it. It now listens on `127.0.0.1` only (opt into the LAN explicitly with
+  `ZOIJS_HOST=0.0.0.0`, which prints a warning), never serves a path with a dot-segment,
+  confines every file — including symlink targets — to the project folder (package-manager
+  links under `node_modules/` excepted), answers malformed or null-byte paths with `400`
+  and keeps running, and sends `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
+  `npm run dev` and the URL it prints are unchanged.
+- **The `minimal` template no longer recommends `npx serve`.** `npx serve . -l 7310`
+  downloaded a mutable package at run time and used that package's own (non-loopback)
+  defaults. `minimal` now ships the same hardened `dev-server.mjs` as the other templates,
+  plus a dependency-free `package.json` whose `dev` script runs it — still nothing to
+  install (`@zoijs/core` stays on the integrity-pinned CDN). All four template copies of
+  the server are byte-identical, and a test enforces that.
+
+### Changed
+- **Deploy guidance for the production entry (SEC-4).** Every app template's README and
+  `index.html` explain switching the import map to `@zoijs/core`'s production entry
+  (`src/prod.js`: no dev warnings, no devtools hook) before deploying. `minimal`'s map
+  already carries the integrity hash for `prod.js`.
+- **"Next steps" match the template.** `minimal` prints `npm run dev` with no install step;
+  `library` prints `npm install` / `npm test` instead of a `dev` script it doesn't have.
+
+### Release note
+- Templates use `@zoijs/core` from `core-cdn.json`. That file (and with it the
+  `minimal` import map) moves to the next core version only after that core is on npm,
+  so `create-zoijs` is published **last** — `release:check` reports it as BLOCKED until
+  then (see `framework/docs/releasing.md`).
+
 ## 0.1.4 — 2026-06-27
 
 Scaffolded apps now come with editor config for a great out-of-the-box experience —

@@ -9,7 +9,7 @@
 // remaining case — the synchronous setup/render throw.
 
 import { createOwner, runWithOwner, disposeOwner } from "../reactivity/owner.js";
-import { isDev } from "../reactivity/env.js";
+import { isDev, reportError } from "../reactivity/env.js";
 
 /**
  * @template C, F
@@ -29,6 +29,8 @@ export function boundary(child, fallback) {
     if (isDev()) {
       console.error("Zoijs: boundary caught an error during render; showing fallback.", err);
     }
+    // The boundary is the layer that contains this error, so it reports it (once).
+    reportError(err, child && child.name ? { kind: "boundary", component: child.name } : { kind: "boundary" });
     return typeof fallback === "function" ? fallback(err) : fallback;
   }
 }

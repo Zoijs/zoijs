@@ -1,0 +1,24 @@
+{
+  "$comment": [
+    "Single source of truth for @zoijs/core compatibility floors (SEC-7), enforced by scripts/release-check.mjs.",
+    "capabilities: the FIRST published @zoijs/core version providing an import (a subpath, or 'subpath#export' when a named export arrived later than its subpath). Verified against the published tarballs on npm.",
+    "'next' = ships in the next core release, which has no version yet. Packages/templates that need a 'next' capability cannot be released until nextCore is set to the version that release will carry (then raise their floors to it).",
+    "securityFloor: the lowest published core with every known security fix — generated apps must not allow anything older.",
+    "When a core release ships: set nextCore to its version, replace 'next' entries with it, then clear nextCore after publishing."
+  ],
+  "nextCore": null,
+  "securityFloor": "1.7.0",
+  "capabilities": {
+    "@zoijs/core": "1.0.0",
+    "@zoijs/core/devtools": "1.4.0",
+    "@zoijs/core/server": "1.5.0",
+    "@zoijs/core/server#styleObjectToCss": "1.7.0",
+    "@zoijs/core/server#isSafeAttributeValue": "next",
+    "@zoijs/core/server#openerRel": "next",
+    "@zoijs/core/prod": "next",
+    "@zoijs/core/unsafe": "next"
+  },
+  "packageRequires": {
+    "create": ["@zoijs/core/prod"]
+  }
+}

@@ -181,7 +181,22 @@ export function boundary<C, F>(
 ): C | F;
 
 /** Toggle development warnings (default: `dev` is `true`). */
-export function configure(options: { dev?: boolean }): void;
+/** What `configure({ onError })` receives alongside a contained error. */
+export interface ZoijsErrorInfo {
+  /** Which Zoijs layer caught it. */
+  kind: "binding" | "effect" | "computed" | "cleanup" | "boundary" | "resource" | "action";
+  /** The component's function name, when known (boundaries). */
+  component?: string;
+}
+
+/** Called for every error Zoijs catches or contains instead of letting it escape. */
+export type ZoijsErrorHandler = (error: unknown, info: ZoijsErrorInfo) => void;
+
+export function configure(options: {
+  dev?: boolean;
+  /** Observe contained errors (every mode). `null` removes the hook; omitting it leaves it unchanged. */
+  onError?: ZoijsErrorHandler | null;
+}): void;
 
 /**
  * Register a teardown function for the current component or list item. It runs

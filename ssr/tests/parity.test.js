@@ -150,3 +150,36 @@ test("hydrate removes the slot start markers (DOM matches a fresh mount)", () =>
   for (let n = walk.nextNode(); n; n = walk.nextNode()) comments.push(n.data);
   assert.ok(!comments.includes("zoijs:["), "no leftover slot-start markers");
 });
+
+// CORE-1: a component returned UNCALLED from a binding renders the same on the
+// server and the client, and hydration adopts it without rebuilding on unrelated
+// writes to state its setup read.
+test("uncalled-component binding: server and client agree; hydrated child is not rebuilt", async () => {
+  const show = createState(true);
+  const theme = createState("light");
+  let setups = 0;
+  const Panel = ({ title }) => {
+    setups++;
+    theme.get(); // setup read
+    return html`<section class="panel"><h2>${title}</h2><p>${() => theme.get()}</p></section>`;
+  };
+  const App2 = () => html`<div>${() => (show.get() ? () => Panel({ title: "Stats" }) : null)}${() => (false ? Panel : null)}</div>`;
+
+  const server = renderToString(App2);
+  assert.ok(!server.includes("=&gt;") && !server.includes("Panel("), `no function source in SSR output: ${server}`);
+  const host = document.createElement("div");
+  mount(App2, host);
+  const serverDoc = new JSDOM(`<div id="r">${server}</div>`).window.document;
+  assert.equal(serverDoc.querySelector("#r").textContent, host.textContent);
+
+  const target = document.createElement("div");
+  target.innerHTML = renderToString(App2, { hydratable: true });
+  setups = 0;
+  hydrate(App2, target);
+  const panel = target.querySelector(".panel");
+  theme.set("dark");
+  await tick();
+  assert.equal(setups, 1, "hydrated child set up once, not rebuilt by its setup read");
+  assert.equal(target.querySelector(".panel"), panel);
+  assert.equal(target.querySelector(".panel p").textContent, "dark", "its own binding is live");
+});

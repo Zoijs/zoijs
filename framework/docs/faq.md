@@ -23,6 +23,20 @@ html`<div>${() => error.get() && html`<p class="err">${() => error.get()}</p>`}<
 
 `null`, `undefined`, `true`, and `false` all render **nothing** — so `cond && html\`...\`` works as expected. (Note: `0` renders `"0"`, just like JSX, so use `list.length > 0 ? … : null` rather than `list.length && …`.)
 
+### Showing a component conditionally
+
+Return the component **uncalled** and Zoijs constructs it for you:
+
+```js
+html`<div>${() => (show.get() ? Profile : null)}</div>`;
+// with props: wrap the call — and pass getters for props that should stay live
+html`<div>${() => (show.get() ? () => Profile({ id: () => userId.get() }) : null)}</div>`;
+```
+
+The arrow decides *whether* (and which) component shows; it's the only part that's tracked. Zoijs then calls the component once, untracked, so state it reads during setup belongs to the component and doesn't make the condition re-run. The component keeps its local state, DOM, and focus until the condition changes; when it does, the old one is disposed (its `onCleanup` runs) and a new one is set up.
+
+Don't call the component inside the arrow — `${() => show.get() ? Profile() : null}`. Then `Profile()` runs *during* the condition, so any `.get()` in its setup becomes part of the condition, and changing that state rebuilds `Profile` (losing its state). Zoijs can't tell those reads apart from the condition's own reads, so it can't fix this for you. Reads inside a props wrapper (`() => Profile({ id: userId.get() })`) are untracked too — that passes a one-time snapshot; use a getter (`id: () => userId.get()`) for a live prop.
+
 ## How do components share state?
 
 Create state in a module and import it where needed — it's the same `createState` primitive in a shared place. Zoijs has no separate global-store concept; you don't need one.
@@ -38,7 +52,7 @@ html`${Greeting({ name })}`;
 
 ## Is it secure?
 
-By default, yes. Text is rendered as inert (escaped) text, dangerous URL schemes (`javascript:`) are blocked, event handlers are function references (never strings), and there's no `eval` — so it's CSP-friendly. There's intentionally **no raw-HTML escape hatch** today.
+By default, yes. Text is rendered as inert (escaped) text, dangerous URL schemes (`javascript:`) are blocked, event handlers are function references (never strings), and there's no `eval` — so it works under a strict script CSP (a `style=${…}` binding needs `style-src-attr 'unsafe-inline'`; see the [production checklist](production-security.md)). Raw HTML has exactly one explicit, opt-in route: `unsafeHTML()` from `@zoijs/core/unsafe`, for markup you've established as trusted (it bypasses escaping; untrusted HTML goes through `@zoijs/sanitize`). See [Security](security.md#markup-untrusted-html-and-trusted-raw-html).
 
 ## How big / fast is it?
 

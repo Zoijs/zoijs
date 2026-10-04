@@ -44,13 +44,13 @@
     "no-jsx"
   ],
   "peerDependencies": {
-    "@zoijs/core": "^1.0.0"
+    "@zoijs/core": "^1.5.0"
   },
   "scripts": {
     "test": "node --test --import ./tests/setup-dom.js",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
-    "dev": "npx serve -l 3700 .."
+    "dev": "node ../scripts/test-server.mjs .. 3800"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

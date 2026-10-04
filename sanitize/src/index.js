@@ -6,11 +6,11 @@
 //   // markdown/CMS body → safe nodes, dropped into a text slot as-is
 //   html`<article>${() => sanitize(post.bodyHtml)}</article>`;
 //
-// Zoijs has NO raw-HTML API by design: a string in a text slot is inert text, and
-// there is deliberately no `unsafeHTML`. But real apps still need to render *rich*
-// HTML they mostly trust — the output of a markdown renderer, a CMS field. That's
-// the single most security-critical boundary in a front end, and until now Zoijs
-// left you to solve it alone. `sanitize()` makes it a supported, tested path.
+// In Zoijs a string in a text slot is always inert text. But real apps still need to
+// render *rich* HTML they don't control — the output of a markdown renderer, a CMS
+// field. That's the single most security-critical boundary in a front end, and
+// `sanitize()` makes it a supported, tested path. (Trusted raw markup has a separate,
+// explicit opt-in — `unsafeHTML()` from @zoijs/core/unsafe — which never sanitizes.)
 //
 // How it stays safe:
 //   1. The string is parsed with `DOMParser` into an INERT document — scripts never
@@ -23,6 +23,10 @@
 //      SAME `isSafeUrl` the core renderer uses, so `javascript:`/`data:text/html`
 //      can't slip through and the decision can't drift from the rest of Zoijs.
 //   4. `target="_blank"` links get `rel="noopener noreferrer"` (no reverse-tabnabbing).
+//   5. Untrusted markup can't claim page-level names (DOM clobbering): `name` is always
+//      removed, and every `id` is namespaced with a prefix (default `user-content-`), so
+//      `<a id="__DATA__">` can't shadow `window.__DATA__`. Same-document references —
+//      `href="#…"`, `headers`, and ARIA ID references — are rewritten to match.
 //
 // It returns an ARRAY OF NODES (not a string, not a fragment) so it composes with a
 // Zoijs binding: each node is tracked and removed cleanly on update/unmount. Because
@@ -58,8 +62,11 @@ const ALLOWED_TAGS = new Set(
 const GLOBAL_ATTRS = new Set(["class", "id", "title", "dir", "lang", "role"]);
 
 // Extra attributes allowed on specific elements.
+// `name` is deliberately absent everywhere: on untrusted markup it only ever creates
+// named properties (window.<name>, form.<name>) — DOM clobbering — and no allowed
+// element needs it (in-page anchors use `id`).
 const TAG_ATTRS = {
-  a: new Set(["href", "target", "rel", "name", "hreflang", "type"]),
+  a: new Set(["href", "target", "rel", "hreflang", "type"]),
   img: new Set(["src", "alt", "width", "height", "loading", "decoding"]),
   blockquote: new Set(["cite"]),
   q: new Set(["cite"]),
@@ -77,6 +84,16 @@ const TAG_ATTRS = {
 
 // Attribute names whose value is a URL — scheme-checked with the core's isSafeUrl.
 const URL_ATTRS = new Set(["href", "src", "cite", "xlink:href"]);
+
+// Allowed attributes whose value is a space-separated list of element ids (IDREF /
+// IDREFS). They're rewritten with the same prefix as `id` so the references still
+// resolve. (`aria-*` is allowed by prefix, so all ARIA id-reference attributes apply.)
+const IDREF_ATTRS = new Set([
+  "headers", "aria-labelledby", "aria-describedby", "aria-controls", "aria-owns",
+  "aria-details", "aria-errormessage", "aria-activedescendant", "aria-flowto",
+]);
+
+const DEFAULT_ID_PREFIX = "user-content-";
 
 function attrAllowed(tag, name) {
   const n = name.toLowerCase();
@@ -99,7 +116,7 @@ function hardenRel(existing) {
 
 // ---- pruning -----------------------------------------------------------------
 
-function cleanElement(el) {
+function cleanElement(el, prefix) {
   const tag = el.tagName.toLowerCase();
   if (!ALLOWED_TAGS.has(tag)) {
     // Not on the allowlist → drop the element AND its subtree. Conservative on
@@ -110,12 +127,24 @@ function cleanElement(el) {
   }
   for (const attr of Array.from(el.attributes)) {
     const name = attr.name;
+    const n = name.toLowerCase();
     if (!attrAllowed(tag, name)) {
       el.removeAttribute(name);
       continue;
     }
-    if (URL_ATTRS.has(name.toLowerCase()) && !isSafeUrl(attr.value)) {
+    if (URL_ATTRS.has(n) && !isSafeUrl(attr.value)) {
       el.removeAttribute(name);
+      continue;
+    }
+    // Namespace ids and the same-document references to them (deterministic prefix,
+    // so references can be rewritten in the same single pass — order doesn't matter).
+    if (n === "id") {
+      if (!attr.value.trim()) el.removeAttribute(name); // an empty id is no id
+      else if (prefix) el.setAttribute(name, prefix + attr.value);
+    } else if (prefix && IDREF_ATTRS.has(n)) {
+      el.setAttribute(name, attr.value.split(/\s+/).filter(Boolean).map((ref) => prefix + ref).join(" "));
+    } else if (prefix && n === "href" && attr.value.trim().startsWith("#") && attr.value.trim().length > 1) {
+      el.setAttribute(name, "#" + prefix + attr.value.trim().slice(1));
     }
   }
   // Reverse-tabnabbing guard: a link opening a new context must not hand it a live
@@ -124,14 +153,14 @@ function cleanElement(el) {
     const target = el.getAttribute("target");
     if (target && target !== "_self") el.setAttribute("rel", hardenRel(el.getAttribute("rel")));
   }
-  cleanChildren(el);
+  cleanChildren(el, prefix);
 }
 
-function cleanChildren(parent) {
+function cleanChildren(parent, prefix) {
   // Snapshot first — we mutate as we go (removing disallowed nodes).
   for (const child of Array.from(parent.childNodes)) {
     const type = child.nodeType;
-    if (type === 1) cleanElement(child); // element
+    if (type === 1) cleanElement(child, prefix); // element
     else if (type === 3) continue; // text — inert, kept verbatim
     else child.remove(); // comment / CDATA / processing-instruction → dropped
   }
@@ -147,10 +176,23 @@ function cleanChildren(parent) {
  * handlers, foreign content, and dangerous URLs are removed. Returns `[]` for
  * null/undefined/empty input. A CLIENT helper — it needs a DOM (throws otherwise).
  *
+ * Every `id` gets the `idPrefix` (default `"user-content-"`) and `name` is always
+ * removed, so sanitized content can't clobber page globals; `href="#…"`, `headers` and
+ * ARIA id references are rewritten to match. Pass `{ idPrefix: "" }` to keep ids
+ * as written (only for content you control — it reopens the collision risk).
+ *
  * @param {unknown} dirty  the untrusted HTML string (coerced with String())
+ * @param {{ idPrefix?: string }} [options]
  * @returns {Node[]}       top-level sanitized nodes, adopted into `document`
  */
-export function sanitize(dirty) {
+export function sanitize(dirty, options) {
+  if (options !== undefined && (options === null || typeof options !== "object")) {
+    throw new TypeError("@zoijs/sanitize: options must be an object, e.g. { idPrefix: \"user-content-\" }");
+  }
+  const prefix = options?.idPrefix === undefined ? DEFAULT_ID_PREFIX : options.idPrefix;
+  if (typeof prefix !== "string") {
+    throw new TypeError(`@zoijs/sanitize: idPrefix must be a string (got ${prefix === null ? "null" : typeof prefix}); use "" to keep ids unprefixed`);
+  }
   if (dirty === null || dirty === undefined) return [];
   if (typeof document === "undefined" || typeof DOMParser === "undefined") {
     throw new Error(
@@ -159,7 +201,7 @@ export function sanitize(dirty) {
     );
   }
   const doc = new DOMParser().parseFromString(String(dirty), "text/html");
-  cleanChildren(doc.body);
+  cleanChildren(doc.body, prefix);
   const out = [];
   for (const node of Array.from(doc.body.childNodes)) out.push(document.adoptNode(node));
   return out;

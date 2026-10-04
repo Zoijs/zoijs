@@ -2,6 +2,15 @@
 
 All notable changes to `@zoijs/resource` are documented here.
 
+## Unreleased
+
+### Added
+- **Failures reach `configure({ onError })` (CORE-3).** A failed fetch that becomes this resource's
+  `error()` is also reported to the app's onError hook as `{ kind: "resource" }` (original error,
+  once; superseded/disposed runs aren't reported). It goes through the core's shared runtime, so
+  no-build apps need no extra import-map entry, and the peer range is unchanged: with an older
+  core (no shared runtime, ≤ 1.8) the error simply isn't reported, as before.
+
 ## 0.2.0 — 2026-06-27
 
 ### Added

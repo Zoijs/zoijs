@@ -11,6 +11,13 @@ export function escapeAttr(value: unknown): string;
 export function isSafeUrl(url: string): boolean;
 /** Is this attribute name allowed to be bound from data (blocks on*, srcdoc)? */
 export function isSafeAttributeName(name: string): boolean;
+/**
+ * The URL-safety decision for a bound attribute value (URL attributes, srcset, and the
+ * compiler-flagged meta-refresh / SVG-animation contexts). Shared with the client renderer.
+ */
+export function isSafeAttributeValue(lname: string, value: unknown, check?: "refresh" | "anim"): boolean;
+/** The rel a link needs: for target="_blank", the app's rel plus noopener + noreferrer. */
+export function openerRel(target: unknown, rel: unknown): unknown;
 /** Attribute names whose values carry a URL (scheme-checked). */
 export const URL_ATTRS: ReadonlySet<string>;
 /** Build an inline-style string from a plain object, safely (injection-proof). */
@@ -28,11 +35,20 @@ export interface AttrPart {
   holes: number[];
   event: boolean;
   whole: boolean;
+  /** Compiler-flagged URL context: meta-refresh content or an SVG animation value. */
+  check?: "refresh" | "anim";
+  /** A target/rel pair merged into one part (opener protection on a/area/form). */
+  opener?: boolean;
+  target?: AttrPart;
+  rel?: AttrPart | null;
 }
 
-/** An `html\`…\`` result, viewed without its DOM template. */
+/**
+ * An `html\`…\`` result, viewed without its DOM template. Identity is a runtime
+ * Symbol brand, not a field — use {@link isTemplateResult}; an object merely shaped
+ * like this is NOT a template result.
+ */
 export interface TemplateResult {
-  __zoijsTemplate: true;
   __staticHTML: string;
   parts: Part[];
   values: unknown[];
@@ -41,7 +57,6 @@ export interface TemplateResult {
 
 /** An `each(...)` list marker. */
 export interface EachMarker {
-  __zoijsEach: true;
   items: unknown;
   keyFn: (item: unknown) => unknown;
   renderFn: (item: unknown) => unknown;

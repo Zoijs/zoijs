@@ -19,6 +19,7 @@ A tagged template. Write real HTML; interpolate values with `${}`.
 - `${() => x}` — a **live** binding (text or attribute) that updates when `x`'s sources change.
 - `${value}` — a **static** value, inserted once.
 - `onevent=${fn}` — an event listener.
+- `${() => cond ? Component : null}` — a live binding may return a component **uncalled** (or `() => Component(props)`); Zoijs calls it once, untracked, and disposes it when the binding returns something else. See [FAQ: showing a component conditionally](faq.md#showing-a-component-conditionally).
 - Returns an opaque `TemplateResult` — pass it to `mount`, return it from a component, place it in another template, or use it in `each`'s render function.
 
 A sole-child `${}` in `<textarea>` or `<title>` binds the element's content — `html\`<textarea>${text}</textarea>\``, `html\`<title>${pageTitle}</title>\`` (reactive when the value is a function). It must be the *only* content (no surrounding text).
@@ -130,10 +131,50 @@ html`<section>${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load.</p
 ## `configure`
 
 ```
-configure({ dev }) → void
+configure({ dev?, onError? }) → void
 ```
 
-Toggle development warnings. `dev` defaults to `true`. See [Production mode](concepts/production-mode.md).
+Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds) *(next release — on 1.8.0 every app starts in development mode; call `configure({ dev: false })`)*. One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
+
+
+### Error monitoring: `configure({ onError })`
+
+*(Next release.)*
+
+```js
+configure({
+  onError(error, info) {
+    monitoring.capture(error, info); // Sentry, Datadog, OpenTelemetry, your own logger…
+  },
+});
+```
+
+Zoijs keeps a page running when part of it fails — a binding that throws keeps the rest
+of the UI working, a `boundary` shows its fallback, a failed `resource` shows its
+`error()`. `onError` lets you **observe** those contained failures. It receives the
+**original** thrown value (not wrapped) and `info`:
+
+| `info.kind` | What failed |
+|---|---|
+| `"binding"` | a `${() => …}` text/attribute/list binding |
+| `"effect"` | an `effect()` body |
+| `"computed"` | a `computed()` derivation (it keeps its previous value) |
+| `"cleanup"` | an `onCleanup` handler or an effect's returned cleanup |
+| `"boundary"` | a `boundary` child's setup (`info.component` is the child function's name, when it has one) |
+| `"resource"` / `"action"` | a `@zoijs/resource` fetch / `@zoijs/action` run that became its `error()` |
+
+- Each failure is reported **once**, by the layer that contained it.
+- Errors that already **escape** (a component throwing outside any `boundary`, `html([…])`,
+  event handlers, server rendering) still escape and are not reported.
+- It works in **production mode** too. Existing console logging is unchanged.
+- It's **one hook per page**, shared by every loaded copy of the core; the last
+  `configure({ onError })` wins. `configure({ onError: null })` removes it; other
+  `configure` calls leave it alone.
+- If the hook itself throws, Zoijs logs that and carries on — it never calls the hook
+  for its own failure.
+
+> **Privacy:** errors and their messages can contain application or user data. Scrub
+> anything sensitive before sending it to an external monitoring service.
 
 ---
 
@@ -149,6 +190,37 @@ Register a teardown function for the current component or list item. It runs whe
 const id = setInterval(tick, 1000);
 onCleanup(() => clearInterval(id));
 ```
+
+---
+
+## `unsafeHTML` (`@zoijs/core/unsafe`)
+
+*(Next release — not in 1.8.0.)*
+
+```
+import { unsafeHTML } from "@zoijs/core/unsafe";
+unsafeHTML(value: string | TrustedHTML) → UnsafeHTMLResult
+```
+
+Not part of the main entry. Renders `value` as **raw markup** in a content position —
+`` html`<article>${unsafeHTML(trusted)}</article>` `` or reactively `${() => unsafeHTML(src.get())}`.
+**It bypasses escaping and does not sanitize**: only pass content you have independently
+established as trusted; untrusted HTML goes through [`@zoijs/sanitize`](../../sanitize/README.md).
+
+- Accepts a string or a genuine `TrustedHTML` (checked with `trustedTypes.isHTML`); anything else
+  throws a `TypeError`. Under enforced Trusted Types, a string is refused when inserted.
+- Content positions only: in an attribute (including `href`, `style`, `on*`, `ref`) or
+  `<textarea>`/`<title>` content it throws; the result can't be converted to a string.
+- Development mode warns once that a string bypasses escaping; production doesn't.
+- Rendered by `@zoijs/ssr` as unescaped output — a `<script>` in it executes when the
+  server-rendered page loads (on the client, through a `<template>`, scripts are inert).
+  Trusted raw HTML used during SSR may contain executable markup: don't pass content you
+  wouldn't be willing to emit directly into the response.
+- None of Zoijs's attribute/URL guards (`javascript:`, `srcset`, `<base>`, `target="_blank"`
+  opener protection) apply inside the markup.
+- No build step: add an exact, integrity-pinned `"@zoijs/core/unsafe"` entry to your import map only
+  when you use it (`node scripts/cdn-importmap.mjs @zoijs/core@<version> --unsafe`).
+- See [Security](security.md#unsafehtml--the-one-escape-hatch).
 
 ---
 

@@ -49,6 +49,7 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 ### Reference & help
 - [API Reference](api-reference.md)
 - [Security](security.md) — safe rendering rules & CSP
+- [Production security checklist](production-security.md) — CSP & headers, CSRF, credentials, serialize, route params, secrets — read before you deploy
 - [Accessibility](accessibility.md) — the Zoijs way to accessible apps
 - [Editor Setup](editor-setup.md) — highlighting, IntelliSense, formatting, linting
 - [Examples index](examples.md)
@@ -79,6 +80,10 @@ When you're stuck: **[Troubleshooting](troubleshooting.md)** · **[FAQ](faq.md)*
 - **Native HTML/CSS/JS** — concepts you already know; nothing bespoke to memorize.
 - **Beginner-friendly mental model** — write a function that returns `html`, put state in it, `mount` it.
 - **Secure by default** — text is escaped, dangerous URLs are blocked, no `eval`.
-- **Small API** — nine functions: `html`, `mount`, `createState`, `computed`, `each`, `effect`, `boundary`, `configure`, `onCleanup`.
+- **Small API** — nine functions in the main entry: `html`, `mount`, `createState`, `computed`, `each`, `effect`, `boundary`, `configure`, `onCleanup`.
+
+> **Version markers.** These docs track the repository. A feature marked *(next release)* is not
+> in the currently published npm version (`@zoijs/core` 1.8.0, or the package's latest release) —
+> it ships in the next release. The markers are removed when that release is published.
 
 Ready? Start with **[Installation »](installation.md)**

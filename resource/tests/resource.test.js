@@ -192,3 +192,124 @@ test("refresh() still loads on demand after { initial }", { skip: domSkip }, asy
   await tick();
   assert.equal(r.data(), "fresh");
 });
+
+// CORE-1 integration: a resource created in a component returned UNCALLED from a
+// reactive binding (`${() => show.get() ? Profile : null}`) belongs to that child.
+// State read during the child's setup — including synchronously inside the
+// fetcher — must not rebuild the child, re-run the request, or dispose the
+// resource; genuine removal must still dispose it.
+test("a resource in an uncalled-component child is not recreated by unrelated writes", { skip: domSkip }, async () => {
+  const { createState } = await import("@zoijs/core");
+  const show = createState(true);
+  const userId = createState(7);
+  const theme = createState("light");
+  const pending = [];
+  let fetches = 0;
+  function Profile() {
+    theme.get(); // a setup read that used to subscribe the parent binding
+    const user = resource(() => {
+      fetches++;
+      const d = deferred();
+      pending.push({ id: userId.get(), d }); // fetcher reads state synchronously
+      return d.promise;
+    });
+    return html`<p class="p">${() => (user.loading() ? "loading" : user.data())}</p>`;
+  }
+  const root = document.createElement("div");
+  const unmount = mount(() => html`<section>${() => (show.get() ? Profile : null)}</section>`, root);
+
+  theme.set("dark"); await tick();
+  userId.set(8); await tick();
+  assert.equal(fetches, 1, "initial request not repeated");
+  assert.equal(root.querySelector(".p").textContent, "loading", "pending work not restarted");
+
+  pending[0].d.resolve("user 7");
+  await tick();
+  assert.equal(root.querySelector(".p").textContent, "user 7", "the original request settles into the same child");
+
+  show.set(false); await tick();
+  show.set(true); await tick();
+  assert.equal(fetches, 2, "a genuine remount creates a new resource");
+  show.set(false); await tick();
+  pending[1].d.resolve("late");
+  await tick();
+  assert.equal(root.querySelector(".p"), null, "removed child stays removed (late result ignored)");
+  unmount();
+});
+
+// CORE-3: a failure that becomes the resource's error() state is also reported to
+// configure({ onError }) — once, with the original value. Stale (superseded) and
+// post-dispose results are ignored by the resource, so they are not reported.
+test("CORE-3: failures that land in error() are reported to onError once", async () => {
+  const { configure } = await import("@zoijs/core");
+  const calls = [];
+  configure({ onError: (error, info) => calls.push({ error, info }) });
+  try {
+    // rejected fetcher
+    const rejected = new Error("404");
+    const r1 = resource(() => Promise.reject(rejected));
+    await tick();
+    assert.equal(r1.error(), rejected, "error state unchanged");
+    assert.deepEqual(calls, [{ error: rejected, info: { kind: "resource" } }]);
+
+    // synchronous throw
+    const thrown = new Error("sync");
+    const r2 = resource(() => { throw thrown; });
+    await tick();
+    assert.equal(r2.error(), thrown);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].error, thrown);
+
+    // superseded request: its rejection is stale → ignored → not reported
+    const first = deferred();
+    const second = deferred();
+    let n = 0;
+    const r3 = resource(() => (n++ === 0 ? first.promise : second.promise));
+    r3.refresh();
+    second.resolve("fresh");
+    first.reject(new Error("stale"));
+    await tick();
+    assert.equal(r3.data(), "fresh");
+    assert.equal(calls.length, 2, "stale failure not reported");
+
+    // success → nothing reported
+    resource(() => Promise.resolve(1));
+    await tick();
+    assert.equal(calls.length, 2);
+  } finally {
+    configure({ onError: null });
+  }
+});
+
+test("CORE-3: a failure after the owning component is disposed is not reported", { skip: domSkip }, async () => {
+  const { configure } = await import("@zoijs/core");
+  const calls = [];
+  configure({ onError: (e) => calls.push(e) });
+  try {
+    const d = deferred();
+    const root = document.createElement("div");
+    const unmount = mount(() => { resource(() => d.promise); return html`<p></p>`; }, root);
+    unmount();
+    d.reject(new Error("after unmount"));
+    await tick();
+    assert.deepEqual(calls, []);
+  } finally {
+    configure({ onError: null });
+  }
+});
+
+// Reporting goes through the core's shared runtime (no @zoijs/core/internal import). With no
+// reporter — a core older than 1.9 has no runtime — a failure still lands in error(), quietly.
+test("without a runtime reporter, a failed fetch still sets error() and nothing throws", async () => {
+  const rt = globalThis[Symbol.for("zoijs.runtime@1")];
+  const saved = rt.report;
+  rt.report = undefined;
+  try {
+    const err = new Error("offline");
+    const r = resource(() => Promise.reject(err));
+    await new Promise((res) => setTimeout(res, 0));
+    assert.equal(r.error(), err);
+  } finally {
+    rt.report = saved;
+  }
+});

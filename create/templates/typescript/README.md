@@ -22,6 +22,26 @@ npm run dev
 
 Open the printed URL (it falls back to 7311–7313 if the port is busy).
 
+The dev server is for **development only**: it listens on `127.0.0.1` (this machine),
+never serves dotfiles (`.env`, `.git/`, …) or anything outside the project folder, and is
+not meant for hosting. To try the app from a phone on your network, opt in explicitly with
+`ZOIJS_HOST=0.0.0.0 npm run dev` — while it runs, anyone on that network can read the
+project's files.
+
+## Deploy
+
+This page loads the **development** entry of `@zoijs/core` (helpful warnings, devtools).
+When you deploy, change the import map in `index.html` to the **production** entry —
+same API, warnings and the devtools hook off:
+
+```html
+"@zoijs/core": "./node_modules/@zoijs/core/src/prod.js"
+```
+
+Then deploy the files to a static host (not the dev server) and go through the
+[production security checklist](https://zoijs.dev/production-security) — security headers,
+a Content-Security-Policy with your import map's hash, CSRF, and more.
+
 ## Type-check
 
 ```bash

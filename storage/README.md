@@ -25,10 +25,12 @@ You can learn the whole thing in about 2 minutes — it's `createState` that rem
 npm install @zoijs/core @zoijs/storage
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/storage" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { storage } from "https://esm.sh/@zoijs/storage@0.1";
+import { storage } from "@zoijs/storage";
 ```
 
 ## What `storage()` does
@@ -60,7 +62,7 @@ Reload the page and the choice is still there. That's the whole idea.
 
 | Member | What it does |
 |---|---|
-| `storage(key, initialValue)` | Create a persistent value. Reads the key (JSON), or uses `initialValue`. |
+| `storage(key, initialValue, { validate }?)` | Create a persistent value. Reads the key (JSON), or uses `initialValue` — also when `validate` doesn't return `true`. |
 | `get()` | Read the current value; **reactive** inside a binding (`${() => ...}`). |
 | `set(value)` | Update the value **and** write it to `localStorage`. |
 | `peek()` | Read the current value **without** subscribing. |
@@ -126,11 +128,35 @@ reactive — values simply don't persist for that session. It never throws.
 - **Storing huge or non-JSON data.** Keep it small and serializable; `localStorage`
   has a modest quota and only holds strings.
 
+## Validating what comes back
+
+*(Next release.)*
+
+`localStorage` is user-editable (devtools, extensions, an XSS bug elsewhere on your
+origin), so a restored value can be anything JSON can express. Pass `validate` to check it:
+
+```js
+const theme = storage("theme", "light", {
+  validate: (value) => value === "light" || value === "dark",
+});
+```
+
+- `validate(value)` gets the parsed JSON. Return **`true`** to accept it. Anything else —
+  `false`, a truthy non-`true` value, or a throw — falls back to `initialValue`; startup never
+  fails. The stored item is left as is until your next `set()` overwrites it.
+- Values you `set()` come from your code and aren't validated.
+- No validator → the original behavior (any valid JSON is restored).
+
 ## What this is *not*
 
 By design, to stay tiny: no global store, no provider/context, no cross-tab sync,
 no TTL/expiration, no encryption, no `sessionStorage`/IndexedDB, no custom
-serializers, and no schema validation. It's the 90%-case persistence helper.
+serializers, and no schema library (just the `validate` hook). It's the 90%-case persistence helper.
+
+**Not for secrets.** `localStorage` is readable by every script on your origin, so an
+XSS bug anywhere exposes it. Store preferences, drafts, and UI state — never passwords,
+API keys, or session tokens (prefer server-set `HttpOnly` cookies for sessions). See
+[secrets](https://zoijs.dev/production-security#13-keep-secrets-off-the-client) in the production security checklist.
 
 ## License
 

@@ -8,11 +8,12 @@
 //
 // These are internal helpers (not part of the public API).
 
-let currentOwner = null;
+import { runtime as rt } from "./runtime.js";
+import { reportError } from "./env.js";
 
 /** The active owner, or null outside any scope. */
 export function getOwner() {
-  return currentOwner;
+  return rt.owner;
 }
 
 /** Create a scope, nested under the currently active owner. */
@@ -20,28 +21,28 @@ export function createOwner() {
   const owner = {
     disposers: [],
     children: new Set(),
-    parent: currentOwner,
+    parent: rt.owner,
     disposed: false,
   };
-  if (currentOwner) currentOwner.children.add(owner);
+  if (rt.owner) rt.owner.children.add(owner);
   return owner;
 }
 
 /** Run `fn` with `owner` active, so things it creates register into `owner`. */
 export function runWithOwner(owner, fn) {
-  const previous = currentOwner;
-  currentOwner = owner;
+  const previous = rt.owner;
+  rt.owner = owner;
   try {
     return fn();
   } finally {
-    currentOwner = previous;
+    rt.owner = previous;
   }
 }
 
 /** Register a cleanup function in the active owner (no-op outside a scope). */
 export function onCleanup(fn) {
-  if (!currentOwner) return; // no active scope — nothing owns this cleanup
-  if (currentOwner.disposed) {
+  if (!rt.owner) return; // no active scope — nothing owns this cleanup
+  if (rt.owner.disposed) {
     // Registered into an ALREADY-disposed scope — e.g. an async callback that resolved after its
     // owner was torn down (teardown-races-async-resolution). Pushing would leak it: the disposers
     // array has already been drained and will never run again. Tear the resource down now instead.
@@ -49,10 +50,11 @@ export function onCleanup(fn) {
       fn();
     } catch (err) {
       console.error("Zoijs: a cleanup handler threw:", err);
+      reportError(err, { kind: "cleanup" });
     }
     return;
   }
-  currentOwner.disposers.push(fn);
+  rt.owner.disposers.push(fn);
 }
 
 /** Dispose a scope: tear down child scopes first, then run its disposers. */
@@ -66,6 +68,7 @@ export function disposeOwner(owner) {
       owner.disposers[i]();
     } catch (err) {
       console.error("Zoijs: a cleanup handler threw:", err);
+      reportError(err, { kind: "cleanup" });
     }
   }
   owner.disposers.length = 0;

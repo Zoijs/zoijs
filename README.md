@@ -48,8 +48,8 @@ That's a complete, working app. No bundler, no JSX, no config.
 - 🚫 **No build step** — a `<script type="module">` is the whole toolchain.
 - ✍️ **No JSX** — write real HTML in template literals.
 - ⚡ **No Virtual DOM** — fine-grained, direct DOM updates; cost scales with what changed, not app size.
-- 🤏 **Tiny API** — seven functions, learnable in ~30 minutes.
-- 🔒 **Secure by default** — inert text, URL-scheme guards, no `eval`, CSP- and Trusted-Types-friendly.
+- 🤏 **Tiny API** — nine functions in the main entry, learnable in ~30 minutes.
+- 🔒 **Secure by default** — inert text, URL-scheme guards, no `eval`; supports a strict script CSP and Trusted Types (allowances [documented](framework/docs/production-security.md)).
 - 🧩 **Plain web skills** — native events, native CSS, native DOM. Nothing bespoke to memorize.
 - 🧪 **Battle-tested** — 100+ unit tests, real-browser tests on Chromium/Firefox/WebKit, and TypeScript definitions.
 
@@ -67,13 +67,15 @@ Or add the core package to an existing project:
 npm install @zoijs/core
 ```
 
-Or with zero install, straight from a CDN:
+Or with zero install, from a CDN — pinned to an exact version with an integrity hash for every
+module file, via an import map (copy it from the
+[Installation guide](framework/docs/installation.md#from-a-cdn)), then:
 
 ```js
-import { html, mount, createState } from "https://esm.sh/@zoijs/core@1";
+import { html, mount, createState } from "@zoijs/core";
 ```
 
-See the [Installation guide](framework/docs/installation.md) for import-map and vendoring options.
+The [Installation guide](framework/docs/installation.md) also covers npm + import maps and vendoring.
 
 ## The one rule to learn
 
@@ -133,7 +135,7 @@ import { html, mount, createState, computed, each, configure, onCleanup } from "
 | `createState(value)` | A reactive value — `get` / `set` / `peek` |
 | `computed(fn)` | A lazy, cached, value-gated derived value |
 | `each(items, keyFn, renderFn)` | Keyed list rendering |
-| `configure({ dev })` | Toggle development warnings |
+| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod` *(next release)*) |
 | `onCleanup(fn)` | Teardown for a component or list item |
 
 Full details in the **[API Reference](framework/docs/api-reference.md)**.
@@ -144,7 +146,7 @@ Start at **[zoijs.dev](https://zoijs.dev)** — or browse the docs in this repo:
 
 - [Installation](framework/docs/installation.md) · [Your First App](framework/docs/first-app.md) · [Core Concepts](framework/docs/concepts/core-concepts.md)
 - Concepts: [State](framework/docs/concepts/state.md) · [Computed](framework/docs/concepts/computed.md) · [Bindings](framework/docs/concepts/bindings.md) · [Events](framework/docs/concepts/events.md) · [Lists](framework/docs/concepts/lists.md) · [Cleanup](framework/docs/concepts/cleanup.md)
-- [Tutorials](framework/docs/README.md#tutorials-build-something) · [API Reference](framework/docs/api-reference.md) · [Security](framework/docs/security.md) · [Troubleshooting](framework/docs/troubleshooting.md) · [FAQ](framework/docs/faq.md)
+- [Tutorials](framework/docs/README.md#tutorials-build-something) · [API Reference](framework/docs/api-reference.md) · [Security](framework/docs/security.md) · [Production security checklist](framework/docs/production-security.md) · [Troubleshooting](framework/docs/troubleshooting.md) · [FAQ](framework/docs/faq.md)
 - Going to production: [Ecosystem guide](framework/docs/ecosystem.md) · [Deployment](framework/docs/deployment.md) · [Deploy to GitHub Pages (recipe)](framework/docs/recipes/deploy-task-board-github-pages.md) · [Task Board example](examples/task-board)
 - Coming from another framework? [React](framework/docs/migration/from-react.md) · [Vue](framework/docs/migration/from-vue.md) · [Solid](framework/docs/migration/from-solid.md) · [Lit](framework/docs/migration/from-lit.md) · [vanilla JS](framework/docs/migration/from-vanilla.md)
 
@@ -187,7 +189,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
 | [`@zoijs/ssr`](ssr) | Render a component to an HTML string + in-place hydration (SSR / static prerender) + `serialize` for server→client data. No DOM, no deps. |
-| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported alternative to a raw-HTML sink. |
+| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported path for untrusted HTML (trusted raw markup uses `unsafeHTML()`, next release). |
 | [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |
@@ -292,7 +294,7 @@ npm run test:browser # all Playwright suites + the Task Board demo
 
 ## Security
 
-Zoijs is secure by default. To report a vulnerability, please follow the [Security Policy](framework/SECURITY.md) (do not open public issues for vulnerabilities).
+Zoijs is secure by default — see the [security model](framework/docs/security.md), and before deploying, the [production security checklist](framework/docs/production-security.md). To report a vulnerability, please follow the [Security Policy](framework/SECURITY.md) (do not open public issues for vulnerabilities).
 
 ## License
 

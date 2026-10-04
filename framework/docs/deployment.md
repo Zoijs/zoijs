@@ -27,22 +27,37 @@ transpiler, no server runtime.
 Browsers run ES modules natively, so your `<script type="module">` loads `app.js`
 directly. You get the framework one of two ways:
 
-- **From a CDN** (simplest): import from a versioned URL.
-  ```js
-  import { html, mount } from "https://esm.sh/@zoijs/core@1";
-  ```
-- **Vendored** (most control): copy the package's `src/` into your project and
-  point an [import map](installation.md) at the local files. Nothing is fetched
-  at runtime from a third party.
+- **From a CDN** (simplest): an import map pointing at **exact-version** jsDelivr file
+  URLs, with an integrity hash for every module file — see
+  [Installation → From a CDN](installation.md#from-a-cdn). Your CSP must then allow the
+  CDN: `script-src 'self' https://cdn.jsdelivr.net`.
+- **Vendored** (most control): copy the `src/` of an exact released version (from the
+  published package) into your project and point an [import map](installation.md) at the
+  local files. Nothing is fetched at runtime from a third party, so a strict
+  `script-src 'self'` works.
 
-> **Production tip:** always pin a version (`@zoijs/core@1`) or vendor the files.
-> Never ship `@latest` to users — a surprise major version could break your app.
+> **Production tip:** pin an exact version (`@1.8.0`, not `@1` or `@latest`) with integrity
+> hashes, or vendor the files. A CDN URL that floats can change what your users run without
+> a deploy — and a build service that rewrites modules can't be integrity-pinned at all.
 
 ## Deploying a static app (the easy case)
 
 If your app **doesn't use the router**, deployment is trivial — drag the folder
 to any host below and you're done. Skip to your host of choice; you don't need
 any fallback configuration.
+
+## Ship production mode
+
+Load the production entry *(next release; on 1.8.0 call `configure({ dev: false })`)* in what you
+deploy so development warnings and the devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` subpath
+on a CDN) in your import map. Bundlers' production builds select it automatically.
+See [Production mode](concepts/production-mode.md).
+
+## Security headers
+
+Send a Content-Security-Policy and a few other headers from your host. The canonical policy
+and copy-paste `_headers` / `vercel.json` / nginx / Apache recipes (plus what GitHub Pages
+can't do) are in the [production security checklist](production-security.md#17-set-and-verify-deployment-headers).
 
 ## History-mode routing needs an `index.html` fallback
 
@@ -177,8 +192,9 @@ real-world traps are worth knowing. Each was hit by a production Zoijs app; all 
 ### A strict `style-src 'self'` and the router outlet
 
 Under `style-src 'self'` the browser blocks **inline `style="…"` attributes** (and they show up in
-pre-rendered HTML, so the block is visible on first load). Zoijs is built to avoid inline styles, with
-one thing to know: `@zoijs/router`'s `view()` outlet.
+pre-rendered HTML, so the block is visible on first load). Zoijs itself doesn't add inline styles,
+with two things to know: your own `style=${…}` bindings are set as `style` attributes, so they need
+`style-src-attr 'unsafe-inline'` (or use classes instead); and `@zoijs/router`'s `view()` outlet:
 
 - On **`@zoijs/router` ≥ 0.5.0** the outlet is a class (`<div class="zoijs-router-outlet">`), not an
   inline style. Add one CSS rule to keep it layout-transparent:
@@ -229,7 +245,11 @@ silently run stale framework code. Two safe options:
 4. Running a **strict CSP**? Add `.zoijs-router-outlet { display: contents }`, hash the inline import
    map in `script-src`, and don't ship `modulepreload` **and** an import map together (see above).
 5. Serving vendored `@zoijs/*` as **`immutable`**? **Content-hash the URL** so re-vendoring busts caches.
-6. Upload the folder. Done.
+6. Sending **security headers**? Use the [production security checklist](production-security.md)
+   and verify the live response with `curl -sI`.
+7. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
+   Want failures in your monitoring? Add `configure({ onError })` (works in production) *(next release)*.
+8. Upload the folder. Done.
 
 ## What you do *not* need
 

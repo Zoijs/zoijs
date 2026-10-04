@@ -18,19 +18,17 @@ export {
   escapeAttr,
   isSafeUrl,
   isSafeAttributeName,
+  isSafeAttributeValue,
+  openerRel,
   URL_ATTRS,
   styleObjectToCss,
 } from "./utils/security.js";
 
-/** True for an `html\`…\`` result (brand check — does not build the DOM template). */
-export function isTemplateResult(value) {
-  return !!(value && value.__zoijsTemplate === true);
-}
-
-/** True for an `each(...)` list marker. */
-export function isEachMarker(value) {
-  return !!(value && value.__zoijsEach === true);
-}
+// Recognition is by Symbol brand (see core/brand.js) — shared with the client
+// renderer, so neither can be fooled by JSON data shaped like a result.
+// isTemplateResult: true for an `html\`…\`` result (does not build the DOM template).
+// isEachMarker:     true for an `each(...)` list marker.
+export { isTemplateResult, isEachResult as isEachMarker } from "./core/brand.js";
 
 /**
  * The static HTML skeleton of a template result — the author's HTML with unique

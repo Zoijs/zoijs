@@ -29,10 +29,10 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@zoijs/core": "^1.2.0"
+    "@zoijs/core": "^{{ZOIJS_CORE_VERSION}}"
   },
   "devDependencies": {
-    "@zoijs/core": "^1.2.0",
+    "@zoijs/core": "^{{ZOIJS_CORE_VERSION}}",
     "typescript": "^5.9.3"
   }
 }

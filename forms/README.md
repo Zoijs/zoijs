@@ -27,10 +27,12 @@ You can learn the whole thing in about 5 minutes.
 npm install @zoijs/core @zoijs/forms
 ```
 
-Or with no install, from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/forms" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { form } from "https://esm.sh/@zoijs/forms@0.1";
+import { form } from "@zoijs/forms";
 ```
 
 ## What `form()` does

@@ -50,11 +50,12 @@ npm install -D @zoijs/devtools      # reactive-graph inspector (dev dependency)
 npm install -D @zoijs/eslint-plugin # lint rule for the reactive-binding rule (dev dependency)
 ```
 
-Or load them with no install via an import map / CDN (pin the version):
+Or load them with no install: an import map maps each name to an **exact-version** jsDelivr
+file URL with integrity hashes ([how](installation.md#from-a-cdn)), and you import by name:
 
 ```js
-import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
+import { html, mount } from "@zoijs/core";
+import { createRouter } from "@zoijs/router";
 ```
 
 Every package is:
@@ -81,6 +82,14 @@ page) unmounts, its `onCleanup` runs. That single mechanism is why:
 
 No provider wraps your app. No context is threaded through. No lifecycle methods.
 A page is a function; it sets up what it needs; the core cleans it up.
+
+*(Next release.)* This holds even if more than one compatible copy of `@zoijs/core`
+ends up on the page: copies using runtime protocol 1 (introduced in core 1.9.0) share
+**one** reactive runtime in a JavaScript realm (one graph, one owner tree, one `onError`
+hook, one Trusted Types policy). Core 1.8.0 and older don't participate — mixing one of
+those with another copy still splits the graph silently, so load a single version. Packages and component libraries should still declare
+`@zoijs/core` as a **peer dependency** and not bundle it; an incompatible major
+version is reported in dev mode (`ZJS201`, see [Troubleshooting](troubleshooting.md)).
 
 ## The Task Board app
 
@@ -120,11 +129,12 @@ the platform and the core, don't build a system.
 From the repository root:
 
 ```bash
-npx serve -l 7310 .
-# open http://localhost:7310/examples/task-board/
+node scripts/test-server.mjs . 3500
+# open http://localhost:3500/examples/task-board/
 ```
 
-No install, no build — `index.html` uses an **import map** to point the
+(That's the repository's own development server — Node built-ins only, bound to
+`127.0.0.1`; `npm run dev` in `examples/task-board` runs the same thing.) No install, no build — `index.html` uses an **import map** to point the
 `@zoijs/*` names at local source.
 
 > The demo is served at a sub-path here, so it passes

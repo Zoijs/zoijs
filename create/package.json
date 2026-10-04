@@ -8,6 +8,7 @@
   },
   "files": [
     "bin",
+    "core-cdn.json",
     "templates",
     "README.md",
     "CHANGELOG.md",
@@ -38,6 +39,6 @@
     "no-jsx"
   ],
   "scripts": {
-    "test": "node --test tests/create.test.js"
+    "test": "node --test tests/create.test.js tests/dev-server.test.js tests/versions.test.js"
   }
 }

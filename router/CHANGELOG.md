@@ -2,6 +2,23 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## Unreleased
+
+### Security
+- **`decodeSlash` option (SEC-10).** `createRouter(routes, { decodeSlash: false })` keeps `%2F` in
+  params encoded (`/files/..%2Fadmin` → `"..%2Fadmin"`, not `"../admin"`) while other escapes still
+  decode. Default `true` keeps the existing behavior; `false` is recommended when params feed paths,
+  API URLs, or identifiers.
+- **`go()` takes app paths only (SEC-10).** An absolute URL, any scheme (`javascript:`, `https:` …),
+  or a protocol-relative `//host` / `/\host` now throws a clear `TypeError` instead of the browser's
+  opaque `SecurityError`. Paths, `?query` and `#hash` navigation are unchanged.
+
+### Documentation
+- **Route params are documented as untrusted data (SEC-11).** Params are decoded per segment, so an
+  encoded slash survives (`/files/..%2Fadmin` → `params.name === "../admin"`); validate and encode them
+  before using them in paths, URLs, or permission checks, and authorize on the server. A test pins
+  the documented decoding. No behavior change.
+
 ## 0.5.0 — 2026-08-06
 
 ### Changed

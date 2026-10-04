@@ -4,10 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{APP_TITLE}}</title>
-    <!-- Zero install, zero build: load @zoijs/core straight from a CDN.
-         Pin the major version (@1) so your app never breaks unexpectedly. -->
+    <!-- Zero install, zero build: @zoijs/core {{ZOIJS_CORE_VERSION}} from jsDelivr, pinned to that
+         exact version, with an integrity hash for every module file (the browser refuses
+         a file whose bytes don't match). If you use a strict CSP, allow
+         https://cdn.jsdelivr.net in script-src — or vendor the files instead. -->
     <script type="importmap">
-      { "imports": { "@zoijs/core": "https://esm.sh/@zoijs/core@1" } }
+      {{ZOIJS_CORE_IMPORTMAP}}
     </script>
   </head>
   <body>

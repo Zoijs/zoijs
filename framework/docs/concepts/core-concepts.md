@@ -47,6 +47,8 @@ A component function runs **one time**. When state changes, Zoijs updates *only 
 
 This is the big difference from React: there's no re-rendering, no stale closures, no dependency arrays, no `useMemo`. You write plain functions and plain values.
 
+To show a component only sometimes, return it uncalled from a live binding — `${() => open.get() ? Panel : null}` — so its setup still runs once each time it appears ([FAQ](../faq.md#showing-a-component-conditionally)).
+
 ```js
 function Counter() {
   const count = createState(0);

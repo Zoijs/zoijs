@@ -13,6 +13,7 @@ import {
   scaffold,
   DEFAULT_TEMPLATE,
   TEMPLATES,
+  nextSteps,
 } from "../bin/create-zoijs.js";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "create-zoijs-"));
@@ -145,8 +146,11 @@ test("any generated dev server uses port 7310 with 7311–7313 fallbacks and the
   for (const template of TEMPLATES) {
     const dir = path.join(tmp(), template);
     scaffold({ name: "x", template, targetDir: dir });
-    // minimal (CDN + npx serve) and library (a package) ship no dev server.
-    if (!fs.existsSync(path.join(dir, "dev-server.mjs"))) continue;
+    // Only library (a package, not an app) ships no dev server.
+    if (template === "library") {
+      assert.ok(!fs.existsSync(path.join(dir, "dev-server.mjs")));
+      continue;
+    }
     const dev = read(dir, "dev-server.mjs");
     assert.match(dev, /\[\s*7310\s*,\s*7311\s*,\s*7312\s*,\s*7313\s*\]/, `${template}: dev-server should list the port range`);
     assert.match(dev, /Zoijs dev server/, `${template}: dev-server should print the banner`);
@@ -183,14 +187,19 @@ test("scaffold(typescript) is type-checked JS with no build step", () => {
   assert.match(read(dir, "index.html"), /<title>Ts App<\/title>/);
 });
 
-test("scaffold(minimal) is two flat files using the CDN, no install", () => {
+test("scaffold(minimal) is two flat source files using the CDN, plus the hardened dev server — no install", () => {
   const dir = path.join(tmp(), "tiny");
   scaffold({ name: "tiny", template: "minimal", targetDir: dir });
   assert.ok(fs.existsSync(path.join(dir, "index.html")));
   assert.ok(fs.existsSync(path.join(dir, "app.js"))); // flat — no src/ folder
-  assert.ok(!fs.existsSync(path.join(dir, "package.json"))); // no install needed
-  assert.ok(!fs.existsSync(path.join(dir, "dev-server.mjs")));
-  assert.match(read(dir, "index.html"), /esm\.sh\/@zoijs\/core@1/); // CDN, major-pinned
+  // The same hardened server as every other app template; `npm run dev` runs it.
+  assert.equal(read(dir, "dev-server.mjs"), fs.readFileSync(new URL("../templates/basic/dev-server.mjs", import.meta.url), "utf8"));
+  const pkg = JSON.parse(read(dir, "package.json"));
+  assert.equal(pkg.name, "tiny");
+  assert.equal(pkg.scripts.dev, "node dev-server.mjs");
+  // Still nothing to install: no dependencies of any kind.
+  for (const k of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) assert.equal(pkg[k], undefined, k);
+  assert.match(read(dir, "index.html"), /cdn\.jsdelivr\.net\/npm\/@zoijs\/core@\d+\.\d+\.\d+\/src\/index\.js/); // CDN, exact version
   assert.match(read(dir, "index.html"), /<title>Tiny<\/title>/);
 });
 
@@ -207,6 +216,36 @@ test("scaffold(library) is a publishable @zoijs/core-based package", () => {
   assert.ok(fs.existsSync(path.join(dir, "tests", "index.test.js")));
   // imports only the core's public API
   assert.match(read(dir, "src", "index.js"), /from "@zoijs\/core"/);
+});
+
+test("no template recommends a mutable `npx serve` (or any npx-fetched server)", () => {
+  for (const template of TEMPLATES) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "x", template, targetDir: dir });
+    for (const file of walk(dir)) {
+      const text = read(file);
+      assert.doesNotMatch(text, /\bnpx\s+(serve|http-server|live-server|vite|sirv)\b/, `${template}: ${path.relative(dir, file)}`);
+      assert.doesNotMatch(text, /\bserve\s+(\.|-l\b)/, `${template}: ${path.relative(dir, file)}`);
+    }
+    const pkg = fs.existsSync(path.join(dir, "package.json")) ? JSON.parse(read(dir, "package.json")) : { scripts: {} };
+    for (const [name, cmd] of Object.entries(pkg.scripts ?? {})) assert.doesNotMatch(cmd, /\bnpx\b/, `${template}: scripts.${name}`);
+  }
+});
+
+test("next steps match the template", () => {
+  assert.deepEqual(nextSteps("a", "minimal"), ["cd a", "npm run dev"]); // nothing to install
+  assert.deepEqual(nextSteps("a", "library"), ["cd a", "npm install", "npm test"]);
+  for (const t of ["app", "basic", "typescript"]) assert.deepEqual(nextSteps("a", t), ["cd a", "npm install", "npm run dev"]);
+  // Every printed `npm run <x>` / `npm test` exists in the generated package.json.
+  for (const template of TEMPLATES) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "x", template, targetDir: dir });
+    const scripts = JSON.parse(read(dir, "package.json")).scripts;
+    for (const step of nextSteps("x", template)) {
+      const m = /^npm (?:run (\S+)|(test))$/.exec(step);
+      if (m) assert.ok(scripts[m[1] ?? m[2]], `${template}: ${step}`);
+    }
+  }
 });
 
 test("no generated template file references port 3000", () => {

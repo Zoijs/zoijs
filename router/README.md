@@ -25,11 +25,13 @@ You can learn the whole thing in about 10 minutes.
 npm install @zoijs/core @zoijs/router
 ```
 
-Or with no install, straight from a CDN:
+Or with no install, from a CDN: in an import map, point "@zoijs/core" and "@zoijs/router" at
+**exact-version** jsDelivr file URLs with integrity hashes, then import by name (so every
+package shares one core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
 ```js
-import { html, mount } from "https://esm.sh/@zoijs/core@1";
-import { createRouter } from "https://esm.sh/@zoijs/router@0.2";
+import { html, mount } from "@zoijs/core";
+import { createRouter } from "@zoijs/router";
 ```
 
 ## The whole idea
@@ -87,7 +89,7 @@ It uses a class rather than an inline `style="display: contents"` so a strict
 show up in prerendered HTML) are blocked by such a policy, but an external stylesheet rule is
 not. Skip the rule and the outlet is just a normal `<div>` wrapper.
 
-## The API (six functions)
+## The API
 
 | Method | What it does |
 |---|---|
@@ -146,6 +148,27 @@ function UserPage(params) {
 
 Params are always strings (convert with `Number(params.id)` if you need a number).
 
+**Params are untrusted data.** They come from the URL, are decoded with
+`decodeURIComponent` after the path is split into segments, and an encoded slash
+survives decoding: with `"/files/:name"`, the URL `/files/..%2Fadmin` gives
+`params.name === "../admin"`. Rendering a param is safe (it's text); before using one
+in an API path, filesystem path, redirect, or permission check, validate it against
+the format you expect and `encodeURIComponent` it when building URLs. The server must
+authorize every request — a client-side route check is not access control. See
+[route params](https://zoijs.dev/production-security#11-treat-router-parameters-as-data) in the production security checklist.
+
+**Keep encoded slashes encoded: `decodeSlash: false`** *(next release)*. When params feed paths, API
+URLs, or identifiers, opt out of turning `%2F` into `/`:
+
+```js
+const router = createRouter(routes, { decodeSlash: false });
+// "/files/:name", URL /files/..%2Fadmin  →  params.name === "..%2Fadmin"
+// every other escape still decodes:      /files/hello%20world → "hello world"
+```
+
+The default stays `true` (the original behavior) so existing apps don't change; prefer
+`false` for new code. Malformed escapes are passed through as written either way.
+
 ## Navigation from code
 
 ```js
@@ -155,6 +178,11 @@ router.go(`/users/${id}`);    // build a path
 
 `go()` adds a history entry, so the back button returns to the previous page.
 
+It navigates **within the app**, so it takes app paths — `"/about"`, `"?tab=2"`, `"#top"`.
+*(Next release:)* an absolute URL, any other scheme (`javascript:`, `https:` …), or a protocol-relative
+`//host` throws a clear `TypeError` (`go() only navigates within the app …`) instead of the
+browser's opaque `SecurityError`. To leave the app, use `location.assign(url)` or a plain `<a>`.
+
 ## Query strings
 
 ```js
@@ -163,7 +191,8 @@ router.query(); // → { q: "hello", page: "2" }
 ```
 
 `query()` is reactive — read it inside a binding (`${() => router.query().q}`)
-and it updates when the URL changes.
+and it updates when the URL changes. Query values are decoded, attacker-controlled
+strings — treat them like params.
 
 ## Hosting under a sub-path (`base`)
 

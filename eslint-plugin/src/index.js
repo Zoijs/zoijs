@@ -14,6 +14,8 @@ import noPositiveTabindex from "./rules/no-positive-tabindex.js";
 import noStaticElementInteractions from "./rules/no-static-element-interactions.js";
 import noTargetBlankWithoutRel from "./rules/no-target-blank-without-rel.js";
 import noDynamicStyle from "./rules/no-dynamic-style.js";
+import noHtmlCall from "./rules/no-html-call.js";
+import noUnsafeHtml from "./rules/no-unsafe-html.js";
 
 const plugin = {
   meta: {
@@ -27,6 +29,8 @@ const plugin = {
     "no-static-element-interactions": noStaticElementInteractions,
     "no-target-blank-without-rel": noTargetBlankWithoutRel,
     "no-dynamic-style": noDynamicStyle,
+    "no-html-call": noHtmlCall,
+    "no-unsafe-html": noUnsafeHtml,
   },
   configs: {},
 };
@@ -34,6 +38,7 @@ const plugin = {
 // The rule levels shared by both config formats. The reactivity rule, the two
 // unambiguous a11y rules, and the reverse-tabnabbing rule are errors; the rules with
 // more legitimate exceptions (static-element-interactions, dynamic-style) are warnings.
+// no-unsafe-html is a warning: unsafeHTML is supported, but every use must be reviewed.
 const LEVELS = {
   "require-reactive-binding": "error",
   "alt-text": "error",
@@ -41,6 +46,8 @@ const LEVELS = {
   "no-static-element-interactions": "warn",
   "no-target-blank-without-rel": "error",
   "no-dynamic-style": "warn",
+  "no-html-call": "error",
+  "no-unsafe-html": "warn",
 };
 
 const withPrefix = (prefix) =>

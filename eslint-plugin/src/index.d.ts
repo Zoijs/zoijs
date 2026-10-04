@@ -30,6 +30,8 @@ export interface ZoijsEslintPlugin {
     "no-static-element-interactions": ZoijsRuleModule;
     "no-target-blank-without-rel": ZoijsRuleModule;
     "no-dynamic-style": ZoijsRuleModule;
+    "no-html-call": ZoijsRuleModule;
+    "no-unsafe-html": ZoijsRuleModule;
   };
   configs: {
     /** Flat config (ESLint 9+): `export default [ zoijs.configs.recommended ]`. */

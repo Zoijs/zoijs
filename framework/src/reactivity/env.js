@@ -7,18 +7,25 @@
 //   import { configure } from "@zoijs/core";
 //   configure({ dev: false }); // production
 
-let dev = true;
+import { runtime as rt } from "./runtime.js";
 
 /**
- * @param {{ dev?: boolean }} options
+ * Partial update: only the options you pass change. `onError: null` removes the hook.
+ * @param {{ dev?: boolean, onError?: ((error: unknown, info: { kind: string, component?: string }) => void) | null }} options
  */
 export function configure(options) {
   if (options && typeof options.dev === "boolean") {
-    dev = options.dev;
+    rt.dev = options.dev;
+  }
+  if (options && (typeof options.onError === "function" || options.onError === null)) {
+    rt.onError = options.onError;
   }
 }
 
+/** Hand a contained error to the app's onError hook (realm-wide, every mode) — see runtime.report. */
+export const reportError = (error, info) => rt.report(error, info);
+
 /** @returns {boolean} true in development mode */
 export function isDev() {
-  return dev;
+  return rt.dev;
 }

@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zoijs/core": "^1.2.0"
+    "@zoijs/core": "^{{ZOIJS_CORE_VERSION}}"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

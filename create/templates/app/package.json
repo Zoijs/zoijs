@@ -7,6 +7,6 @@
     "dev": "node dev-server.mjs"
   },
   "dependencies": {
-    "@zoijs/core": "^1.1.0"
+    "@zoijs/core": "^{{ZOIJS_CORE_VERSION}}"
   }
 }
