@@ -5,6 +5,7 @@ follows [Semantic Versioning](https://semver.org).
 
 ## Unreleased
 
+### Added
 - **`no-unsafe-html`** (warn, in `recommended`) — flags every use of `@zoijs/core/unsafe`'s
   `unsafeHTML()` (SEC-3): the import (static, dynamic, or re-export) and each call, including renamed
   imports and namespace access. The API is supported but bypasses escaping, so each use should be
@@ -12,6 +13,11 @@ follows [Semantic Versioning](https://semver.org).
 - **`no-html-call`** (error, in `recommended`) — flags calling `html` as a function (`html([...])`,
   `html.call/apply/bind`, `Reflect.apply(html, …)`) (SEC-2). (Shipped with the SEC-2 change; listed
   here because it was missing from this changelog.)
+
+### Documentation
+- The security-rules intro no longer calls `target="_blank"` a footgun "the runtime can't
+  sanitize": from the next core release the runtime adds `rel="noopener noreferrer"` itself
+  (SEC-9). The rule is unchanged (still `error` in `recommended`).
 
 ## 0.3.0
 

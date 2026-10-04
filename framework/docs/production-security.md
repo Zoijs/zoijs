@@ -330,6 +330,11 @@ build output, a fragment your trusted backend renders). It does not sanitize. Ev
 from `@zoijs/core/unsafe`, so review them with `grep -R unsafeHTML` and the `zoijs/no-unsafe-html`
 lint warning; keep reviewed ones with an `eslint-disable-next-line … -- <reason>` comment. Under
 enforced Trusted Types it needs a `TrustedHTML` from your own policy — a plain string is refused.
+None of the URL/opener guards run inside its markup. With `@zoijs/ssr` the markup goes into the
+response verbatim, so a `<script>` in it **executes** on page load (client-side insertion leaves
+scripts inert). Trusted raw HTML used during SSR may contain executable markup. `unsafeHTML()` means
+exactly what it says; do not pass content you would not be willing to emit directly into the
+response.
 Details: [Security → `unsafeHTML()`](security.md#unsafehtml--the-one-escape-hatch).
 
 ## 10. Avoid raw DOM sinks

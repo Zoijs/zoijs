@@ -52,7 +52,7 @@ html`${Greeting({ name })}`;
 
 ## Is it secure?
 
-By default, yes. Text is rendered as inert (escaped) text, dangerous URL schemes (`javascript:`) are blocked, event handlers are function references (never strings), and there's no `eval` — so it's CSP-friendly. Raw HTML has exactly one explicit, opt-in route: `unsafeHTML()` from `@zoijs/core/unsafe`, for markup you've established as trusted (it bypasses escaping; untrusted HTML goes through `@zoijs/sanitize`). See [Security](security.md#markup-untrusted-html-and-trusted-raw-html).
+By default, yes. Text is rendered as inert (escaped) text, dangerous URL schemes (`javascript:`) are blocked, event handlers are function references (never strings), and there's no `eval` — so it works under a strict script CSP (a `style=${…}` binding needs `style-src-attr 'unsafe-inline'`; see the [production checklist](production-security.md)). Raw HTML has exactly one explicit, opt-in route: `unsafeHTML()` from `@zoijs/core/unsafe`, for markup you've established as trusted (it bypasses escaping; untrusted HTML goes through `@zoijs/sanitize`). See [Security](security.md#markup-untrusted-html-and-trusted-raw-html).
 
 ## How big / fast is it?
 

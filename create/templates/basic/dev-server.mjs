@@ -1,8 +1,9 @@
 // dev-server.mjs — a tiny static file server for this Zoijs app. DEVELOPMENT ONLY.
 //
 // Zero dependencies (Node built-ins only), no build step, no bundler. It serves
-// the project files so the import map in index.html can load @zoijs/core from
-// node_modules. Tries port 7310, then 7311 / 7312 / 7313 if one is busy.
+// the project files — index.html, your modules, and whatever its import map points
+// at inside this folder (node_modules/, if you installed). Tries port 7310, then
+// 7311 / 7312 / 7313 if one is busy. The same file ships in every Zoijs template.
 //
 //   node dev-server.mjs      (this is what `npm run dev` runs)
 //

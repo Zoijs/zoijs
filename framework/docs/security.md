@@ -18,9 +18,9 @@ The core guarantee: **dynamic values fill text and attribute *slots* only — th
 | `${() => value}` in text | rendered as an **inert Text node** (escaped) | ✅ always |
 | `attr=${() => value}` | set via `setAttribute` (or property for `value`/`checked`) | ✅ |
 | URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `data`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
-| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
-| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` | **compile error** | ✅ data can't steer resolution/navigation |
-| `target="_blank"` on `<a>`/`<area>`/`<form>` | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
+| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` *(next release)* | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
+| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` *(next release)* | **compile error** | ✅ data can't steer resolution/navigation |
+| `target="_blank"` on `<a>`/`<area>`/`<form>` *(next release)* | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
 | `onclick=${fn}` | `addEventListener` with a **function reference** | ✅ strings ignored |
 
 ### Text is always escaped
@@ -46,7 +46,7 @@ html`<a href=${() => url}>link</a>`;
 
 The same check covers every URL a bound value can carry, in every mode (dev or production), on
 the client and in `@zoijs/ssr`. A refused value is not set (development mode warns, naming the
-attribute but not the value):
+attribute but not the value). *(Next release — core 1.8.0 checks only the URL attributes above.)*
 
 - **`srcset` / `imagesrcset`** — each candidate URL is checked (parsed as HTML does, so a
   `data:image/…` URL keeps its commas); one unsafe candidate refuses the whole value.
@@ -60,6 +60,8 @@ attribute but not the value):
   use the router's `base` option.
 
 ### `target="_blank"` opens without `window.opener`
+
+*(Next release.)*
 
 A Zoijs-rendered `<a>`, `<area>`, or `<form>` whose `target` is `_blank` — bound or written
 statically — always gets `rel` tokens `noopener` (the new page can't reach `window.opener`) and
@@ -168,10 +170,16 @@ How it's fenced in:
   string is therefore refused (a clear `TypeError` when it's inserted); create the `TrustedHTML`
   with your own policy (`trusted-types zoijs my-app`). Without Trusted Types, a string works, and
   development mode warns once that it bypasses escaping.
-- **On the server** (`@zoijs/ssr`), it is the only output that isn't escaped. Node has no
-  `TrustedHTML`, so a string is accepted: by calling `unsafeHTML()` the server code asserts trust.
-- `<script>` elements in the markup are parsed but don't execute on the client; everything else —
-  event-handler attributes, `javascript:` links, styles — is live. That is the point, and the risk.
+- **No guards apply.** Inside the markup, event-handler attributes, `javascript:` links, `srcset`,
+  `<base>`, meta refresh and `target="_blank"` without `rel` are all inserted as written — none of
+  the URL, opener or attribute protections run. That is the point, and the risk.
+- **Client vs. server `<script>`.** Inserted on the client (through a `<template>`), `<script>`
+  elements are inert and don't run. **Server-rendered** by `@zoijs/ssr`, the markup is written
+  into the HTML response verbatim (it is the only unescaped output; Node has no `TrustedHTML`,
+  so a string is accepted) — and a `<script>` in it **executes when the page loads**.
+  Trusted raw HTML used during SSR may contain executable markup. `unsafeHTML()` means
+  exactly what it says; do not pass content you would not be willing to emit directly into the
+  response.
 
 ### A note on `style`
 
@@ -202,8 +210,9 @@ Zoijs is friendly to a strict Content Security Policy:
   ```
 
   Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe.
-  Compatible copies of the core share one runtime and so one `zoijs` policy (created once — no
-  `'allow-duplicates'` needed). Current limit: `@zoijs/sanitize` parses with `DOMParser` without
+  From the next release (core 1.9.0), compatible copies of the core share one runtime and so
+  one `zoijs` policy (created once — no `'allow-duplicates'` needed); with core 1.8.0 and
+  older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. Current limit: `@zoijs/sanitize` parses with `DOMParser` without
   a policy, so it fails under enforcement.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`

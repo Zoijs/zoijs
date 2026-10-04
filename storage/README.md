@@ -130,6 +130,8 @@ reactive — values simply don't persist for that session. It never throws.
 
 ## Validating what comes back
 
+*(Next release.)*
+
 `localStorage` is user-editable (devtools, extensions, an XSS bug elsewhere on your
 origin), so a restored value can be anything JSON can express. Pass `validate` to check it:
 

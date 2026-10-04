@@ -13,7 +13,15 @@
 
 ---
 
-`@zoijs/sanitize` is an **optional** package. Zoijs has **no raw-HTML API** by design — a string in a text slot is inert text, and there is deliberately no `unsafeHTML`. But real apps still need to render *rich* HTML they mostly trust: the output of a markdown renderer, a CMS body, an email preview. That boundary is the single most security-critical spot in a front end. `sanitize()` makes it a **supported, tested** path instead of one you solve alone.
+`@zoijs/sanitize` is an **optional** package. In Zoijs a string in a text slot is always inert text. But real apps still need to render *rich* HTML they don't control: the output of a markdown renderer, a CMS body, an email preview. That boundary is the single most security-critical spot in a front end. `sanitize()` makes it a **supported, tested** path instead of one you solve alone.
+
+Which one to use:
+
+| Markup | Use |
+|---|---|
+| Your own, written in code | `` html`…` `` |
+| From users, APIs, databases, URLs, storage — anything not fully trusted | `sanitize()` (this package) |
+| Raw HTML you have independently established as trusted, rendered as-is | `unsafeHTML()` from `@zoijs/core/unsafe` *(next core release)* — **bypasses escaping, never sanitizes**; never pass it untrusted input |
 
 ## Install
 
@@ -107,6 +115,8 @@ sanitize('<p onclick="steal()">Hi <strong>there</strong> <script>evil()</script>
 5. **No DOM clobbering.** Browsers expose elements by `id` (and some by `name`) as properties of `window`, `document` and forms — so untrusted `<a id="__DATA__">` could shadow `window.__DATA__` (the pattern [`serialize()`](../ssr) data uses) or a config global. Sanitized content therefore lives in its own namespace: `name` is always removed, and every `id` gets a prefix (below).
 
 ## IDs and in-page links
+
+*(Next release — `@zoijs/sanitize` 0.1.0 keeps ids as written and leaves `name`.)*
 
 Every `id` in sanitized content is prefixed with **`user-content-`**, and the references that point at ids are rewritten to match, so in-page links and accessibility relationships keep working:
 
