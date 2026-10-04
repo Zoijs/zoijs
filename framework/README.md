@@ -81,7 +81,7 @@ npx playwright install chromium firefox webkit
 npm run test:browser
 ```
 
-Playwright starts a static server automatically (`npx serve` on port 7310) — still no build step.
+Playwright starts a static server automatically (the repo's own `scripts/test-server.mjs`, Node built-ins only, on 127.0.0.1:7310) — still no build step.
 
 ## Browser support
 
