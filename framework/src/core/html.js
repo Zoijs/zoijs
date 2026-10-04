@@ -32,6 +32,12 @@ const cache = new WeakMap();
 export function html(strings, ...values) {
   let compiled = cache.get(strings);
   if (!compiled) {
+    // Markup may only come from a tagged-template literal. Checked once per call
+    // site (cache miss), before any parsing: arrays from data or runtime code are
+    // rejected, so html([runtimeString]) can't act as innerHTML.
+    if (!isTemplateStrings(strings)) {
+      throw new TypeError("ZJS010: use html as a tagged template (html`…`), not html([...]). Never pass runtime HTML to it; for untrusted HTML use @zoijs/sanitize.");
+    }
     compiled = compile(strings); // pure: a static HTML string + parts, NO DOM
     cache.set(strings, compiled);
   }
@@ -50,6 +56,13 @@ export function html(strings, ...values) {
     },
     values,
   };
+}
+
+// What the engine passes a tag: a frozen array whose own `raw` is a frozen array,
+// non-enumerable. JSON, split(), spread and plain assignment can't produce this.
+function isTemplateStrings(s) {
+  const raw = Array.isArray(s) && Object.isFrozen(s) && Object.getOwnPropertyDescriptor(s, "raw");
+  return !!raw && !raw.enumerable && Array.isArray(raw.value) && Object.isFrozen(raw.value);
 }
 
 // ---- scanner ----------------------------------------------------------------

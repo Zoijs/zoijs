@@ -14,6 +14,7 @@ import noPositiveTabindex from "./rules/no-positive-tabindex.js";
 import noStaticElementInteractions from "./rules/no-static-element-interactions.js";
 import noTargetBlankWithoutRel from "./rules/no-target-blank-without-rel.js";
 import noDynamicStyle from "./rules/no-dynamic-style.js";
+import noHtmlCall from "./rules/no-html-call.js";
 
 const plugin = {
   meta: {
@@ -27,6 +28,7 @@ const plugin = {
     "no-static-element-interactions": noStaticElementInteractions,
     "no-target-blank-without-rel": noTargetBlankWithoutRel,
     "no-dynamic-style": noDynamicStyle,
+    "no-html-call": noHtmlCall,
   },
   configs: {},
 };
@@ -41,6 +43,7 @@ const LEVELS = {
   "no-static-element-interactions": "warn",
   "no-target-blank-without-rel": "error",
   "no-dynamic-style": "warn",
+  "no-html-call": "error",
 };
 
 const withPrefix = (prefix) =>

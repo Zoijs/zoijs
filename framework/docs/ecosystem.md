@@ -82,6 +82,12 @@ page) unmounts, its `onCleanup` runs. That single mechanism is why:
 No provider wraps your app. No context is threaded through. No lifecycle methods.
 A page is a function; it sets up what it needs; the core cleans it up.
 
+This holds even if more than one compatible copy of `@zoijs/core` ends up on the
+page: all 1.x copies in a JavaScript realm share **one** reactive runtime (one
+graph, one owner tree). Packages and component libraries should still declare
+`@zoijs/core` as a **peer dependency** and not bundle it; an incompatible major
+version is reported in dev mode (`ZJS201`, see [Troubleshooting](troubleshooting.md)).
+
 ## The Task Board app
 
 A small task manager that uses **five** packages — core, router, resource, action,

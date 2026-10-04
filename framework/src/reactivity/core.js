@@ -17,30 +17,28 @@
 import { onCleanup, getOwner, createOwner, runWithOwner, disposeOwner } from "./owner.js";
 import { isDev } from "./env.js";
 import { reportCreate, reportRun, reportWrite, reportDispose } from "./devtools.js";
+import { runtime as rt } from "./runtime.js";
 
 const CLEAN = 0;
 const CHECK = 1;
 const DIRTY = 2;
 
-let currentObserver = null;
-
 // ---- batching scheduler -----------------------------------------------------
 
-const queue = new Set();
-let scheduled = false;
 const RUNAWAY_LIMIT = 100;
 
 function enqueue(node) {
-  queue.add(node);
-  if (!scheduled) {
-    scheduled = true;
+  rt.queue.add(node);
+  if (!rt.scheduled) {
+    rt.scheduled = true;
     queueMicrotask(flush);
   }
 }
 
 /** Run all queued effects (and anything they schedule) to completion, in order. */
 export function flush() {
-  scheduled = false;
+  rt.scheduled = false;
+  const queue = rt.queue;
   const runCounts = new Map();
   while (queue.size) {
     const nodes = [...queue];
@@ -64,9 +62,9 @@ export function flush() {
 // ---- graph internals --------------------------------------------------------
 
 function readNode(node) {
-  if (currentObserver) {
-    node.observers.add(currentObserver);
-    currentObserver.sources.add(node);
+  if (rt.observer) {
+    node.observers.add(rt.observer);
+    rt.observer.sources.add(node);
   }
   if (node.fn) updateIfNecessary(node); // computed: make sure it's fresh
   return node.value;
@@ -80,7 +78,7 @@ function writeNode(node, next) {
 }
 
 function markStale(node, newState) {
-  if (node === currentObserver && isDev()) {
+  if (node === rt.observer && isDev()) {
     warnOnce(node, "Zoijs: an effect/computed updated state it depends on (self-triggering). Derive with computed() or guard the write.");
   }
   if (node.state < newState) {
@@ -120,8 +118,8 @@ function runComputation(node) {
   if (node.runOwner) disposeOwner(node.runOwner);
   node.runOwner = runWithOwner(node.owner, () => createOwner());
   cleanupSources(node);
-  const previousObserver = currentObserver;
-  currentObserver = node;
+  const previousObserver = rt.observer;
+  rt.observer = node;
   let result;
   let threw = false;
   try {
@@ -131,7 +129,7 @@ function runComputation(node) {
     // Task 3/5: contain the failure so other bindings keep working.
     console.error("Zoijs: a reactive binding threw (other bindings keep working):", err);
   } finally {
-    currentObserver = previousObserver;
+    rt.observer = previousObserver;
   }
   reportRun(node); // devtools: this node actually recomputed (dev + attached)
   if (node.isEffect) {
@@ -248,11 +246,11 @@ export function effect(fn) {
 
 /** Run `fn` without subscribing the current observer to what it reads. */
 export function untrack(fn) {
-  const previous = currentObserver;
-  currentObserver = null;
+  const previous = rt.observer;
+  rt.observer = null;
   try {
     return fn();
   } finally {
-    currentObserver = previous;
+    rt.observer = previous;
   }
 }

@@ -18,8 +18,8 @@ export function resolveTarget(target) {
 // Trusted Types support. `template.innerHTML = string` is a Trusted-Types sink,
 // so under a strict `require-trusted-types-for 'script'` CSP it would throw. The
 // htmlText here is ALWAYS framework-generated from the author's static template
-// strings + markers — dynamic values never reach it (the scanner forbids that) —
-// so a pass-through policy is safe by construction. Pages enforcing Trusted Types
+// strings + markers — html() accepts only tagged-template strings, and dynamic
+// values never reach it (the scanner forbids that) — so a pass-through policy is safe. Pages enforcing Trusted Types
 // must allow the `zoijs` policy (e.g. `trusted-types zoijs`).
 let ttPolicy;
 let ttChecked = false;

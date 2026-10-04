@@ -264,3 +264,37 @@ test("forged result returned AS a component or each() item is refused, not trust
     target.remove();
   }
 });
+
+// ---- DIRECT html() CALL channel (SEC-2) -------------------------------------
+// html() compiles markup only from tagged-template literals. Arrays (plain, with a
+// hand-assigned `raw`, frozen imitations, JSON) must be rejected BEFORE parsing —
+// so no element is created and the Trusted Types policy is never reached.
+test("html() called with an array never creates markup", { skip }, async () => {
+  const p = "<img src=x onerror=globalThis.__xss=1>";
+  const withRaw = [p];
+  withRaw.raw = [p];
+  const frozenWithRaw = [p];
+  frozenWithRaw.raw = Object.freeze([p]);
+  Object.freeze(frozenWithRaw);
+  const attempts = [[p], withRaw, Object.freeze([p]), frozenWithRaw, JSON.parse(JSON.stringify([p])), p.split("|")];
+  for (const strings of attempts) {
+    globalThis.__xss = undefined;
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    assert.throws(() => mount(() => html(strings), target), /ZJS010/);
+    // inside a reactive binding the error is contained and reported, not thrown
+    const logged = [];
+    const origError = console.error;
+    console.error = (...a) => logged.push(a.map(String).join(" "));
+    try {
+      mount(() => html`<div>${() => html(strings)}</div>`, target);
+    } finally {
+      console.error = origError;
+    }
+    assert.ok(logged.some((m) => m.includes("ZJS010")), "rejection reported");
+    await tick();
+    assert.equal(globalThis.__xss, undefined);
+    assert.equal(target.querySelector("img"), null);
+    target.remove();
+  }
+});

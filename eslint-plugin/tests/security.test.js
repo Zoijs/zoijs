@@ -4,6 +4,7 @@ import { RuleTester } from "eslint";
 import { describe, it } from "node:test";
 import noTargetBlankWithoutRel from "../src/rules/no-target-blank-without-rel.js";
 import noDynamicStyle from "../src/rules/no-dynamic-style.js";
+import noHtmlCall from "../src/rules/no-html-call.js";
 
 RuleTester.describe = describe;
 RuleTester.it = it;
@@ -47,5 +48,23 @@ ruleTester.run("no-dynamic-style", noDynamicStyle, {
     { code: "html`<div style=\"${s}\">x</div>`", errors: [{ messageId: "dynamicStyle" }] },
     { code: "html`<div style=\"width:${pct}%\">x</div>`", errors: [{ messageId: "dynamicStyle" }] },
     { code: "html`<span style='color:${c}'>x</span>`", errors: [{ messageId: "dynamicStyle" }] },
+  ],
+});
+
+ruleTester.run("no-html-call", noHtmlCall, {
+  valid: [
+    "html`<p>${value}</p>`",
+    "html`<div>${() => count.get()}</div>`",
+    "other(['<b>x</b>'])", // not html
+    "obj.html(x)", // a different html (member of another object)
+    "const t = html; ", // referenced, not called
+  ],
+  invalid: [
+    { code: "html(['<img src=x onerror=alert(1)>'])", errors: [{ messageId: "directCall" }] },
+    { code: "html(strings)", errors: [{ messageId: "directCall" }] },
+    { code: "html(userInput.split('|'))", errors: [{ messageId: "directCall" }] },
+    { code: "html.call(null, ['<b>x</b>'])", errors: [{ messageId: "directCall" }] },
+    { code: "html.apply(null, [['<b>x</b>']])", errors: [{ messageId: "directCall" }] },
+    { code: "Reflect.apply(html, null, [['<b>x</b>']])", errors: [{ messageId: "directCall" }] },
   ],
 });

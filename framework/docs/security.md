@@ -45,6 +45,22 @@ html`<button onclick=${doThing}>x</button>`;     // ✅ function reference
 html`<button onclick=${"doThing()"}>x</button>`; // ⚠️ ignored — a string is never wired up or eval'd
 ```
 
+### Markup comes only from tagged templates
+
+`html` compiles markup only from a real tagged-template literal written in your source.
+Calling it as a function is rejected before anything is parsed:
+
+```js
+html`<p>${value}</p>`;            // ✅ markup from source; value is data
+html(["<p>runtime markup</p>"]);  // ❌ throws ZJS010 — html is not an innerHTML
+```
+
+Never pass runtime HTML through `html`. For HTML from users, a CMS, or markdown, use
+[`@zoijs/sanitize`](../../sanitize/README.md); otherwise build real elements. (The runtime
+check stops arrays that come from data or ordinary code. JavaScript can't tell a template
+object apart from one deliberately rebuilt to look identical, so the
+[`zoijs/no-html-call`](../../eslint-plugin/README.md) lint rule flags *any* direct call.)
+
 ## Unsafe patterns to avoid
 
 These either **throw a clear error** or are **blocked**:
@@ -56,6 +72,7 @@ These either **throw a clear error** or are **blocked**:
 | `<iframe srcdoc=${html}>` | attribute blocked | don't inject HTML; build real elements |
 | `<script>${x}</script>` / `<style>${x}</style>` | throws | never interpolate into script/style (injection surface) |
 | `onclick="a ${fn}"` (multi-part handler) | throws | `onclick=${fn}` |
+| `html([...])` / `html(strings)` (calling `html` as a function) | throws `ZJS010` | write a tagged template; for untrusted HTML use `@zoijs/sanitize` |
 | `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML` |
 
 There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely need to render *rich* HTML you broadly trust (e.g. markdown or CMS output), use the optional [`@zoijs/sanitize`](../../sanitize/README.md) package: `sanitize(dirtyHtml)` parses the string inertly and returns **safe DOM nodes** (allowlist-based, reusing the same URL/attribute guards described above) that drop straight into a text binding — `html\`<article>${() => sanitize(body)}</article>\``. For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
@@ -82,7 +99,7 @@ Zoijs is friendly to a strict Content Security Policy:
 
 - **No `eval` / `new Function`** anywhere → no `'unsafe-eval'` needed.
 - **No inline scripts or inline event handlers** are injected → no `'unsafe-inline'` needed for scripts.
-- **Trusted Types** (`require-trusted-types-for 'script'`): Zoijs uses `<template>.innerHTML` with framework-generated HTML built only from your *static* template strings (never data). Under Trusted Types it routes that through a pass-through policy named **`zoijs`**, which is safe by construction. Allow it in your CSP:
+- **Trusted Types** (`require-trusted-types-for 'script'`): Zoijs uses `<template>.innerHTML` with framework-generated HTML built only from your *static* template strings (never data): `html` accepts only tagged-template strings, and interpolated values never enter that HTML. Under Trusted Types it routes the HTML through a pass-through policy named **`zoijs`**, which is only ever reached from that path. Allow it in your CSP:
 
   ```
   Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs;

@@ -18,6 +18,12 @@ graph, owner-scope helpers, the `html()` return shape, marker formats, the
 template scanner internals, and anything under `src/` not re-exported by
 `src/index.js`.
 
+**Runtime protocol (maintainers).** Compatible copies of the core in one realm
+share reactive state through `globalThis[Symbol.for("zoijs.runtime@<protocol>")]`
+(`src/reactivity/runtime.js`). Any change to the shape of reactive nodes, owners,
+or that shared runtime object, or to the graph algorithm's semantics, MUST bump
+`PROTOCOL` — mixed copies otherwise run one another's nodes with different code.
+
 ## Version bumps
 
 - **PATCH** (`1.0.x`) — bug fixes, performance improvements, docs, internal
