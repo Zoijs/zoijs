@@ -6,6 +6,18 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A conditionally shown component no longer rebuilds when state read during its setup changes (CORE-1).**
+  A live binding can now return a component **uncalled** — `${() => show.get() ? Child : null}`, or
+  `() => Child(props)` for props. Zoijs constructs it once, untracked, under the binding's owner, so
+  the child's setup reads stay the child's: unrelated writes no longer dispose and re-create it (losing
+  local state, DOM identity, focus, in-flight resources). Its own bindings stay live; when the
+  condition changes it is disposed and a new one is set up. Previously a returned function rendered as
+  its source text. Calling the component *inside* the binding (`? Child() : null`) can't be fixed this
+  way — `Child()` then runs as part of the condition and its reads are indistinguishable from the
+  condition's — so it is documented as the pattern to avoid. `@zoijs/ssr` renders the new form identically
+  (previously it emitted the function's source text).
+
 ### Security
 - **Template results and `each()` markers can no longer be forged by data (SEC-1).** Zoijs
   recognized its own result objects by string properties (`__zoijsTemplate: true`,

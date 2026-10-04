@@ -225,7 +225,12 @@ function bindReactiveContent(anchor, getValue) {
   };
 
   labelNext({ kind: "text", el: anchor }, () => effect(() => {
-    const value = getValue();
+    let value = getValue(); // tracked: the selector decides whether / which child
+    // A function returned by the selector is a component to construct
+    // (`${() => show.get() ? Child : null}`). Call it once, untracked, so reads in
+    // its setup belong to the child and don't subscribe this binding. Ownership is
+    // unchanged: it still runs under this binding's owner (cleanup, nesting).
+    if (typeof value === "function") value = untrack(value);
     const t = typeof value;
     // null/undefined/booleans render NOTHING (matches the `cond && html\`...\``
     // idiom); numbers/strings render as text; everything else is node content.

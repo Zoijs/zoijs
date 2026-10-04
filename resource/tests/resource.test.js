@@ -192,3 +192,47 @@ test("refresh() still loads on demand after { initial }", { skip: domSkip }, asy
   await tick();
   assert.equal(r.data(), "fresh");
 });
+
+// CORE-1 integration: a resource created in a component returned UNCALLED from a
+// reactive binding (`${() => show.get() ? Profile : null}`) belongs to that child.
+// State read during the child's setup — including synchronously inside the
+// fetcher — must not rebuild the child, re-run the request, or dispose the
+// resource; genuine removal must still dispose it.
+test("a resource in an uncalled-component child is not recreated by unrelated writes", { skip: domSkip }, async () => {
+  const { createState } = await import("@zoijs/core");
+  const show = createState(true);
+  const userId = createState(7);
+  const theme = createState("light");
+  const pending = [];
+  let fetches = 0;
+  function Profile() {
+    theme.get(); // a setup read that used to subscribe the parent binding
+    const user = resource(() => {
+      fetches++;
+      const d = deferred();
+      pending.push({ id: userId.get(), d }); // fetcher reads state synchronously
+      return d.promise;
+    });
+    return html`<p class="p">${() => (user.loading() ? "loading" : user.data())}</p>`;
+  }
+  const root = document.createElement("div");
+  const unmount = mount(() => html`<section>${() => (show.get() ? Profile : null)}</section>`, root);
+
+  theme.set("dark"); await tick();
+  userId.set(8); await tick();
+  assert.equal(fetches, 1, "initial request not repeated");
+  assert.equal(root.querySelector(".p").textContent, "loading", "pending work not restarted");
+
+  pending[0].d.resolve("user 7");
+  await tick();
+  assert.equal(root.querySelector(".p").textContent, "user 7", "the original request settles into the same child");
+
+  show.set(false); await tick();
+  show.set(true); await tick();
+  assert.equal(fetches, 2, "a genuine remount creates a new resource");
+  show.set(false); await tick();
+  pending[1].d.resolve("late");
+  await tick();
+  assert.equal(root.querySelector(".p"), null, "removed child stays removed (late result ignored)");
+  unmount();
+});

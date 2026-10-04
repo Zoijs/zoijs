@@ -116,7 +116,11 @@ function renderTemplate(result) {
       out += skeleton.slice(pos, childAt);
       const part = parts[p++]; // { type: "child", hole }
       const raw = values[part.hole];
-      const content = renderValue(typeof raw === "function" ? raw() : raw);
+      let value = typeof raw === "function" ? raw() : raw;
+      // Mirror the client: a binding may return a component uncalled
+      // (`${() => show.get() ? Child : null}`) — construct it once.
+      if (typeof raw === "function" && typeof value === "function") value = value();
+      const content = renderValue(value);
       // Hydratable (top level only): bracket the content with the slot start marker
       // + keep the anchor, so the client can clear exactly this slot and re-render.
       out += top ? SLOT_START + content + CHILD_MARKER : content;

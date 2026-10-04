@@ -19,6 +19,7 @@ A tagged template. Write real HTML; interpolate values with `${}`.
 - `${() => x}` — a **live** binding (text or attribute) that updates when `x`'s sources change.
 - `${value}` — a **static** value, inserted once.
 - `onevent=${fn}` — an event listener.
+- `${() => cond ? Component : null}` — a live binding may return a component **uncalled** (or `() => Component(props)`); Zoijs calls it once, untracked, and disposes it when the binding returns something else. See [FAQ: showing a component conditionally](faq.md#showing-a-component-conditionally).
 - Returns an opaque `TemplateResult` — pass it to `mount`, return it from a component, place it in another template, or use it in `each`'s render function.
 
 A sole-child `${}` in `<textarea>` or `<title>` binds the element's content — `html\`<textarea>${text}</textarea>\``, `html\`<title>${pageTitle}</title>\`` (reactive when the value is a function). It must be the *only* content (no surrounding text).

@@ -77,6 +77,7 @@ It runs once, isn't reactive, and can return a cleanup function. See
 | `${someValue}` | **Static** — set once |
 | `attr=${() => state.get()}` | **Live** attribute |
 | `attr="constant"` | **Static** attribute |
+| `${() => cond.get() ? Child : null}` | **Live** choice of component — `Child` is set up once per appearance ([details](../faq.md#showing-a-component-conditionally)) |
 
 ## SVG
 
