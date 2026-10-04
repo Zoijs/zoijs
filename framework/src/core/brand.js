@@ -6,6 +6,8 @@
 
 export const TEMPLATE = Symbol.for("zoijs.template");
 export const EACH = Symbol.for("zoijs.each");
+export const UNSAFE_HTML = Symbol.for("zoijs.unsafe-html");
 
 export const isTemplateResult = (v) => v != null && typeof v === "object" && v[TEMPLATE] === true;
 export const isEachResult = (v) => v != null && typeof v === "object" && v[EACH] === true;
+export const isUnsafeHTML = (v) => v != null && typeof v === "object" && v[UNSAFE_HTML] === true;

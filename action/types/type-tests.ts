@@ -32,3 +32,9 @@ save.run(123);
 action();
 
 void [save, p, pending, err, done, result, name, inc, r];
+
+// ---- SEC-10: exclusive ---------------------------------------------------------------
+const pay = action(async (amount: number) => amount * 2, { exclusive: true });
+pay.run(1);
+// @ts-expect-error — exclusive is a boolean
+action(async () => 1, { exclusive: "yes" });

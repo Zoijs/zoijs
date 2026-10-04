@@ -71,13 +71,14 @@ npm create zoijs@latest my-app --template library    # author a Zoijs-based pack
 - **`typescript`** — the counter as type-checked JavaScript (`// @ts-check` +
   strict `tsconfig.json` + `npm run typecheck`). Full TS safety, **no build step**.
 - **`minimal`** — the smallest scaffold: two flat files loading `@zoijs/core` from a
-  CDN. No install, no dev server — run with `npx serve . -l 7310`.
+  CDN (exact version, integrity-pinned). No install — `npm run dev` runs the same
+  hardened dev server as the other templates.
 - **`library`** — a starter for authoring a Zoijs-based package: `src` + `.d.ts`,
   `exports`/`types`, a peer dep on `@zoijs/core`, and a `node:test` suite.
 
 ## What it does
 
-- Copies a template, fills in the app name, and prints the next three commands.
+- Copies a template, fills in the app name, and prints the next commands to run.
 - Validates the name (npm-safe) and won't overwrite a non-empty folder.
 
 ## What it does **not** do

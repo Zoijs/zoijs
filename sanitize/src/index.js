@@ -6,11 +6,11 @@
 //   // markdown/CMS body → safe nodes, dropped into a text slot as-is
 //   html`<article>${() => sanitize(post.bodyHtml)}</article>`;
 //
-// Zoijs has NO raw-HTML API by design: a string in a text slot is inert text, and
-// there is deliberately no `unsafeHTML`. But real apps still need to render *rich*
-// HTML they mostly trust — the output of a markdown renderer, a CMS field. That's
-// the single most security-critical boundary in a front end, and until now Zoijs
-// left you to solve it alone. `sanitize()` makes it a supported, tested path.
+// In Zoijs a string in a text slot is always inert text. But real apps still need to
+// render *rich* HTML they don't control — the output of a markdown renderer, a CMS
+// field. That's the single most security-critical boundary in a front end, and
+// `sanitize()` makes it a supported, tested path. (Trusted raw markup has a separate,
+// explicit opt-in — `unsafeHTML()` from @zoijs/core/unsafe — which never sanitizes.)
 //
 // How it stays safe:
 //   1. The string is parsed with `DOMParser` into an INERT document — scripts never

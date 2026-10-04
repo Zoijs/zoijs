@@ -5,6 +5,15 @@ All notable changes to `@zoijs/sanitize` are documented here.
 ## Unreleased
 
 ### Documentation
+- **Which raw-HTML tool to use.** The README no longer says Zoijs has "no raw-HTML API" (core's
+  next release adds the explicit `unsafeHTML()` opt-in, SEC-3). It now shows the three paths —
+  `` html`…` `` for your own markup, `sanitize()` for anything not fully trusted, `unsafeHTML()` only for
+  markup independently established as trusted (it never sanitizes).
+- **The no-build import map now includes `@zoijs/core/server`.** sanitize imports the core's shared
+  URL/attribute checks from it, so a map with only `@zoijs/core` and `@zoijs/sanitize` (what the
+  README described) failed with *Failed to resolve module specifier "@zoijs/core/server"*. The README
+  shows the complete, integrity-pinned map and how to generate it (`scripts/cdn-importmap.mjs` now
+  adds the subpath automatically).
 - **Trusted Types limitation documented (SEC-11).** `sanitize()` parses with `DOMParser` (a Trusted
   Types sink) without a policy, so it fails on pages enforcing `require-trusted-types-for 'script'`.
   The README now says so and links to the production security checklist.

@@ -85,3 +85,18 @@ mount(tpl, "#app");
 
 // reference the values so noUnusedLocals (if enabled elsewhere) stays quiet
 void [p, s, f, b, list, explicit];
+
+// ---- @zoijs/core/unsafe (SEC-3) --------------------------------------------------
+import { unsafeHTML } from "../src/unsafe.js";
+import type { UnsafeHTMLResult } from "../src/unsafe.js";
+
+const rawResult: UnsafeHTMLResult = unsafeHTML("<b>trusted</b>");
+html`<article>${rawResult}</article>`;
+html`<article>${() => unsafeHTML("<i>x</i>")}</article>`;
+// @ts-expect-error — only a string (or a TrustedHTML, where the DOM lib declares it)
+unsafeHTML(42);
+// @ts-expect-error — an arbitrary object is not TrustedHTML
+unsafeHTML({ toString: () => "<b>" });
+// @ts-expect-error — the result is opaque: not assignable to string
+const asString: string = rawResult;
+void asString;

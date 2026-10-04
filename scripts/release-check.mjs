@@ -17,8 +17,22 @@
 //   6. create-zoijs: generated apps target one exact, published core version (create/core-cdn.json)
 //      at or above the security floor and every capability the templates need, whose integrity
 //      map matches the published files; templates take versions only from that file.
-// Blockers fail a tag release (and `--all --strict`); `--all` reports them without failing, so CI
-// stays green while showing what still blocks a release.
+//
+// Every package gets one verdict:
+//   READY   — can be released now.
+//   BLOCKED — the repository is consistent, but an ORDER dependency isn't met yet: it needs a
+//             core capability that isn't versioned yet ("next"), a core version that isn't on
+//             npm yet, or (create) a CDN map regenerated from the published next core.
+//   ERROR   — the metadata is wrong: a peer range allowing a core that lacks an import, a
+//             floating CDN URL, a bad integrity map, a dirty tarball, a tag/version mismatch …
+// ERROR always fails. BLOCKED fails a tag release (and `--all --strict`); plain `--all` (CI)
+// reports it without failing, so development stays green while showing what waits on what.
+//
+// Release states (see docs/releasing.md): development (nextCore null; next-only capabilities
+// allowed, dependents BLOCKED) → core release (tag core-v<x> passes with nextCore still null —
+// core needs nothing published) → after core is on npm, one PR sets nextCore, materializes the
+// "next" capabilities, raises the dependents' floors and regenerates create/core-cdn.json →
+// dependents and create become READY.
 // In GitHub Actions it writes `dir`, `name` and `version` to $GITHUB_OUTPUT.
 
 import { readFileSync, readdirSync, statSync, appendFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
@@ -27,8 +41,10 @@ import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-export const compat = JSON.parse(readFileSync(join(root, "scripts", "zoijs-compat.json"), "utf8"));
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = ROOT;
+const COMPAT = JSON.parse(readFileSync(join(ROOT, "scripts", "zoijs-compat.json"), "utf8"));
+export { COMPAT as compat };
 
 // Tag prefix → package directory. Every publishable package must be listed here.
 export const PACKAGES = {
@@ -72,15 +88,15 @@ export function cmp(a, b) {
 }
 
 /** First core version providing `capability` ("subpath" or "subpath#name"); "next" or undefined. */
-function requiredFor(subpath, name) {
+function requiredFor(compat, subpath, name) {
   const caps = compat.capabilities;
   return caps[`${subpath}#${name}`] ?? caps[subpath];
 }
 
 /** Every @zoijs/core import in a package's src: [{ subpath, names[] }]. */
-export function coreImports(dir) {
+export function coreImports(dir, base = ROOT) {
   const out = [];
-  const src = join(root, dir, "src");
+  const src = join(base, dir, "src");
   if (!existsSync(src)) return out; // e.g. create-zoijs: no runtime source
   for (const f of srcFiles(src)) {
     const code = readFileSync(f, "utf8").replace(/^\s*(\/\/|\*).*$/gm, ""); // skip comment lines
@@ -123,7 +139,29 @@ function srcFiles(dir) {
   return out;
 }
 
-export function check(prefix, version, { offline = false } = {}) {
+/** Fetch and unpack a published @zoijs/core; throws { notFound: true } if that version isn't on npm. */
+function fetchPublishedCore(version, work) {
+  try {
+    const [{ filename }] = JSON.parse(npm(work, "pack", `@zoijs/core@${version}`, "--json", "--silent"));
+    execFileSync("tar", ["xzf", join(work, filename), "-C", work]);
+    return join(work, "package");
+  } catch (err) {
+    if (/E404|ETARGET|No matching version|not in this registry/i.test(`${err.stderr || ""} ${err.message}`)) throw Object.assign(new Error("not published"), { notFound: true });
+    throw err;
+  }
+}
+
+/** READY | BLOCKED | ERROR for one check() result. */
+export const verdict = (r) => (r.problems.length ? "ERROR" : r.blockers?.length ? "BLOCKED" : "READY");
+
+/**
+ * Check one package at one version. Options (tests inject the last three):
+ *   offline   — skip registry reads;
+ *   compat    — the compatibility table (default scripts/zoijs-compat.json);
+ *   root      — the repository root to read packages from;
+ *   fetchCore — (version, workDir) => unpacked published core dir.
+ */
+export function check(prefix, version, { offline = false, compat = COMPAT, root = ROOT, fetchCore = fetchPublishedCore } = {}) {
   const problems = [];
   const dir = PACKAGES[prefix];
   if (!dir) return { problems: [`unknown package "${prefix}" (known: ${Object.keys(PACKAGES).join(", ")})`] };
@@ -134,6 +172,9 @@ export function check(prefix, version, { offline = false } = {}) {
   if (pkg.private) problems.push(`${dir}/package.json is private`);
   if (pkg.name !== name) problems.push(`package name is ${pkg.name}, tag expects ${name}`);
   if (pkg.version !== version) problems.push(`package.json version is ${pkg.version}, tag says ${version}`);
+
+  // 1b. while a next core is declared, core itself must be that release
+  if (prefix === "core" && compat.nextCore && version !== compat.nextCore) problems.push(`scripts/zoijs-compat.json says the next core is ${compat.nextCore}, but this is core ${version}`);
 
   // 2. no lifecycle scripts
   const scripts = Object.keys(pkg.scripts || {}).filter((s) => LIFECYCLE.includes(s));
@@ -154,17 +195,17 @@ export function check(prefix, version, { offline = false } = {}) {
   // 4. the peer floor provides every core import (offline: compat table; online: the tarball)
   const blockers = [];
   const range = pkg.peerDependencies && pkg.peerDependencies["@zoijs/core"];
-  const imports = range ? coreImports(dir) : [];
+  const imports = range ? coreImports(dir, root) : [];
   const floor = range ? rangeFloor(range) : null;
   if (range && !floor) problems.push(`can't read the floor of peer range "${range}"`);
   if (floor) {
     for (const { subpath, names } of imports) {
       for (const n of names.length ? names : [null]) {
-        const need = requiredFor(subpath, n);
+        const need = requiredFor(compat, subpath, n);
         const what = n ? `${n} from ${subpath}` : subpath;
         if (need === undefined) problems.push(`imports ${what}, which scripts/zoijs-compat.json doesn't list — add its first core version`);
         else if (need === "next") {
-          if (!compat.nextCore) blockers.push(`imports ${what}, which first ships in the next core release — not yet versioned. Set "nextCore" in scripts/zoijs-compat.json, then raise the @zoijs/core peer floor (now "${range}") to it`);
+          if (!compat.nextCore) blockers.push(`imports ${what}, which first ships in the next core release — not yet versioned. Publish that core first; then, in one PR, set "nextCore" to it in scripts/zoijs-compat.json and raise the @zoijs/core peer floor (now "${range}")`);
           else if (cmp(floor, compat.nextCore) < 0) problems.push(`imports ${what} (core ${compat.nextCore}+) but peer range "${range}" allows ${floor}`);
         } else if (cmp(floor, need) < 0) problems.push(`imports ${what} (first in core ${need}) but peer range "${range}" allows ${floor} — raise the floor to ^${need}`);
       }
@@ -173,20 +214,21 @@ export function check(prefix, version, { offline = false } = {}) {
   if (floor && !offline && !blockers.length) {
     const work = mkdtempSync(join(tmpdir(), "zoijs-floor-"));
     try {
-      const [{ filename }] = JSON.parse(npm(work, "pack", `@zoijs/core@${floor}`, "--json", "--silent"));
-      execFileSync("tar", ["xzf", join(work, filename), "-C", work]);
-      const core = JSON.parse(readFileSync(join(work, "package", "package.json"), "utf8"));
+      const coreDir = fetchCore(floor, work);
+      const core = JSON.parse(readFileSync(join(coreDir, "package.json"), "utf8"));
       for (const { subpath, names } of imports) {
         const key = "." + subpath.slice("@zoijs/core".length);
         const target = core.exports?.[key];
         const file = typeof target === "string" ? target : target?.default;
         if (!file) { problems.push(`published @zoijs/core@${floor} has no "${key}" export — raise the peer floor`); continue; }
-        const have = exportedNames(join(work, "package", file));
+        const have = exportedNames(join(coreDir, file));
         const missing = names.filter((n) => !have.has(n));
         if (missing.length) problems.push(`published @zoijs/core@${floor} ${key} lacks ${missing.join(", ")} — raise the peer floor`);
       }
     } catch (err) {
-      problems.push(`@zoijs/core@${floor} (the floor of "${range}") couldn't be fetched from npm — is it published? (${String(err.message).split("\n")[0]})`);
+      // Waiting for the next core to be published is an order dependency, not an error.
+      if (err.notFound && floor === compat.nextCore) blockers.push(`needs @zoijs/core@${floor}, which isn't on npm yet — publish core first`);
+      else problems.push(`@zoijs/core@${floor} (the floor of "${range}") couldn't be fetched from npm — is it published? (${String(err.message).split("\n")[0]})`);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -200,6 +242,22 @@ export function check(prefix, version, { offline = false } = {}) {
     });
   }
 
+  // 5b. no-build docs must map every public core subpath the package imports: a README that tells
+  // users to write an import map but omits e.g. "@zoijs/core/server" documents a page that fails
+  // to load. Any import map embedded in the README must map it and pin every URL with integrity.
+  const subpaths = [...new Set(imports.map((i) => i.subpath).filter((s) => s !== "@zoijs/core"))];
+  const readmePath = join(root, dir, "README.md");
+  if (subpaths.length && existsSync(readmePath)) {
+    const readme = readFileSync(readmePath, "utf8");
+    if (/import ?map/i.test(readme)) for (const s of subpaths) if (!readme.includes(s)) problems.push(`README.md explains import maps but never mentions "${s}", which this package imports — document that mapping`);
+    for (const [, body] of readme.matchAll(/<script type="importmap">\s*([\s\S]*?)<\/script>/g)) {
+      let map;
+      try { map = JSON.parse(body); } catch { problems.push("README.md has an import map that isn't valid JSON"); continue; }
+      for (const s of subpaths) if (!map.imports?.[s]) problems.push(`README.md's import map doesn't map "${s}", which this package imports`);
+      for (const url of Object.values(map.imports || {})) if (!map.integrity?.[url]) problems.push(`README.md's import map has no integrity for ${url}`);
+    }
+  }
+
   // 6. create-zoijs: one exact, published, secure core target with a verified integrity map
   if (prefix === "create") {
     const cdn = JSON.parse(readFileSync(join(root, dir, "core-cdn.json"), "utf8"));
@@ -208,11 +266,12 @@ export function check(prefix, version, { offline = false } = {}) {
     else {
       if (cmp(target, compat.securityFloor) < 0) problems.push(`generated apps would target @zoijs/core ${target}, below the security floor ${compat.securityFloor}`);
       for (const cap of compat.packageRequires.create || []) {
-        const need = compat.capabilities[cap];
-        if (need === "next") {
-          if (!compat.nextCore) blockers.push(`templates use ${cap}, which first ships in the next core release — not yet versioned. Set "nextCore", publish that core, then regenerate: node scripts/cdn-importmap.mjs @zoijs/core@<it> --write create/core-cdn.json`);
-          else if (cmp(target, compat.nextCore) < 0) problems.push(`templates use ${cap} (core ${compat.nextCore}+) but target core ${target} — regenerate create/core-cdn.json`);
-        } else if (cmp(target, need) < 0) problems.push(`templates use ${cap} (core ${need}+) but target core ${target}`);
+        const need = compat.capabilities[cap] === "next" ? compat.nextCore : compat.capabilities[cap];
+        if (!need) blockers.push(`templates use ${cap}, which first ships in the next core release — not yet versioned. Publish that core, then regenerate: node scripts/cdn-importmap.mjs @zoijs/core@<it> --write create/core-cdn.json`);
+        else if (cmp(target, need) >= 0) continue;
+        // The map can only be generated from the PUBLISHED next core: waiting on it is BLOCKED.
+        else if (need === compat.nextCore) blockers.push(`templates use ${cap} (core ${need}+) but create/core-cdn.json targets ${target} — once core ${need} is on npm, regenerate it: node scripts/cdn-importmap.mjs @zoijs/core@${need} --write create/core-cdn.json`);
+        else problems.push(`templates use ${cap} (core ${need}+) but target core ${target}`);
       }
       const urls = Object.keys(cdn.integrity || {});
       for (const [spec, url] of Object.entries(cdn.imports || {})) if (!cdn.integrity?.[url]) problems.push(`core-cdn.json: ${spec} → ${url} has no integrity entry`);
@@ -268,17 +327,18 @@ if (all) {
 let failed = 0;
 for (const [prefix, version] of targets) {
   const r = check(prefix, version, { offline });
-  const blocking = !all || strict;
-  if (r.problems.length || (blocking && r.blockers?.length)) {
-    failed++;
-    console.error(`✖ ${prefix}-v${version}`);
+  const v = verdict(r);
+  const fails = v === "ERROR" || (v === "BLOCKED" && (!all || strict));
+  if (fails) failed++;
+  if (v === "ERROR") {
+    console.error(`✖ ERROR    ${prefix}-v${version}`);
     for (const p of r.problems) console.error(`   - ${p}`);
-    for (const b of r.blockers || []) console.error(`   - BLOCKED: ${b}`);
-  } else if (r.blockers?.length) {
-    console.log(`⏸ ${prefix}-v${version}  ${r.name}  release blocked:`);
-    for (const b of r.blockers) console.log(`   - ${b}`);
+    for (const b of r.blockers || []) console.error(`   - (also blocked) ${b}`);
+  } else if (v === "BLOCKED") {
+    (fails ? console.error : console.log)(`⏸ BLOCKED  ${prefix}-v${version}  ${r.name}${fails ? "  — can't be released yet" : ""}`);
+    for (const b of r.blockers) (fails ? console.error : console.log)(`   - ${b}`);
   } else {
-    console.log(`✔ ${prefix}-v${version}  ${r.name}  (${r.files.length} files)${offline ? "  [offline: registry checks skipped]" : ""}`);
+    console.log(`✔ READY    ${prefix}-v${version}  ${r.name}  (${r.files.length} files)${offline ? "  [offline: registry checks skipped]" : ""}`);
     if (!all && process.env.GITHUB_OUTPUT) {
       appendFileSync(process.env.GITHUB_OUTPUT, `dir=${r.dir}\nname=${r.name}\nversion=${r.version}\n`);
     }

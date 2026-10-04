@@ -1,5 +1,12 @@
 # Zoijs — Release Readiness Review (internal)
 
+> **Historical snapshot** from the 1.0 release-candidate sprint, kept for the record. It does
+> not describe the current code (SSR, `boundary`, `effect`, LIS reconciliation and more have
+> shipped since). Current sources of truth: [`VERSIONING.md`](../VERSIONING.md) (public API and
+> subpaths), [`SECURITY.md`](../SECURITY.md), [Security](security.md),
+> [Production security](production-security.md), and [Releasing](releasing.md). The security
+> lines below were corrected so they don't contradict the current model.
+
 Status snapshot at the **Release Candidate** sprint. Updated after parser hardening, TypeScript definitions, cross-browser automation, security hardening, the documentation site, and RC fixes.
 
 ## Public API stability
@@ -21,8 +28,8 @@ html, mount, createState, computed, each, configure, onCleanup
 
 ## Security posture
 
-- Text → inert `Text` nodes (XSS-safe). URLs → scheme allowlist, control-char-resistant, `data:` raster-images-only. Handlers → functions only (strings ignored). `on*` and `srcdoc` blocked from data. No `eval`. CSP- and **Trusted-Types**-friendly (pass-through `zoijs` policy).
-- **Status:** ✅ strong defaults, regression-tested in jsdom **and** real browsers (injected `<script>`/`onerror` proven not to execute on Chromium/Firefox/WebKit). No raw-HTML API. *Remaining:* no formal XSS-corpus fuzz; `srcset`/dynamic-`style` are caller's responsibility.
+- Text → inert `Text` nodes (XSS-safe). URLs → scheme allowlist, control-char-resistant, `data:` raster-images-only. Handlers → functions only (strings ignored). `on*` and `srcdoc` blocked from data. No `eval`. Works under a strict script CSP and enforced **Trusted Types** (pass-through `zoijs` policy, shared by compatible core copies from the next release), with the allowances documented in `production-security.md` (`style` bindings need `style-src-attr 'unsafe-inline'`; inline import maps need a hash or nonce).
+- **Status:** ✅ strong defaults, regression-tested in jsdom **and** real browsers (injected `<script>`/`onerror` proven not to execute on Chromium/Firefox/WebKit). Raw HTML: untrusted → `@zoijs/sanitize`; trusted → the explicit `unsafeHTML()` opt-in (`@zoijs/core/unsafe`, next release), which bypasses escaping and is flagged by `zoijs/no-unsafe-html`. Next release: `srcset`, meta refresh, SVG animation values are URL-checked, bound `<base>` is refused, `target="_blank"` gets `noopener noreferrer`. *Remaining:* dynamic `style` values are the caller's responsibility.
 
 ## Performance status
 
@@ -54,7 +61,7 @@ Fine-grained updates; no Virtual DOM. Keyed `each` reuses/moves nodes. Measured 
 2. No SSR/hydration; `each` identity relies on stable keys.
 3. Errors in bindings are logged, not bounded by an error boundary.
 4. Interpolation into `<script>/<style>` and dynamic tag/attribute names throw by design; a sole-child `${}` in `<textarea>/<title>` binds the element's content.
-5. `data:image/svg+xml` fully rejected; `srcset` not scheme-checked; dynamic `style` from untrusted data is the caller's responsibility.
+5. `data:image/svg+xml` fully rejected; dynamic `style` from untrusted data is the caller's responsibility. (`srcset` candidates are scheme-checked from the next release.)
 6. Strict Trusted-Types CSP must allow the `zoijs` policy.
 
 ## Allowed before v1

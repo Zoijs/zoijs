@@ -1,5 +1,8 @@
 # Production mode
 
+> *(Next release.)* The production entry and entry-based starting mode below ship in the next
+> core release. On core 1.8.0, call `configure({ dev: false })` before `mount` instead.
+
 Zoijs has a development mode (helpful warnings, the devtools hook) and a production
 mode (quiet, no graph introspection). **Which one you start in depends on the entry
 you load** — you don't have to remember to flip a flag:

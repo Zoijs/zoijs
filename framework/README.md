@@ -81,7 +81,7 @@ npx playwright install chromium firefox webkit
 npm run test:browser
 ```
 
-Playwright starts a static server automatically (`npx serve` on port 7310) — still no build step.
+Playwright starts a static server automatically (the repo's own `scripts/test-server.mjs`, Node built-ins only, on 127.0.0.1:7310) — still no build step.
 
 ## Browser support
 
@@ -97,7 +97,7 @@ Relies on baseline-modern platform APIs: ES modules, `<template>`, `TreeWalker`,
 
 ## Public API
 
-The whole framework is **nine functions** — learnable in one sitting and frozen for 1.x:
+The main entry is **nine functions** — learnable in one sitting and frozen for 1.x (opt-in subpaths such as `@zoijs/core/unsafe` are listed in [`VERSIONING.md`](VERSIONING.md)):
 
 ```js
 import {
@@ -114,7 +114,7 @@ import {
 - `createState(value)` — a reactive value (`get` / `set` / `peek`).
 - `computed(fn)` — a lazy, cached, **value-gated** derived value (`get` / `peek`).
 - `effect(fn)` — a side effect that re-runs when a value it reads changes; returns `{ dispose }` and may return a per-run cleanup.
-- `configure({ dev, onError })` — toggle development mode (warnings, devtools hook; starts `true` on `@zoijs/core`, `false` on the production entry `@zoijs/core/prod`), and observe contained errors with `onError(error, { kind })`.
+- `configure({ dev, onError })` — toggle development mode (warnings, devtools hook; starts `true` on `@zoijs/core`, `false` on the production entry `@zoijs/core/prod` *(next release)*), and observe contained errors with `onError(error, { kind })` *(next release)*.
 - `onCleanup(fn)` — register teardown for a component or list item (timers, subscriptions).
 
 Plus the **`ref`** binding (`html\`<input ref=${(el) => el.focus()} />\``) — no export; it's a template
@@ -125,6 +125,12 @@ hook — `attachInspector(inspector)` and `inspecting()` — that [`@zoijs/devto
 (or a browser extension) uses to observe the reactive graph. It's off by default, never instruments
 the hot read path, and is a no-op under `configure({ dev: false })`, so it costs production nothing and
 leaves the nine-function main surface unchanged.
+
+**Raw HTML (opt-in)** *(next release)*. A separate subpath, `@zoijs/core/unsafe`, exports `unsafeHTML(trustedMarkup)` —
+the one way to render markup **without escaping**, in a content position only. It never sanitizes
+(untrusted HTML goes through [`@zoijs/sanitize`](https://www.npmjs.com/package/@zoijs/sanitize)), the
+default entry never loads it, and every use is greppable and flagged by `zoijs/no-unsafe-html`. See
+[Security](docs/security.md#unsafehtml--the-one-escape-hatch).
 
 See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, and API reference.
 
@@ -139,7 +145,7 @@ See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, a
 - `boundary()` render-time error boundary — a failing subtree shows a fallback instead of breaking `mount`.
 - `each()` keyed list reconciliation — minimal DOM moves; preserves focus / input / scroll on reorder.
 - Microtask batching, push-pull dependency tracking, **owner-scoped cleanup** (unmount and removed items dispose their subscriptions).
-- Production mode by loading `@zoijs/core/prod` (bundlers' production builds pick it automatically) — no build step required; `configure({ dev })` overrides.
+- Production mode by loading `@zoijs/core/prod` *(next release)* (bundlers' production builds pick it automatically) — no build step required; `configure({ dev })` overrides.
 - Safety: self-triggering effects are warned + stopped; a throwing binding doesn't break others.
 
 **Out of the core (by design):** routing, SSR, data, forms, and i18n live in optional packages — `@zoijs/router`, `@zoijs/ssr`, `@zoijs/resource`/`@zoijs/action`, `@zoijs/forms`, `@zoijs/i18n` — not the core. **Not part of Zoijs at all:** plugins, a global store, JSX, a Virtual DOM, a mandatory build step, TypeScript-first setup.

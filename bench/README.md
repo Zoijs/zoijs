@@ -10,19 +10,20 @@ npm run bench:size   # gzipped-size budget check (also runs inside `npm test`)
 ## Shipped size
 
 Zoijs has **no build step** — the published package *is* its source, so the gzipped
-size of `framework/src/**/*.js` is what a browser fetches from a gzip/brotli CDN.
+size of `framework/src/**/*.js` (client-reachable files, including opt-in entries like
+`unsafe.js`; the server-only `server.js` is excluded) is what a browser can fetch from a
+gzip/brotli CDN. `npm run bench:size` prints the current numbers.
 
-| Metric | Size |
-|---|---|
-| raw | ~42 KB |
-| **gzipped** | **~13.3 KB** |
+Phase 1 currently tracks **commented source size**: about **25.9 KB gzipped
+(26,498 B as of this writing) against a temporary 26.5 KB (27,136 B) budget**, enforced by `npm test`
+(`bench/size.mjs --check`). That is **not** a production payload figure — the source
+ships with its comments, and a page only loads the modules it imports. The budget was
+raised deliberately through Phase 1 for reviewed security and correctness fixes (the
+history is in `bench/size.mjs`); it is not license for unchecked growth.
+Production/minified distribution budgets are defined in PERF-2, which has not run yet,
+so there is no final minified production size to quote.
 
-For comparison, React + ReactDOM is ~45 KB gzipped. `npm test` fails the build if
-the core grows past a **22.5 KB gzipped** budget (`bench/size.mjs --check`). That is a
-**temporary Phase 1 budget** for the commented source: the Phase 1 security and
-correctness fixes needed more code than the old 20 KB margin allowed. It is not license
-for unchecked growth; PERF-2's minified build will introduce separate budgets for the
-minified production output and for source/module delivery.
+> Historical: before the Phase 1 hardening the core measured ~13.3 KB gzipped (1.0) and ~18.1 KB (August 2026), against budgets of 16–20 KB.
 
 ## DOM micro-benchmarks (jsdom)
 

@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/forms` are documented here.
 
+## Unreleased
+
+### Documentation
+- **CDN guidance uses exact, integrity-pinned URLs (SEC-7).** The README's no-install example
+  imported a floating `esm.sh/@zoijs/forms@0.1` URL; it now maps `@zoijs/core` and `@zoijs/forms` to
+  exact-version jsDelivr files with integrity hashes in an import map and imports by name. README
+  only — no code change.
+
 ## 0.1.1 — 2026-06-25
 
 Consistency hardening — **non-breaking, additive only.**

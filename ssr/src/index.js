@@ -22,12 +22,20 @@ import {
   toText,
   escapeText,
   escapeAttr,
-  isSafeUrl,
   isSafeAttributeName,
-  URL_ATTRS,
+  isSafeAttributeValue,
+  openerRel,
   styleObjectToCss,
 } from "@zoijs/core/server";
 import { mount } from "@zoijs/core";
+
+// unsafeHTML() results (@zoijs/core/unsafe). The Symbol.for key IS the brand protocol, so
+// checking it here needs no new core export (and no higher peer floor).
+const UNSAFE_HTML = Symbol.for("zoijs.unsafe-html");
+const isUnsafeHTML = (v) => v != null && typeof v === "object" && v[UNSAFE_HTML] === true;
+const rawInAttr = (name) => {
+  throw new TypeError(`Zoijs: unsafeHTML() is content-only — it can't be bound to attribute "${name}"`);
+};
 
 const CHILD_MARKER = "<!--zoijs-->";
 const ELEMENT_MARKER = " data-zoijs-bind";
@@ -72,6 +80,8 @@ function renderValue(value) {
   if (value == null || value === true || value === false) return ""; // render nothing
   if (isTemplateResult(value)) return renderTemplate(value);
   if (isEachMarker(value)) return renderEach(value);
+  // The caller asserted this markup is trusted: the only unescaped output path.
+  if (isUnsafeHTML(value)) return String(value.html);
   if (Array.isArray(value)) {
     let out = "";
     for (const v of value) out += renderValue(v);
@@ -154,10 +164,22 @@ function renderTemplate(result) {
 function renderAttributes(attrs, values) {
   let out = "";
   for (const attr of attrs) {
+    if (attr.holes.some((h) => isUnsafeHTML(values[h]))) rawInAttr(attr.name); // mirrors the client
     if (attr.event) continue; // event handlers are wired on the client
     if (attr.name === "ref") continue; // ref is a client-only binding
     if (attr.content) continue; // raw-text content binding — emitted as element content below
-    out += serializeAttribute(attr.name, computeAttribute(attr, values));
+    if (attr.opener) {
+      // target/rel computed together (SEC-9): target="_blank" always carries noopener noreferrer,
+      // already in the server HTML — never left for hydration to fix.
+      const target = computeAttribute(attr.target, values);
+      const rel = attr.rel ? computeAttribute(attr.rel, values) : null;
+      if (isUnsafeHTML(target) || isUnsafeHTML(rel)) rawInAttr(attr.name);
+      out += serializeAttribute("target", target) + serializeAttribute("rel", openerRel(target, rel));
+      continue;
+    }
+    const value = computeAttribute(attr, values);
+    if (isUnsafeHTML(value)) rawInAttr(attr.name);
+    out += serializeAttribute(attr.name, value, attr.check);
   }
   return out;
 }
@@ -179,13 +201,13 @@ function computeAttribute(attr, values) {
 // Mirror the client renderer's applyAttribute decisions, but emit a string:
 // unsafe names dropped, unsafe URLs dropped, value/checked serialized as the
 // markup form, false/null omitted, true → bare, otherwise name="escaped".
-function serializeAttribute(name, value) {
+function serializeAttribute(name, value, check) {
   if (!isSafeAttributeName(name)) return ""; // on*, srcdoc
   // HTML attribute names are case-insensitive — normalize for the security/dispatch checks so
   // `HREF`/`SRC`/`VALUE` can't skip the URL guard or property routing (mirrors the client
   // renderer). Keep the original `name` when emitting so case-sensitive SVG attrs are preserved.
   const lname = name.toLowerCase();
-  if (URL_ATTRS.has(lname) && !isSafeUrl(toText(value))) return ""; // dangerous scheme
+  if (!isSafeAttributeValue(lname, value, check)) return ""; // unsafe URL / srcset / refresh / animation URL
   if (lname === "style" && value !== null && typeof value === "object") {
     // Object form: mirror the client — build the CSS string safely (no breakout).
     const css = styleObjectToCss(value);

@@ -6,7 +6,54 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Migration notes
+Security hardening in this release (proposed 1.9.0) can make code that relied on
+undocumented, unsafe behavior fail. Documented usage is unchanged — see *Security hardening*
+in [`VERSIONING.md`](VERSIONING.md). What to check:
+
+- **`html([...])` throws `ZJS010`.** `html` only accepts a tagged template. Calling it with a
+  runtime array used to compile that array as markup. Fix: write `` html`…` `` for your own markup;
+  for HTML from users or other systems, use `sanitize()` from `@zoijs/sanitize`; for HTML you
+  trust as-is (your CMS, your build), use `unsafeHTML()` from `@zoijs/core/unsafe`.
+- **Conditional components: return the component, don't call it.**
+  `${() => show.get() ? Child : null}` (or `() => Child(props)` for props) constructs `Child`
+  once, untracked — state it reads during setup doesn't rebuild it. `${() => show.get() ? Child() : null}`
+  still works but stays tracked: `Child()` runs *inside* the binding, so every signal it reads
+  while setting up becomes a dependency of the condition, and any write to one of them disposes
+  and rebuilds the child (losing its local state and focus). Change `Child()` to `Child`.
+- **Lit-style `.prop=${…}`, `?attr=${…}` and `@event=${…}` are compile errors.** They never
+  worked (they threw at render, or `@click` called the handler). Use `onclick=${fn}` for events,
+  `disabled=${() => cond}` (`false`/`null` removes the attribute) for boolean attributes, and an
+  attribute or a `ref` for properties (`value=${…}` on inputs is kept in sync as a property).
+- **A bound `<base>` is refused.** Write `<base href="/app/">` statically. Bound `srcset`,
+  meta-refresh `content` and SVG `<animate>`/`<set>` values must now pass the URL check.
+- **`target="_blank"` links get `rel="noopener noreferrer"`**, merged into your own `rel`.
+  If the opened page relied on `window.opener` or the `Referer` header, that no longer works by
+  design — use `postMessage` or explicit parameters instead.
+- **`@zoijs/sanitize` namespaces ids** (`id="x"` → `id="user-content-x"`, same for `name`, with
+  `#x` links and ARIA references rewritten). Update links into sanitized content from outside it
+  (`#user-content-x`), or pass `{ idPrefix: "" }` if the content is trusted not to clobber.
+- **`@zoijs/router`: `go()` throws on absolute and scheme URLs** (`https://…`, `//host`,
+  `mailto:`). Pass an app path (`go("/settings")`); use `location.assign()` or a plain `<a>` to
+  leave the app.
+- **`@zoijs/router`: path-like params.** A param is decoded per segment, so `%2F` becomes `/`.
+  If your ids can contain slashes (file paths, S3 keys), create the router with
+  `{ decodeSlash: false }` and decode the param yourself.
+
 ### Added
+- **`@zoijs/core/unsafe` — one explicit raw-HTML opt-in (SEC-3).** `unsafeHTML(value)` renders a
+  string or `TrustedHTML` as raw markup in a content position (`${unsafeHTML(trusted)}`, or reactively
+  `${() => unsafeHTML(src.get())}`, which replaces and cleans up its nodes). **It bypasses escaping and
+  does not sanitize** — only for content you have established as trusted; untrusted HTML still goes
+  through `@zoijs/sanitize`. It replaces the unreviewable `ref` + `innerHTML` workaround: it lives only
+  on its own subpath (never exported from `@zoijs/core`, never loaded by the default entry), results are
+  Symbol-branded (JSON can't forge them; `Symbol.for`, so compatible copies interoperate), it throws in
+  any attribute/URL/handler/`ref`/raw-text position and can't be stringified, and `<script>`/`<style>`
+  holes stay compile errors. The value goes to the DOM as given — never through the `zoijs` Trusted
+  Types policy — so pages enforcing Trusted Types must pass their own `TrustedHTML` (a plain string is
+  refused with a clear error). Development mode warns once when a string is passed. `@zoijs/ssr`
+  emits it unescaped. Lint rule `zoijs/no-unsafe-html` (warn) flags every use. Default rendering is
+  unchanged: data is still always inert.
 - **`configure({ onError(error, info) })` — observe errors Zoijs contains (CORE-3).** Failures Zoijs
   catches to keep the page running — a throwing binding, `effect`, `computed` or cleanup, a `boundary`
   child, a failed `@zoijs/resource` fetch or `@zoijs/action` run — were only visible in the console
@@ -15,7 +62,8 @@ All notable changes to Zoijs are documented here. The format is based on
   `boundary` | `resource` | `action`), once per failure, in every mode. Errors that escape still
   escape. The hook is realm-wide (shared by compatible copies); `onError: null` removes it, other
   `configure` calls leave it unchanged. A throwing hook is logged and never re-invoked for its own
-  failure. resource/action report through a new framework-internal subpath, `@zoijs/core/internal`.
+  failure. `@zoijs/resource`/`@zoijs/action` report through the shared runtime (no extra import or
+  import-map entry), so the hook and its recursion guard are one per realm.
 - **Production entry: `@zoijs/core/prod` (SEC-4).** Same API as `@zoijs/core`, but a page that loads
   it starts in production mode — no development warnings, and the devtools hook never attaches.
   Bundlers' production builds select it automatically through a new `"production"` export condition
@@ -27,15 +75,35 @@ All notable changes to Zoijs are documented here. The format is based on
   development mode. Security and correctness checks are unaffected by the mode.
 
 ### Fixed
+- **Template-compiler edge cases (CORE-4).** Each now compiles correctly or fails while compiling
+  `html\`…\``, on the client and under `@zoijs/ssr`:
+  - `<img src=${url}/>` — the `/` of `/>` was appended to an unquoted binding (`"/x.png/"`; an
+    `onclick=${fn}/>` threw). It now self-closes the tag; slashes inside a value are kept.
+  - Lit-style `.prop=${…}`, `?attr=${…}` and `@event=${…}` (and other non-HTML names such as
+    `[x]=`) compiled, then threw `InvalidCharacterError` at render (`@click` silently *called* the
+    handler as a reactive getter; SSR emitted the bogus attribute). They are now refused at compile
+    time — in every mode, before any DOM or `<template>` work — with the supported form in the message.
+    An invalid template is never cached.
+  - Character references in the static text of a mixed attribute (`title="Tom &amp; ${name}"`) were
+    set literally (`Tom &amp;amp; Ann`). They are decoded at compile time as the HTML parser does
+    (numeric, `&amp; &lt; &gt; &quot; &apos;`, the Latin-1 names, and the no-`;` legacy rules);
+    references that can't be decoded exactly (`&hellip;`, `&#0;`, C1 `&#128;`) throw instead of
+    being guessed. URL checks see the decoded value.
+  - Development mode now warns (once per element) when an array or plain object is bound to an
+    ordinary attribute and becomes `"a,b"` / `"[object Object]"`. Rendering is unchanged; `style`
+    objects, refs, handlers, and values with their own `toString` (`URL`, `Date`) don't warn.
 - **Multiple copies of `@zoijs/core` on one page now share one reactive runtime (CORE-2).** The
   tracking context, owner scope, effect queue, dev flag and devtools inspector were per-module-copy,
   so a second copy (CDN + bundled, an import-map duplicate, a UI kit bundling its own core) silently
   split the graph: state from one copy never updated bindings or effects from the other, and its
   cleanups never ran. They now live on one runtime object per JavaScript realm, keyed by
-  `Symbol.for("zoijs.runtime@1")` (the runtime protocol): every compatible copy joins it, the first
-  copy's object is never replaced, and `configure({ dev })` is a single realm-wide setting. A copy with
-  a different runtime protocol keeps its own runtime and logs `ZJS201` in dev mode instead of mixing.
-  No API changes.
+  `Symbol.for("zoijs.runtime@1")` (runtime protocol 1, new in this release — core 1.8.0 and older
+  keep per-copy state and don't join): every protocol-1 copy joins it, the first
+  copy's object is never replaced, and `configure({ dev })` is a single realm-wide setting. The runtime
+  also holds the `onError` reporter and the `zoijs` Trusted Types policy, so compatible copies create
+  that policy once and share it — under `trusted-types zoijs` a second copy renders without
+  `'allow-duplicates'`. A copy with a different runtime protocol keeps its own runtime and logs
+  `ZJS201` in dev mode instead of mixing. No API changes.
 - **A conditionally shown component no longer rebuilds when state read during its setup changes (CORE-1).**
   A live binding can now return a component **uncalled** — `${() => show.get() ? Child : null}`, or
   `() => Child(props)` for props. Zoijs constructs it once, untracked, under the binding's owner, so
@@ -48,6 +116,26 @@ All notable changes to Zoijs are documented here. The format is based on
   (previously it emitted the function's source text).
 
 ### Security
+- **Wider URL guards and opener protection (SEC-9).** Bound values could still reach navigation and
+  resource contexts the URL check didn't cover. Now, in every mode, on the client and under
+  `@zoijs/ssr` (one shared decision, `isSafeAttributeValue`):
+  - **`<base>`** can't be bound at all — a compile error even for a safe-looking URL, since it
+    re-resolves every relative URL on the page. Static `<base href="/app/">` is unchanged.
+  - **`<meta http-equiv="refresh">`**: a bound `content` is parsed the way browsers parse a refresh
+    (`0;url=…`, `0;URL='…'`, `0 …`) and its URL must pass the URL check; a value that isn't a
+    refresh is refused. Binding `http-equiv` is a compile error.
+  - **`srcset` / `imagesrcset`**: every candidate URL is checked (HTML's candidate parsing, so
+    `data:image/…` commas stay inside their URL); one unsafe candidate refuses the whole value.
+    Parsing is linear in the value's length.
+  - **SVG `<animate>`/`<set>`**: `from`/`to`/`by`/`values` are checked when the static
+    `attributeName` is a URL attribute; binding `attributeName` is a compile error.
+  - **`target="_blank"`** on `<a>`/`<area>`/`<form>` — bound or static — always carries
+    `rel="noopener noreferrer"`, merged into the app's own tokens (never duplicated, re-applied when
+    `rel` updates, dropped when `target` leaves `_blank`), independent of attribute order, and already
+    present in server HTML. `noreferrer` also suppresses the Referer header.
+  Refused values are not set; the dev warning now names the attribute but not the URL. `unsafeHTML()`
+  markup is unaffected (trusted, inserted as written). New `@zoijs/core/server` exports
+  `isSafeAttributeValue` and `openerRel` for @zoijs/ssr.
 - **Production security checklist (SEC-11, documentation).** The security docs explained safe
   rendering but not how to deploy safely: the recommended CSP lacked `object-src`, `base-uri`,
   `form-action` and `frame-ancestors`, and there was no guidance on CSRF, credentialed requests, where
@@ -59,8 +147,7 @@ All notable changes to Zoijs are documented here. The format is based on
   `onError`, HTTPS, the dev server, compatible versions, and copy-paste headers for Netlify,
   Cloudflare Pages, Vercel, nginx and Apache (and GitHub Pages' limits). It also records two current
   limits a strict policy hits: `style` bindings are attributes (need `style-src-attr 'unsafe-inline'`),
-  and under enforced Trusted Types `@zoijs/sanitize` fails and a second core copy can't create the
-  `zoijs` policy. Package READMEs link to it; `npm run test:docs` checks it stays complete and that
+  and under enforced Trusted Types `@zoijs/sanitize` fails. Package READMEs link to it; `npm run test:docs` checks it stays complete and that
   every host recipe matches the canonical policy. No runtime change.
 - **Exact, integrity-pinned CDN guidance and truthful peer floors (SEC-7).** Docs and READMEs pointed
   at floating build-service URLs (`esm.sh/@zoijs/core@1`), which can change without a deploy, can't be
@@ -68,8 +155,10 @@ All notable changes to Zoijs are documented here. The format is based on
   jsDelivr file URLs (the published bytes) with an import-map `integrity` hash for every module — see
   `docs/installation.md` — or vendoring for a strict CSP. `scripts/zoijs-compat.json` records the first
   core version providing each import, and the release check verifies every package's peer floor
-  against it (and against the published tarball), blocks floating CDN URLs, and blocks packages that
-  need the still-unversioned next core (`@zoijs/resource`, `@zoijs/action`, `create-zoijs`).
+  against it (and against the published tarball) and blocks floating CDN URLs. A package that needs
+  the still-unpublished next core (`@zoijs/ssr`, and `create-zoijs`, whose import map must point at a
+  published core) is reported BLOCKED, not ERROR: core is released first, then those packages' floors
+  and maps are raised in one follow-up change (`docs/releasing.md`).
   `scripts/cdn-importmap.mjs` generates import maps from the npm tarball.
 - **Hardened release supply chain (SEC-5).** Every package (all 14) now publishes only from CI,
   only when a `<package>-v<version>` tag on `main` is pushed, after the full CI suite passes — no
