@@ -14,7 +14,8 @@
     "@zoijs/core/server": "1.5.0",
     "@zoijs/core/server#styleObjectToCss": "1.7.0",
     "@zoijs/core/internal": "next",
-    "@zoijs/core/prod": "next"
+    "@zoijs/core/prod": "next",
+    "@zoijs/core/unsafe": "next"
   },
   "packageRequires": {
     "create": ["@zoijs/core/prod"]

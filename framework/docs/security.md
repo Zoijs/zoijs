@@ -89,9 +89,60 @@ These either **throw a clear error** or are **blocked**:
 | `<script>${x}</script>` / `<style>${x}</style>` | throws | never interpolate into script/style (injection surface) |
 | `onclick="a ${fn}"` (multi-part handler) | throws | `onclick=${fn}` |
 | `html([...])` / `html(strings)` (calling `html` as a function) | throws `ZJS010` | write a tagged template; for untrusted HTML use `@zoijs/sanitize` |
-| `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML` |
+| `el.innerHTML = data` (your own code) | **bypasses Zoijs entirely** | never assign untrusted data to `innerHTML`; for trusted markup use `unsafeHTML()` (reviewable, Trusted-Types-aware) |
+| `title=${unsafeHTML(…)}` (or any attribute) | throws | `unsafeHTML()` is for content positions only |
 
-There is intentionally **no raw-HTML rendering API** in Zoijs. If you genuinely need to render *rich* HTML you broadly trust (e.g. markdown or CMS output), use the optional [`@zoijs/sanitize`](../../sanitize/README.md) package: `sanitize(dirtyHtml)` parses the string inertly and returns **safe DOM nodes** (allowlist-based, reusing the same URL/attribute guards described above) that drop straight into a text binding — `html\`<article>${() => sanitize(body)}</article>\``. For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
+## Markup, untrusted HTML, and trusted raw HTML
+
+There are exactly three ways markup reaches the page:
+
+| Source | Use | What happens |
+|---|---|---|
+| Markup you write | `` html`…` `` | static structure from your source; every `${}` value is data |
+| Untrusted HTML (users, a CMS, markdown) | [`@zoijs/sanitize`](../../sanitize/README.md): `` html`<article>${() => sanitize(body)}</article>` `` | parsed inertly, allowlist-filtered, returned as **safe DOM nodes** |
+| HTML you have deliberately established as trusted | `unsafeHTML()` from **`@zoijs/core/unsafe`** | inserted **raw** — no escaping, no filtering |
+
+For fully adversarial input in high-value contexts, prefer a dedicated, independently-audited
+sanitizer (e.g. DOMPurify) and treat that boundary as security-critical.
+
+### `unsafeHTML()` — the one escape hatch
+
+> **`unsafeHTML()` bypasses normal escaping. Never pass API, database, URL, storage, or user input
+> to it unless that content has been independently established as trusted.** It does not sanitize.
+
+```js
+import { unsafeHTML } from "@zoijs/core/unsafe";
+
+// Markup your own build or publishing pipeline produced and controls end to end.
+html`<article>${unsafeHTML(trustedCmsFragment)}</article>`;
+```
+
+If the CMS content can be written by users or third parties, it is **untrusted** — use
+`sanitize()` instead. Don't wrap `sanitize()` output in `unsafeHTML()`: `sanitize()` already returns
+DOM nodes that render directly.
+
+How it's fenced in:
+
+- **Opt-in by import.** It is only exported from `@zoijs/core/unsafe` — never from `@zoijs/core` —
+  so every use is a visible import, `grep -R unsafeHTML` finds them all, and the
+  [`zoijs/no-unsafe-html`](../../eslint-plugin/README.md) lint rule warns on each one (keep a
+  reviewed use with `// eslint-disable-next-line zoijs/no-unsafe-html -- <why it's trusted>`).
+  The default entry never loads it.
+- **Data can't impersonate it.** Results carry a Symbol brand (like `html` results), so JSON or
+  other data shaped like one renders as text.
+- **Content positions only.** It works where a child value goes (`${…}` between tags, including
+  `${() => unsafeHTML(src.get())}`, which replaces its nodes on change). In an attribute, a URL, an
+  event handler, a `ref`, or `<textarea>`/`<title>` content it throws instead of being stringified;
+  `<script>`/`<style>` holes remain compile errors.
+- **Trusted Types.** It accepts a string or a real `TrustedHTML`, and passes the value to the DOM
+  as-is — never through Zoijs's own `zoijs` policy. On a page that enforces Trusted Types, a plain
+  string is therefore refused (a clear `TypeError` when it's inserted); create the `TrustedHTML`
+  with your own policy (`trusted-types zoijs my-app`). Without Trusted Types, a string works, and
+  development mode warns once that it bypasses escaping.
+- **On the server** (`@zoijs/ssr`), it is the only output that isn't escaped. Node has no
+  `TrustedHTML`, so a string is accepted: by calling `unsafeHTML()` the server code asserts trust.
+- `<script>` elements in the markup are parsed but don't execute on the client; everything else —
+  event-handler attributes, `javascript:` links, styles — is live. That is the point, and the risk.
 
 ### A note on `style`
 
@@ -156,6 +207,6 @@ A change that weakens any of these fails the build.
 
 - Text → inert, escaped. URLs → scheme-checked. Handlers → functions only.
 - `on*` and `srcdoc` attributes are blocked from data; dynamic tag/attribute *names* throw.
-- No `eval`, no Virtual DOM, no raw-HTML API. CSP- and Trusted-Types-friendly.
+- No `eval`, no Virtual DOM. One explicit raw-HTML opt-in, `unsafeHTML()` from `@zoijs/core/unsafe`, for trusted markup only. CSP- and Trusted-Types-friendly.
 - The one rule that keeps you safe: **let Zoijs render your data — never hand untrusted data to `innerHTML` yourself.**
 - Deploying? Go through the [production security checklist](production-security.md) — CSP and headers, CSRF, credentials, `serialize()`, route params, secrets, and monitoring.

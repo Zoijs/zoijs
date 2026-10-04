@@ -126,6 +126,12 @@ hook — `attachInspector(inspector)` and `inspecting()` — that [`@zoijs/devto
 the hot read path, and is a no-op under `configure({ dev: false })`, so it costs production nothing and
 leaves the nine-function main surface unchanged.
 
+**Raw HTML (opt-in).** A separate subpath, `@zoijs/core/unsafe`, exports `unsafeHTML(trustedMarkup)` —
+the one way to render markup **without escaping**, in a content position only. It never sanitizes
+(untrusted HTML goes through [`@zoijs/sanitize`](https://www.npmjs.com/package/@zoijs/sanitize)), the
+default entry never loads it, and every use is greppable and flagged by `zoijs/no-unsafe-html`. See
+[Security](docs/security.md#unsafehtml--the-one-escape-hatch).
+
 See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, and API reference.
 
 **TypeScript:** ships type definitions ([`src/index.d.ts`](src/index.d.ts)) for autocomplete and optional type-checking — JS-first, no build step required. `createState<T>`, `computed<T>`, and `each<T>` are generic. Type-check with `npm run test:types`.

@@ -3,6 +3,16 @@
 All notable changes to `@zoijs/eslint-plugin` are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- **`no-unsafe-html`** (warn, in `recommended`) — flags every use of `@zoijs/core/unsafe`'s
+  `unsafeHTML()` (SEC-3): the import (static, dynamic, or re-export) and each call, including renamed
+  imports and namespace access. The API is supported but bypasses escaping, so each use should be
+  reviewed and kept with a reasoned `eslint-disable-next-line` comment.
+- **`no-html-call`** (error, in `recommended`) — flags calling `html` as a function (`html([...])`,
+  `html.call/apply/bind`, `Reflect.apply(html, …)`) (SEC-2). (Shipped with the SEC-2 change; listed
+  here because it was missing from this changelog.)
+
 ## 0.3.0
 
 Adds two zero-dependency **security rules**, defense-in-depth on top of the runtime's

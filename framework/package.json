@@ -26,6 +26,10 @@
     "./internal": {
       "types": "./src/internal.d.ts",
       "default": "./src/internal.js"
+    },
+    "./unsafe": {
+      "types": "./src/unsafe.d.ts",
+      "default": "./src/unsafe.js"
     }
   },
   "files": [

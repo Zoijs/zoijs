@@ -280,3 +280,41 @@ test("CORE-4: mixed-value character references are decoded once, then escaped as
 test("CORE-4: the URL guard sees the decoded value on the server", () => {
   assert.equal(renderToString(() => html`<a href="java&#115;cript:${"alert(1)"}">x</a>`), "<a>x</a>");
 });
+
+// ---- SEC-3: unsafeHTML() is the only unescaped output path -----------------------------
+
+import { unsafeHTML } from "@zoijs/core/unsafe";
+
+test("SEC-3: unsafeHTML emits raw markup; the same string as plain data is escaped", () => {
+  const markup = "<b>x</b><img src=x onerror=alert(1)>";
+  assert.equal(
+    renderToString(() => html`<div>${unsafeHTML(markup)}</div><div>${markup}</div>`),
+    '<div><b>x</b><img src=x onerror=alert(1)></div><div>&lt;b&gt;x&lt;/b&gt;&lt;img src=x onerror=alert(1)&gt;</div>'
+  );
+  assert.equal(renderToString(() => html`<p>${() => unsafeHTML("<i>r</i>")}</p>`), "<p><i>r</i></p>", "reactive slot");
+  assert.equal(renderToString(() => html`<p>${[unsafeHTML("<i>1</i>"), "<i>2</i>"]}</p>`), "<p><i>1</i>&lt;i&gt;2&lt;/i&gt;</p>");
+});
+
+test("SEC-3: hydratable output keeps the slot markers around raw markup", () => {
+  assert.equal(renderToString(() => html`<p>${unsafeHTML("<i>r</i>")}</p>`, { hydratable: true }), "<p><!--zoijs:[--><i>r</i><!--zoijs--></p>");
+});
+
+test("SEC-3: refused in attributes on the server too (incl. events/refs, which SSR drops)", () => {
+  const u = unsafeHTML("<b>x</b>");
+  for (const tpl of [
+    () => html`<div title=${u}></div>`,
+    () => html`<div title="a ${u}"></div>`,
+    () => html`<a href=${unsafeHTML("javascript:alert(1)")}>x</a>`,
+    () => html`<b onclick=${u}></b>`,
+    () => html`<b ref=${u}></b>`,
+    () => html`<textarea>${u}</textarea>`,
+    () => html`<a href=${() => u}>x</a>`,
+  ]) {
+    assert.throws(() => renderToString(tpl), /can't be bound to attribute|content-only, never a string/);
+  }
+});
+
+test("SEC-3: JSON look-alikes are escaped data, never raw", () => {
+  const forged = JSON.parse('{"__zoijsUnsafeHTML":true,"zoijs.unsafe-html":true,"Symbol(zoijs.unsafe-html)":true,"html":"<b>x</b>"}');
+  assert.equal(renderToString(() => html`<p>${forged}</p>`), "<p>[object Object]</p>");
+});

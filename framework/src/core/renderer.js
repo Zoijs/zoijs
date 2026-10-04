@@ -18,7 +18,7 @@ import { createState } from "../reactivity/state.js";
 import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
 import { isDev } from "../reactivity/env.js";
 import { toText, isSafeUrl, isSafeAttributeName, URL_ATTRS, styleObjectToCss } from "../utils/security.js";
-import { isTemplateResult, isEachResult } from "./brand.js";
+import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
@@ -127,7 +127,13 @@ function bindChild(anchor, value) {
   else insertStaticContent(anchor, value);
 }
 
+// unsafeHTML() is content-only: refused in any attribute, before URL/name checks.
+const rawInAttr = (name) => {
+  throw new TypeError(`Zoijs: unsafeHTML() can't be bound to attribute "${name}"`);
+};
+
 function bindAttribute(el, attr, values) {
+  for (const h of attr.holes) if (isUnsafeHTML(values[h])) rawInAttr(attr.name);
   if (attr.name === "ref") {
     // A callback ref. Only a single ${fn} is meaningful; anything else (a string,
     // a number, a multi-part value) is rejected by bindRef without touching the DOM.
@@ -299,7 +305,20 @@ function renderChild(value) {
     const r = render(value);
     return { nodes: [...r.node.childNodes], dispose: r.dispose };
   }
+  if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html), dispose: noop };
   return { nodes: [document.createTextNode(toText(value))], dispose: noop };
+}
+
+// unsafeHTML(): the one raw-markup path. The value reaches the sink as given (never via
+// the zoijs policy), so enforced Trusted Types refuse a string and take the app's TrustedHTML.
+function rawNodes(markup) {
+  const t = document.createElement("template");
+  try {
+    t.innerHTML = markup;
+  } catch (cause) {
+    throw new TypeError("Zoijs: Trusted Types are enforced — pass unsafeHTML() a TrustedHTML", { cause });
+  }
+  return [...t.content.childNodes];
 }
 
 // ---- keyed list binding ------------------------------------------------------
@@ -502,6 +521,7 @@ function stringifyKey(key) {
 // ---- attribute binding -------------------------------------------------------
 
 function applyAttribute(el, name, value) {
+  if (isUnsafeHTML(value)) rawInAttr(name);
   if (!isSafeAttributeName(name)) {
     if (isDev()) console.warn(`Zoijs: refusing to bind unsafe attribute "${name}"`);
     return;

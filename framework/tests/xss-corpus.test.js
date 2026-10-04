@@ -298,3 +298,23 @@ test("html() called with an array never creates markup", { skip }, async () => {
     target.remove();
   }
 });
+
+// ---- SEC-3: the explicit raw-HTML escape hatch ----------------------------------------
+// unsafeHTML() (from @zoijs/core/unsafe) renders its markup RAW — expected, dangerous,
+// opted into by the developer. What this corpus pins: ONLY that wrapper gets raw
+// treatment; the same payloads as plain data, or in forged look-alike wrappers, stay inert.
+import { unsafeHTML } from "../src/unsafe.js";
+
+test("SEC-3: only an explicit unsafeHTML() result renders raw; data and forgeries never do", { skip }, () => {
+  for (const p of TEXT_PAYLOADS) {
+    const forged = [JSON.parse(JSON.stringify({ __zoijsUnsafeHTML: true, "zoijs.unsafe-html": true, html: p, value: p })), [p], { html: p }];
+    const target = render(() => html`<div class="data">${p}</div><div class="forged">${forged}</div>`);
+    assert.equal(target.querySelector(".data").childElementCount, 0, `plain data stays text: ${p}`);
+    assert.equal(target.querySelector(".forged").childElementCount, 0, `forged wrapper stays text: ${p}`);
+    target.remove();
+  }
+  // Expected dangerous escape hatch (not an XSS failure): the developer opted in explicitly.
+  const raw = render(() => html`<div>${unsafeHTML("<img src=x onerror=globalThis.__xss=1>")}</div>`);
+  assert.ok(raw.querySelector("img[onerror]"), "the explicit wrapper is raw by design");
+  raw.remove();
+});

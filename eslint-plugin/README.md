@@ -139,6 +139,7 @@ fully enforce. See the [security guide](https://zoijs.dev/security).
 | `no-target-blank-without-rel` | a `target="_blank"` link with no `rel="noopener"` (reverse tabnabbing) | error |
 | `no-dynamic-style` | a `style` attribute bound from a dynamic value (CSS injection / data exfiltration) | warn |
 | `no-html-call` | calling `html` as a function (`html([...])`, `html.call(…)`) instead of as a tagged template — a raw-markup path | error |
+| `no-unsafe-html` | every use of the raw-HTML escape hatch: imports from `@zoijs/core/unsafe` (static, dynamic, re-export) and every `unsafeHTML(…)` call, renamed or via a namespace | warn |
 
 ```js
 html`<a href=${url} target="_blank">Docs</a>`               // ✗ no-target-blank-without-rel
@@ -147,6 +148,17 @@ html`<div style=${cssString}>…</div>`                       // ✗ no-dynamic-
 html`<div class=${() => (active ? "on" : "")}>…</div>`      // ✓ bind a class instead
 html`<div style="color:red">…</div>`                        // ✓ static style is fine
 html([userHtml])                                            // ✗ no-html-call (throws at runtime too)
+html`<article>${unsafeHTML(markup)}</article>`              // ⚠ no-unsafe-html — review it
+```
+
+`no-unsafe-html` is a warning, not an error: `unsafeHTML()` is supported for markup you have
+established as trusted, but it bypasses escaping, so every use should be a deliberate, reviewed
+decision. After review, keep it with a reasoned suppression (ESLint's
+`--report-unused-disable-directives` keeps these honest):
+
+```js
+// eslint-disable-next-line zoijs/no-unsafe-html -- built by our docs pipeline from repo Markdown
+html`<article>${unsafeHTML(docsHtml)}</article>`;
 ```
 
 Both are narrow: only a *static* `target="_blank"` is flagged (a dynamic `target`/`rel`
