@@ -22,6 +22,12 @@ npm run dev
 
 Open the printed URL (it falls back to 7311–7313 if the port is busy).
 
+The dev server is for **development only**: it listens on `127.0.0.1` (this machine),
+never serves dotfiles (`.env`, `.git/`, …) or anything outside the project folder, and is
+not meant for hosting. To try the app from a phone on your network, opt in explicitly with
+`ZOIJS_HOST=0.0.0.0 npm run dev` — while it runs, anyone on that network can read the
+project's files.
+
 ## Deploy
 
 This page loads the **development** entry of `@zoijs/core` (helpful warnings, devtools).
