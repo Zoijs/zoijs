@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/testing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tiny first-party testing helpers for Zoijs: render, queries, fireEvent, waitFor — drive the real DOM. No custom renderer, no build step.",
   "type": "module",
   "main": "src/index.js",
