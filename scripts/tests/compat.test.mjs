@@ -60,11 +60,17 @@ test("no package imports a core subpath beyond the public ones; resource/action 
   assert.equal(compat.capabilities["@zoijs/core/internal"], undefined, "the /internal subpath is gone");
 });
 
-test("create is blocked until the next core (with the production entry) exists, and never targets an insecure core", () => {
+test("create is blocked until the core with the production entry is published, and never targets an insecure core", () => {
   const r = results.find((x) => x.prefix === "create");
   const target = JSON.parse(readFileSync(join(root, "create", "core-cdn.json"), "utf8")).packages["@zoijs/core"].version;
   assert.ok(cmp(target, compat.securityFloor) >= 0);
-  if (compat.nextCore === null) assert.match(r.blockers.join(" "), /@zoijs\/core\/prod/);
+  const prod = compat.capabilities["@zoijs/core/prod"];
+  if (prod === "next") assert.match(r.blockers.join(" "), /@zoijs\/core\/prod/);
+  else {
+    // Shipped: the map must target a core that has the production entry, and nothing blocks create.
+    assert.ok(cmp(target, prod) >= 0, `core-cdn.json targets ${target}, but /prod first shipped in ${prod}`);
+    assert.deepEqual(r.blockers, []);
+  }
 });
 
 test("npm peer ranges stay ranges (not exact pins)", () => {
@@ -88,5 +94,12 @@ test("ssr is blocked until the next core ships the SEC-9 helpers it imports from
   const r = results.find((x) => x.prefix === "ssr");
   const names = coreImports("ssr").flatMap((i) => i.names);
   assert.ok(names.includes("isSafeAttributeValue") && names.includes("openerRel"));
-  if (compat.nextCore === null) assert.match(r.blockers.join(" "), /isSafeAttributeValue from @zoijs\/core\/server.*next core release/);
+  const first = compat.capabilities["@zoijs/core/server#isSafeAttributeValue"];
+  if (first === "next") assert.match(r.blockers.join(" "), /isSafeAttributeValue from @zoijs\/core\/server.*next core release/);
+  else {
+    // Shipped: the peer floor must include the release that added the helpers.
+    assert.equal(compat.capabilities["@zoijs/core/server#openerRel"], first);
+    assert.ok(cmp(rangeFloor(pkgJson("ssr").peerDependencies["@zoijs/core"]), first) >= 0, `ssr floor < ${first}`);
+    assert.deepEqual(r.blockers, []);
+  }
 });
