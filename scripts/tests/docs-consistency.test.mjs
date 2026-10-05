@@ -59,6 +59,11 @@ test("no floating or build-service CDN URL for a Zoijs package", () => {
   assert.deepEqual(offenders(DOCS, FLOATING, { allowNegated: true }), []);
 });
 
+test("docs and templates stay editor-neutral (no third-party editor or extension recommendations)", () => {
+  const files = [...DOCS, ...tracked.filter((p) => p.startsWith("create/templates/"))];
+  assert.deepEqual(offenders(files, /\bvs ?code\b|\.vscode|extensions\.json|marketplace\.visualstudio|bierner\.|esbenp\.|dbaeumer\.|lit-html|prettier|neovim|jetbrains|webstorm|IntelliSense/i), []);
+});
+
 test("raw HTML is described with the final model (html / sanitize / unsafeHTML)", () => {
   assert.deepEqual(offenders(DOCS, /no raw[- ]html (rendering )?(api|sink)|deliberately no `?unsafeHTML|unsafeHTML.{0,40}\b(future|planned|someday)\b/i), []);
   for (const f of ["framework/SECURITY.md", "framework/docs/security.md", "sanitize/README.md"]) {
