@@ -1,6 +1,6 @@
 # API Reference
 
-The entire public API — nine functions (five you'll use constantly, plus `effect`, `boundary`, `configure`, and `onCleanup`).
+The main entry, `@zoijs/core`, is nine functions (five you'll use constantly, plus `effect`, `boundary`, `configure`, and `onCleanup`). The opt-in subpaths — `@zoijs/core/prod`, `@zoijs/core/unsafe`, `@zoijs/core/server`, `@zoijs/core/devtools` — are listed in [VERSIONING.md](../VERSIONING.md#public-subpaths).
 
 ```js
 import { html, mount, createState, computed, each, effect, boundary, configure, onCleanup } from "./src/index.js";

@@ -32,7 +32,7 @@ in [`VERSIONING.md`](VERSIONING.md). What to check:
 - **`target="_blank"` links get `rel="noopener noreferrer"`**, merged into your own `rel`.
   If the opened page relied on `window.opener` or the `Referer` header, that no longer works by
   design — use `postMessage` or explicit parameters instead.
-- **`@zoijs/sanitize` namespaces ids** (`id="x"` → `id="user-content-x"`, same for `name`, with
+- **`@zoijs/sanitize` namespaces ids** (`id="x"` → `id="user-content-x"`; `name` is removed; with
   `#x` links and ARIA references rewritten). Update links into sanitized content from outside it
   (`#user-content-x`), or pass `{ idPrefix: "" }` if the content is trusted not to clobber.
 - **`@zoijs/router`: `go()` throws on absolute and scheme URLs** (`https://…`, `//host`,
