@@ -89,7 +89,7 @@ const isText = (file) => file === "_gitignore" || TEXT_EXT.has(path.extname(file
 
 // npm strips/renames files and dirs that start with a dot from a published package,
 // so templates ship them with a "_" prefix and we restore the dot name on copy.
-const RENAME = { _gitignore: ".gitignore", _vscode: ".vscode" };
+const RENAME = { _gitignore: ".gitignore" };
 
 function applyTokens(content, tokens) {
   return content.replace(/\{\{(APP_NAME|APP_TITLE|ZOIJS_CORE_VERSION|ZOIJS_CORE_CDN|ZOIJS_CORE_IMPORTMAP)\}\}/g, (_, key) => tokens[key]);
