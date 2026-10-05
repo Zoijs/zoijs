@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/storage` are documented here.
 
-## Unreleased
+## 0.2.0 — 2026-10-05
 
 ### Added
 - **`validate` option (SEC-10).** `storage(key, initial, { validate })` checks the value restored

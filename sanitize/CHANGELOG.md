@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/sanitize` are documented here.
 
-## Unreleased
+## 0.2.0 — 2026-10-05
 
 ### Documentation
 - **Which raw-HTML tool to use.** The README no longer says Zoijs has "no raw-HTML API" (core's

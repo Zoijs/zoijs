@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/action` are documented here.
 
-## Unreleased
+## 0.2.0 — 2026-10-05
 
 ### Added
 - **`exclusive` option (SEC-10).** `action(fn, { exclusive: true })`: while a run is pending,

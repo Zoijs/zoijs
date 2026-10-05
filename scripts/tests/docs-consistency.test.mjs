@@ -124,32 +124,8 @@ test("size claims distinguish the commented-source gate from production size", (
   assert.deepEqual(offenders(DOCS, /≤ ?1[0-9] KB|~13\.3 KB|18\.1 KB/).filter((l) => !/Historical/.test(l)), []);
 });
 
-test("features not in the published releases carry a (next release) marker", () => {
-  // [file, a pattern locating the feature] — the marker must be on that line or within 3 lines.
-  const FEATURES = [
-    ["framework/docs/api-reference.md", /^## `unsafeHTML`/],
-    ["framework/docs/api-reference.md", /^### Error monitoring/],
-    ["framework/docs/api-reference.md", /`false` for `@zoijs\/core\/prod`/],
-    ["framework/docs/concepts/production-mode.md", /^# Production mode/],
-    ["framework/docs/security.md", /^### `target="_blank"`/],
-    ["framework/docs/security.md", /^\| `srcset`/],
-    ["framework/docs/troubleshooting.md", /compatible\*\* copies/],
-    ["framework/README.md", /^\*\*Raw HTML/],
-    ["router/README.md", /decodeSlash: false`\*\*/],
-    ["storage/README.md", /^## Validating what comes back/],
-    ["action/README.md", /exclusive: true \}\)`/],
-    ["action/README.md", /^## Error monitoring/],
-    ["resource/README.md", /^## Error monitoring/],
-    ["sanitize/README.md", /^## IDs and in-page links/],
-  ];
-  const missing = [];
-  for (const [f, at] of FEATURES) {
-    const lines = read(f).split("\n");
-    const i = lines.findIndex((l) => at.test(l));
-    if (i < 0) { missing.push(`${f}: feature ${at} not found`); continue; }
-    if (!/next release/i.test(lines.slice(Math.max(0, i - 3), i + 4).join("\n"))) missing.push(`${f}:${i + 1}`);
-  }
-  assert.deepEqual(missing, []);
+test("the (next release) marker convention stays defined for the next release cycle", () => {
+  // Markers were removed when 1.9.0 shipped; the convention is reused for whatever ships next.
   assert.match(read("framework/docs/README.md"), /\*\(next release\)\*/, "the convention is defined");
 });
 

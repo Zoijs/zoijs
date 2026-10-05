@@ -6,17 +6,17 @@
     "securityFloor: the lowest published core with every known security fix — generated apps must not allow anything older.",
     "When a core release ships: set nextCore to its version, replace 'next' entries with it, then clear nextCore after publishing."
   ],
-  "nextCore": null,
+  "nextCore": "1.9.0",
   "securityFloor": "1.7.0",
   "capabilities": {
     "@zoijs/core": "1.0.0",
     "@zoijs/core/devtools": "1.4.0",
     "@zoijs/core/server": "1.5.0",
     "@zoijs/core/server#styleObjectToCss": "1.7.0",
-    "@zoijs/core/server#isSafeAttributeValue": "next",
-    "@zoijs/core/server#openerRel": "next",
-    "@zoijs/core/prod": "next",
-    "@zoijs/core/unsafe": "next"
+    "@zoijs/core/server#isSafeAttributeValue": "1.9.0",
+    "@zoijs/core/server#openerRel": "1.9.0",
+    "@zoijs/core/prod": "1.9.0",
+    "@zoijs/core/unsafe": "1.9.0"
   },
   "packageRequires": {
     "create": ["@zoijs/core/prod"]

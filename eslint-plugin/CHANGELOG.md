@@ -3,7 +3,7 @@
 All notable changes to `@zoijs/eslint-plugin` are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.4.0 — 2026-10-05
 
 ### Added
 - **`no-unsafe-html`** (warn, in `recommended`) — flags every use of `@zoijs/core/unsafe`'s
@@ -16,7 +16,7 @@ follows [Semantic Versioning](https://semver.org).
 
 ### Documentation
 - The security-rules intro no longer calls `target="_blank"` a footgun "the runtime can't
-  sanitize": from the next core release the runtime adds `rel="noopener noreferrer"` itself
+  sanitize": from core 1.9.0 the runtime adds `rel="noopener noreferrer"` itself
   (SEC-9). The rule is unchanged (still `error` in `recommended`).
 
 ## 0.3.0
