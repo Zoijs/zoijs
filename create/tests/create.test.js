@@ -158,16 +158,19 @@ test("any generated dev server uses port 7310 with 7311–7313 fallbacks and the
   }
 });
 
-test("scaffold writes editor config: .vscode recommendations + jsconfig (app/basic)", () => {
+test("scaffolds stay editor-neutral: no editor config or extension recommendations; app/basic keep jsconfig for types", () => {
+  for (const template of TEMPLATES) {
+    const dir = path.join(tmp(), template);
+    scaffold({ name: "ed", template, targetDir: dir });
+    for (const name of [".vscode", "_vscode", ".idea", ".zed", ".fleet"]) assert.ok(!fs.existsSync(path.join(dir, name)), `${template}: no ${name}`);
+    for (const file of walk(dir)) {
+      assert.doesNotMatch(read(file), /\bvs ?code\b|extensions\.json|marketplace\.visualstudio|bierner\.|esbenp\.|dbaeumer\.|IntelliSense/i, `${template}: ${path.relative(dir, file)}`);
+    }
+  }
+  // jsconfig gives editors autocomplete from the bundled types, without a build step
   for (const template of ["app", "basic"]) {
     const dir = path.join(tmp(), template);
     scaffold({ name: "ed", template, targetDir: dir });
-    // _vscode is restored to .vscode on copy (npm strips dot-prefixed names)
-    assert.ok(fs.existsSync(path.join(dir, ".vscode", "extensions.json")), `${template}: .vscode/extensions.json`);
-    assert.ok(!fs.existsSync(path.join(dir, "_vscode")), `${template}: no leftover _vscode`);
-    const ext = JSON.parse(read(dir, ".vscode", "extensions.json"));
-    assert.ok(ext.recommendations.includes("bierner.lit-html"), `${template}: recommends an html\`\` highlighter`);
-    // jsconfig gives IntelliSense from the bundled types without a build step
     assert.ok(fs.existsSync(path.join(dir, "jsconfig.json")), `${template}: jsconfig.json`);
   }
 });
