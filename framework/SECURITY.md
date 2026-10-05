@@ -31,13 +31,13 @@ Zoijs is **secure by default**; the full model is documented in
 - URL attributes use a scheme allowlist (control-char resistant); `data:` is
   restricted to raster images. Bound `srcset`, meta-refresh `content` and SVG
   animation values are URL-checked, a bound `<base>` is refused, and
-  `target="_blank"` always gets `rel="noopener noreferrer"` *(next release)*.
+  `target="_blank"` always gets `rel="noopener noreferrer"`.
 - Event handlers must be function references; `on*` and `srcdoc` are blocked
   from data.
 - No `eval` / `new Function`. Works under a strict script CSP and enforced Trusted
   Types, with documented allowances (see [`docs/production-security.md`](docs/production-security.md)).
 - Untrusted HTML has one supported path, `@zoijs/sanitize`. Trusted raw HTML has one
-  explicit, greppable opt-in, `unsafeHTML()` from `@zoijs/core/unsafe` *(next release)*,
+  explicit, greppable opt-in, `unsafeHTML()` from `@zoijs/core/unsafe`,
   which **bypasses escaping and every guard above** by design.
 
 When evaluating a report, the key question is whether **untrusted data** can

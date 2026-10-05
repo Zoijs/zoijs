@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
-## Unreleased
+## 0.6.0 — 2026-10-05
 
 ### Security
 - **`decodeSlash` option (SEC-10).** `createRouter(routes, { decodeSlash: false })` keeps `%2F` in

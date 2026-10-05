@@ -28,8 +28,8 @@ deep imports (`@zoijs/core/src/…`) are unsupported even where a CDN can serve 
 | Import | Status | What it is |
 |---|---|---|
 | `@zoijs/core` | **Public, stable (semver).** | The nine functions above. Bundlers' `"production"` condition resolves it to the production entry. |
-| `@zoijs/core/prod` | **Public, stable (semver).** *Next release.* | The same API in production mode (no dev warnings, no devtools hook). Deployment-specific: use it instead of `@zoijs/core` in production. |
-| `@zoijs/core/unsafe` | **Public, stable (semver), intentionally opt-in.** *Next release.* | `unsafeHTML()` — raw trusted markup, bypasses escaping. Never re-exported from the main entry. |
+| `@zoijs/core/prod` | **Public, stable (semver).** Since 1.9.0. | The same API in production mode (no dev warnings, no devtools hook). Deployment-specific: use it instead of `@zoijs/core` in production. |
+| `@zoijs/core/unsafe` | **Public, stable (semver), intentionally opt-in.** Since 1.9.0. | `unsafeHTML()` — raw trusted markup, bypasses escaping. Never re-exported from the main entry. |
 | `@zoijs/core/server` | **Public, stable (semver), environment-specific.** | The renderer's rules for server rendering (`isTemplateResult`, `isEachMarker`, `styleObjectToCss`, `isSafeAttributeValue`, `openerRel`, …). Used by `@zoijs/ssr`; no DOM required. Exports appear in the version that introduced them (`scripts/zoijs-compat.json`). |
 | `@zoijs/core/devtools` | **Public, stable (semver), development tooling.** | The read-only inspector hook used by `@zoijs/devtools`. Inactive in production mode. |
 
@@ -39,7 +39,7 @@ export or a subpath is MINOR. There is **no framework-internal subpath**: an unr
 `@zoijs/core/internal` existed briefly during 1.9 development and was removed before any
 release — it is not, and never was, a supported import.
 
-**Runtime protocol (maintainers).** Starting with the next release (core 1.9.0), compatible
+**Runtime protocol (maintainers).** Starting with core 1.9.0, compatible
 copies of the core in one realm share reactive state, the `onError` reporter and the `zoijs`
 Trusted Types policy through `globalThis[Symbol.for("zoijs.runtime@<protocol>")]`
 (`src/reactivity/runtime.js`, protocol 1). Core 1.8.0 and older don't participate. Any

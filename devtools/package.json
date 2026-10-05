@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/devtools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A reactive-graph inspector for Zoijs: watch one state update exactly one DOM node. Dev-only, read-only, no build step.",
   "type": "module",
   "main": "src/index.js",

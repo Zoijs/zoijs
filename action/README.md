@@ -80,7 +80,7 @@ Rule of thumb: loading a page → `resource`. Clicking a button → `action`.
 | `result()` | The latest successful result (reactive) |
 | `reset()` | Clear pending, error, done, and result |
 
-`action(fn, { exclusive: true })` *(next release)* — for non-idempotent writes (a payment, a POST that
+`action(fn, { exclusive: true })` — for non-idempotent writes (a payment, a POST that
 creates a record). While a run is pending, `run()` doesn't call `fn` again; it returns the
 pending run's promise (its arguments are ignored). The lock is taken before `fn` starts, so
 a double-click in the same tick can't slip through, and it's released when the run succeeds
@@ -158,7 +158,7 @@ on the server. See [CSRF](https://zoijs.dev/production-security#5-protect-state-
 
 ## Error monitoring
 
-*(Next release; reports arrive only with core 1.9.0 or later — older cores have no shared runtime, so nothing is reported.)*
+Reports need `@zoijs/core` 1.9.0 or later; older cores have no shared runtime, so nothing is reported (and nothing breaks).
 
 A failure that becomes `error()` is also reported to the app's
 `configure({ onError })` hook from `@zoijs/core`, as `{ kind: "action" }` with the original

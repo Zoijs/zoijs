@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/action",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The simplest write/mutation helper for Zoijs: reactive pending / error / done / result. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",

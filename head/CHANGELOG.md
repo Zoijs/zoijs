@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/head` are documented here.
 
-## Unreleased
+## 0.1.2 — 2026-10-05
 
 ### Documentation
 - **CDN guidance uses exact, integrity-pinned URLs (SEC-7).** The README's no-install example

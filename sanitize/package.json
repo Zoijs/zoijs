@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/sanitize",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn an untrusted HTML string into safe DOM nodes for Zoijs — allowlist-based, zero-dependency, reuses the core's URL/attribute guards. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",

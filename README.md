@@ -135,7 +135,7 @@ import { html, mount, createState, computed, each, configure, onCleanup } from "
 | `createState(value)` | A reactive value — `get` / `set` / `peek` |
 | `computed(fn)` | A lazy, cached, value-gated derived value |
 | `each(items, keyFn, renderFn)` | Keyed list rendering |
-| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod` *(next release)*) |
+| `configure({ dev })` | Toggle development mode (production entry: `@zoijs/core/prod`) |
 | `onCleanup(fn)` | Teardown for a component or list item |
 
 Full details in the **[API Reference](framework/docs/api-reference.md)**.
@@ -189,7 +189,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
 | [`@zoijs/ssr`](ssr) | Render a component to an HTML string + in-place hydration (SSR / static prerender) + `serialize` for server→client data. No DOM, no deps. |
-| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported path for untrusted HTML (trusted raw markup uses `unsafeHTML()`, next release). |
+| [`@zoijs/sanitize`](sanitize) | Turn an untrusted HTML string (markdown/CMS output) into safe DOM nodes — allowlist-based, reuses the core's URL/attribute guards. The supported path for untrusted HTML (trusted raw markup uses `unsafeHTML()`). |
 | [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |

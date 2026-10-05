@@ -134,12 +134,10 @@ html`<section>${boundary(() => RiskyWidget(), (err) => html`<p>Couldn't load.</p
 configure({ dev?, onError? }) → void
 ```
 
-Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds) *(next release — on 1.8.0 every app starts in development mode; call `configure({ dev: false })`)*. One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
+Toggle development mode (warnings, the devtools hook). The starting value depends on the entry: `true` for `@zoijs/core`, `false` for `@zoijs/core/prod` (and for bundlers' production builds). One setting per page, shared by every loaded copy of the core. See [Production mode](concepts/production-mode.md).
 
 
 ### Error monitoring: `configure({ onError })`
-
-*(Next release.)*
 
 ```js
 configure({
@@ -194,8 +192,6 @@ onCleanup(() => clearInterval(id));
 ---
 
 ## `unsafeHTML` (`@zoijs/core/unsafe`)
-
-*(Next release — not in 1.8.0.)*
 
 ```
 import { unsafeHTML } from "@zoijs/core/unsafe";

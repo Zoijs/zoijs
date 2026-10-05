@@ -4,6 +4,9 @@
 //   after core   — nextCore = x, "next" → x, floors raised, create/core-cdn.json regenerated:
 //                  dependents READY once core x is on npm (BLOCKED, not ERROR, before that).
 // Each state is staged in a throwaway copy of the packages and checked with check()/verdict().
+// The copy is reset to the pre-release baseline (capabilities first shipped in 1.9.0 back to
+// "next", ssr floor ^1.7.0, CDN map on 1.8.0), so these tests don't depend on how far the repo
+// itself has moved through the sequence.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -12,22 +15,30 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { check, verdict, compat as repoCompat } from "../release-check.mjs";
+import { check, verdict, compat as repoCompat, PACKAGES } from "../release-check.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NEXT = "1.9.0";
 const skipNodeModules = (src) => !src.split(/[\\/]/).includes("node_modules") && !src.includes("test-results");
 
-function stage({ nextCore = null, materialize = false, coreVersion = NEXT, ssrFloor = null, cdnTarget = null } = {}) {
+// Capabilities that first ship in NEXT (still "next" before the core release, NEXT after it).
+const NEXT_CAPS = Object.keys(repoCompat.capabilities).filter((k) => ["next", NEXT].includes(repoCompat.capabilities[k]));
+const PRE_RELEASE_SSR_FLOOR = "1.7.0";
+const PUBLISHED_CORE = "1.8.0";
+
+function stage({ nextCore = null, materialize = false, coreVersion = NEXT, ssrFloor = PRE_RELEASE_SSR_FLOOR, cdnTarget = PUBLISHED_CORE, full = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "zoijs-release-state-"));
-  for (const dir of ["framework", "ssr", "create", "resource", "sanitize", "scripts"]) cpSync(join(repo, dir), join(root, dir), { recursive: true, filter: skipNodeModules });
+  const dirs = full ? [...new Set([...Object.values(PACKAGES), "scripts"])] : ["framework", "ssr", "create", "resource", "sanitize", "scripts"];
+  for (const dir of dirs) cpSync(join(repo, dir), join(root, dir), { recursive: true, filter: skipNodeModules });
   const json = (p, f) => { const d = JSON.parse(readFileSync(join(root, p), "utf8")); f(d); writeFileSync(join(root, p), JSON.stringify(d, null, 2)); };
   json("framework/package.json", (d) => (d.version = coreVersion));
-  if (ssrFloor) json("ssr/package.json", (d) => (d.peerDependencies["@zoijs/core"] = `^${ssrFloor}`));
+  json("ssr/package.json", (d) => (d.peerDependencies["@zoijs/core"] = `^${ssrFloor}`));
   const compat = structuredClone(repoCompat);
   compat.nextCore = nextCore;
-  if (materialize) for (const k in compat.capabilities) if (compat.capabilities[k] === "next") compat.capabilities[k] = nextCore;
-  if (cdnTarget) {
+  for (const k of NEXT_CAPS) compat.capabilities[k] = materialize ? nextCore : "next";
+  // The CLI reads the compat file next to it.
+  writeFileSync(join(root, "scripts", "zoijs-compat.json"), JSON.stringify(compat, null, 2));
+  {
     // A map in the exact shape cdn-importmap.mjs writes, hashed from the staged core's files
     // (standing in for the published tarball — the online --check is skipped offline).
     const src = join(root, "framework", "src");
@@ -128,13 +139,15 @@ test("create stays BLOCKED until its CDN map targets the published next core, th
 
 test("the CLI: --all exits 0 with BLOCKED packages; a BLOCKED tag fails; ERROR always fails", async () => {
   const { execFileSync } = await import("node:child_process");
+  const s = stage({ coreVersion: PUBLISHED_CORE, full: true }); // the development state, every package
   const cli = (...args) => {
     try {
-      return { code: 0, out: execFileSync(process.execPath, [join(repo, "scripts", "release-check.mjs"), ...args], { encoding: "utf8", stdio: "pipe" }) };
+      return { code: 0, out: execFileSync(process.execPath, [join(s.root, "scripts", "release-check.mjs"), ...args], { encoding: "utf8", stdio: "pipe" }) };
     } catch (e) {
       return { code: e.status, out: `${e.stdout}${e.stderr}` };
     }
   };
+  try {
   const all = cli("--all", "--offline");
   assert.equal(all.code, 0, all.out);
   assert.match(all.out, /⏸ BLOCKED  ssr-v/);
@@ -143,6 +156,9 @@ test("the CLI: --all exits 0 with BLOCKED packages; a BLOCKED tag fails; ERROR a
   assert.equal(tag.code, 1);
   assert.match(tag.out, /BLOCKED  ssr-v.*can't be released yet/);
   assert.equal(cli("core-v9.9.9", "--offline").code, 1, "a tag/version mismatch is an ERROR");
+  } finally {
+    s.done();
+  }
 });
 
 // No-build docs: a package importing a public core subpath must document mapping it.
