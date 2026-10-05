@@ -155,7 +155,10 @@ test("features not in the published releases carry a (next release) marker", () 
 
 test("migration notes for the next core release exist and cover the material changes", () => {
   const log = read("framework/CHANGELOG.md");
-  const unreleased = log.slice(log.indexOf("## [Unreleased]"), log.indexOf("\n## [", log.indexOf("## [Unreleased]") + 1));
+  // Before the release they sit under [Unreleased]; once the version is cut, under its heading.
+  const version = JSON.parse(read("framework/package.json")).version;
+  const head = log.includes(`## [${version}]`) ? `## [${version}]` : "## [Unreleased]";
+  const unreleased = log.slice(log.indexOf(head), log.indexOf("\n## [", log.indexOf(head) + 1));
   assert.match(unreleased, /### Migration notes/);
   for (const topic of ["ZJS010", "? Child : null", "Child()", "user-content-", "idPrefix: \"\"", ".prop=", "noopener noreferrer", "go()", "decodeSlash: false", "<base>"]) {
     assert.ok(unreleased.includes(topic), `migration notes mention ${topic}`);
