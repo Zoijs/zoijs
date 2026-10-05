@@ -97,7 +97,7 @@ changing a documented signature or return shape, changing documented non-securit
 semantics (reactivity, keying, scheduling), raising the browser baseline, or breaking
 documented usage "for security". Those are MAJOR changes. When in doubt, it is MAJOR.
 
-The Phase 1 hardening that ships in the next core release (proposed 1.9.0) meets these
+The Phase 1 hardening that ships in core 1.9.0 meets these
 tests: each item above rejects undocumented or unsafe input, keeps the documented usage
 working, and carries a migration note — see *Migration notes* in [`CHANGELOG.md`](CHANGELOG.md).
 
