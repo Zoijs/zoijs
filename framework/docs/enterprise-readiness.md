@@ -32,7 +32,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 
 | Requirement | ✅ | Evidence |
 |---|---|---|
-| Secure by default (no opt-in needed) | ✅ | Inert text, URL-scheme allowlist, function-only handlers; raw HTML only through the explicit, lint-flagged `unsafeHTML()` opt-in (`@zoijs/core/unsafe`, next release) — [`docs/security.md`](security.md) |
+| Secure by default (no opt-in needed) | ✅ | Inert text, URL-scheme allowlist, function-only handlers; raw HTML only through the explicit, lint-flagged `unsafeHTML()` opt-in (`@zoijs/core/unsafe`) — [`docs/security.md`](security.md) |
 | XSS resistance is tested, not assumed | ✅ | [`tests/xss-corpus.test.js`](../tests/xss-corpus.test.js), [`tests/security.test.js`](../tests/security.test.js), [`browser-tests/security.spec.js`](../browser-tests/security.spec.js) |
 | Strict script CSP / Trusted Types | ✅ | [`browser-tests/csp.spec.js`](../browser-tests/csp.spec.js) (real-browser gate). Documented allowances: inline import-map hash/nonce, `style-src-attr 'unsafe-inline'` for `style` bindings; `@zoijs/sanitize` fails under enforced Trusted Types — [production security](production-security.md) |
 | One escaping implementation (server = client) | ✅ | `@zoijs/ssr` reuses core predicates — [`src/server.js`](../src/server.js), [RFC 0008](rfcs/0008-ssr.md) |

@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/i18n` are documented here.
 
-## Unreleased
+## 0.2.0 — 2026-10-05
 
 ### Changed
 - **The source is plain text again.** The formatter cache key was built with a literal NUL byte in

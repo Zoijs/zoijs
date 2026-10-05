@@ -6,11 +6,11 @@ entry you load, the headers your host sends, and how your server treats requests
 
 Each section is short and copyable. Package docs link here instead of repeating it.
 
-> **Versions.** This page describes Zoijs as it is in the repository today. Some protections
-> land in the **next** `@zoijs/core` release (the changes after 1.8.0) and are marked
-> *(next release)*: the `@zoijs/core/prod` entry, `configure({ onError })`, the `html()`
-> tagged-template check (`ZJS010`), Symbol-branded results, and `@zoijs/sanitize`'s id
-> namespacing. On 1.8.0, use `configure({ dev: false })` instead of the production entry.
+> **Versions.** This page assumes `@zoijs/core` 1.9.0 or later and the matching package
+> releases. Several protections first shipped in 1.9.0 — the `@zoijs/core/prod` entry,
+> `configure({ onError })`, the `html()` tagged-template check (`ZJS010`), Symbol-branded
+> results, the wider URL guards — and `@zoijs/sanitize` 0.2.0 namespaces ids. On older cores,
+> use `configure({ dev: false })` instead of the production entry, and upgrade.
 
 ## The checklist
 
@@ -38,7 +38,7 @@ Copy this into your release process.
 
 ## 1. Use the production entry
 
-Deploy with `@zoijs/core/prod` *(next release)*. It is the same API as `@zoijs/core`, but it
+Deploy with `@zoijs/core/prod`. It is the same API as `@zoijs/core`, but it
 starts in production mode:
 
 ```html
@@ -67,11 +67,11 @@ console. Details: [Production mode](concepts/production-mode.md).
 Two different things, both needed:
 
 - **No-build / CDN apps — reproducible URLs.** Use exact versions and exact file URLs:
-  `https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/index.js`, never `@1`, `@latest`, or a
+  `https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/index.js`, never `@1`, `@latest`, or a
   package root that the CDN resolves for you. A floating URL changes what your users run
   without a deploy.
 - **npm apps — reproducible installs.** Commit `package-lock.json` and install with
-  `npm ci`. Keep normal semver ranges (`^1.8.0`) in `package.json`; the lockfile is what
+  `npm ci`. Keep normal semver ranges (`^1.9.0`) in `package.json`; the lockfile is what
   pins. Don't exact-pin `peerDependencies` — package peer ranges state *compatibility*
   ([18](#18-keep-package-versions-compatible)), not the version you ship.
 
@@ -198,13 +198,12 @@ and keep `style-src 'self'`. The router outlet needs no exception on `@zoijs/rou
 Adding `require-trusted-types-for 'script'; trusted-types zoijs;` makes the browser reject
 string assignments to HTML sinks (`innerHTML`, …) anywhere on the page. Zoijs's template
 parsing goes through a policy named `zoijs`, which only ever receives HTML built from your
-static template strings — and `html()` refuses runtime arrays and data (`ZJS010`,
-*(next release)*), so data can't reach it. Know the current limits before enabling it:
+static template strings — and `html()` refuses runtime arrays and data (`ZJS010`), so data can't reach it. Know the current limits before enabling it:
 
 - **`@zoijs/sanitize` doesn't support enforced Trusted Types yet.** It parses with
   `DOMParser`, a Trusted Types sink, without a policy, so under enforcement `sanitize()`
   will fail. Don't enable enforcement on pages that sanitize.
-- **Several copies of `@zoijs/core` are fine** *(next release)*: compatible copies share one
+- **Several copies of `@zoijs/core` are fine**: compatible copies share one
   runtime and therefore one `zoijs` policy — it's created once, so `trusted-types zoijs` needs no
   `'allow-duplicates'`. (Mapping every package to one core is still simplest.)
 - `unsafeHTML()` never uses the `zoijs` policy: pass it a `TrustedHTML` from your own policy
@@ -306,7 +305,7 @@ clobbering), and `getElementById` returns the first match. So:
 - Put the data block **before** any user content (e.g. in `<head>`), and read it by id
   before rendering.
 - Content passed through `@zoijs/sanitize` can't claim your names: its ids are namespaced
-  (`user-content-…`) and `name` is removed *(next release)*, so it can't become `__DATA__`
+  (`user-content-…`) and `name` is removed, so it can't become `__DATA__`
   or `app-data`. This complements safe serialization — it doesn't replace it.
 - Don't bind `id=${…}` (or `name`) from untrusted data in your own templates.
 
@@ -316,13 +315,13 @@ clobbering), and `getElementById` returns the first match. So:
 |---|---|
 | Your markup | `` html`…` `` tagged templates. Interpolated values are always data. |
 | HTML from users, a CMS, markdown | [`@zoijs/sanitize`](../../sanitize/README.md): `` html`<article>${() => sanitize(body)}</article>` `` |
-| Raw HTML you have independently established as trusted | `unsafeHTML()` from `@zoijs/core/unsafe` *(next release)* — **bypasses escaping**; never for API, database, URL, storage or user input |
+| Raw HTML you have independently established as trusted | `unsafeHTML()` from `@zoijs/core/unsafe` — **bypasses escaping**; never for API, database, URL, storage or user input |
 
 `html` can't be used as an HTML parser: calling it as a function with runtime data —
-strings, arrays, JSON — throws `ZJS010` *(next release)*. `sanitize()` is allowlist-based,
+strings, arrays, JSON — throws `ZJS010`. `sanitize()` is allowlist-based,
 reuses Zoijs's URL guards, removes `name`, and namespaces ids and same-document references
-(`#fragment`, `headers`, ARIA ids) so sanitized content can't clobber page globals
-*(next release)*. Pass `idPrefix` to change the prefix. For fully adversarial input in
+(`#fragment`, `headers`, ARIA ids) so sanitized content can't clobber page globals.
+Pass `idPrefix` to change the prefix. For fully adversarial input in
 high-value contexts, prefer an independently audited sanitizer such as DOMPurify.
 
 **`unsafeHTML()`** is the one sanctioned raw-HTML route, for markup you control end to end (your own
@@ -367,7 +366,7 @@ attacker-controlled. Before using one:
 
 - **Validate** it against the format you expect: `/^\d+$/` for an id, an allowlist for a
   section name.
-- **Keep slashes encoded** with `createRouter(routes, { decodeSlash: false })` *(next release)*:
+- **Keep slashes encoded** with `createRouter(routes, { decodeSlash: false })`:
   `/files/..%2Fadmin` then gives `"..%2Fadmin"` instead of `"../admin"`.
 - **Encode** it when building another URL: `` `/api/files/${encodeURIComponent(params.name)}` ``,
   never raw concatenation into an API path, filesystem path, or redirect.
@@ -381,14 +380,14 @@ is what *your code* does with it.
 
 Zoijs scheme-checks the URLs a bound value can carry — URL attributes (`href`, `src`, `action`,
 `formaction`, …), every `srcset` candidate, `<meta http-equiv="refresh">` content, and SVG
-animation values aimed at `href` *(srcset/refresh/SVG: next release)*: `javascript:`, `vbscript:`,
+animation values aimed at `href`: `javascript:`, `vbscript:`,
 `data:text/html`, SVG `data:` URLs and unknown schemes are dropped. `<base>` can't be bound at all,
 and `target="_blank"` always gets `rel="noopener noreferrer"`. These checks are about
 **executable schemes** and navigation contexts — they don't know your business rules, and they don't cover:
 
 - URLs you pass to `fetch`, `location.assign`, `window.open`, or a third-party library;
 - open redirects (`?next=https://evil.example` is a valid `https:` URL) — note `router.go()` takes
-  only app paths and throws on absolute URLs *(next release)*, but `location.assign()` doesn't;
+  only app paths and throws on absolute URLs, but `location.assign()` doesn't;
 - which hosts your API calls may reach.
 
 Validate those yourself — parse with `new URL(value, location.origin)` and check `origin`
@@ -409,7 +408,7 @@ server-set `HttpOnly` cookies (which page JavaScript can't read or set).
 ## 14. Monitor errors with `onError`
 
 Zoijs contains many failures to keep the page running (a throwing binding, a `boundary`
-fallback, a failed `resource`). Observe them in production *(next release)*:
+fallback, a failed `resource`). Observe them in production:
 
 ```js
 import { configure } from "@zoijs/core";

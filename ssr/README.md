@@ -6,11 +6,10 @@ SEO) and for static prerendering (build your site to flat HTML). The *same compo
 code* runs on the server and the client.
 
 ```bash
-npm i @zoijs/ssr   # peer: @zoijs/core ^1.7.0
+npm i @zoijs/ssr   # peer: @zoijs/core ^1.9.0
 ```
 
-The next `@zoijs/ssr` release needs the next core release (1.9.0) for its SEC-9 server-side guards
-and raises its peer floor to match; it is published right after that core.
+`@zoijs/ssr` 0.5.0 needs `@zoijs/core` 1.9.0 or later for its server-side URL and opener guards.
 
 ## Render to a string
 
@@ -146,13 +145,13 @@ implementation to drift:
   dangerous schemes are dropped; `data:` is allowed only for raster images.
 - **Event handlers and `ref`s are dropped** — they're wired on the client by `mount`.
 - **Unsafe attribute names** (`on*`, `srcdoc`) are refused.
-- *(Next release, with core 1.9.0.)* Bound `srcset`/`imagesrcset` candidates, meta-refresh
+- Bound `srcset`/`imagesrcset` candidates, meta-refresh
   `content` and SVG `<animate>`/`<set>` values are URL-checked; a bound `<base>` is refused;
   `target="_blank"` links are emitted with `rel="noopener noreferrer"`.
 
 ### `unsafeHTML()` on the server
 
-`unsafeHTML()` from `@zoijs/core/unsafe` *(next release)* is the one output `renderToString`
+`unsafeHTML()` from `@zoijs/core/unsafe` is the one output `renderToString`
 doesn't escape: the markup is written into the response **verbatim**, and none of the guards
 above apply to it. That includes `<script>` — inert when `unsafeHTML()` inserts markup on the
 client, but **executed when the browser loads server-rendered HTML**.

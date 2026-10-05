@@ -21,7 +21,7 @@ Which one to use:
 |---|---|
 | Your own, written in code | `` html`…` `` |
 | From users, APIs, databases, URLs, storage — anything not fully trusted | `sanitize()` (this package) |
-| Raw HTML you have independently established as trusted, rendered as-is | `unsafeHTML()` from `@zoijs/core/unsafe` *(next core release)* — **bypasses escaping, never sanitizes**; never pass it untrusted input |
+| Raw HTML you have independently established as trusted, rendered as-is | `unsafeHTML()` from `@zoijs/core/unsafe` (core 1.9.0+) — **bypasses escaping, never sanitizes**; never pass it untrusted input |
 
 ## Install
 
@@ -43,34 +43,37 @@ node scripts/cdn-importmap.mjs @zoijs/core@<version> @zoijs/sanitize@<version>
 ```
 
 <details>
-<summary>The generated map for <code>@zoijs/core@1.8.0</code> + <code>@zoijs/sanitize@0.1.0</code> (published versions)</summary>
+<summary>The generated map for <code>@zoijs/core@1.9.0</code> + <code>@zoijs/sanitize@0.2.0</code></summary>
 
 ```html
 <script type="importmap">
 {
   "imports": {
-    "@zoijs/core": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/index.js",
-    "@zoijs/sanitize": "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.1.0/src/index.js",
-    "@zoijs/core/server": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/server.js"
+    "@zoijs/core": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/index.js",
+    "@zoijs/sanitize": "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.2.0/src/index.js",
+    "@zoijs/core/server": "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/server.js"
   },
   "integrity": {
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/boundary.js": "sha384-IQ7MJEJQjcYemF3C0nXUzhmtJMYLIfdJ74lHQ+NgDHkhxP0q0fWc3hp7J+8NmdA5",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/each.js": "sha384-dmivZrBb98RiAQA6JDBpWM+90WXrKGV16K2+MznUr65Dwe7QYMno0fCzqWVqtjuR",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/html.js": "sha384-eokPtOg2OKALqYTTvuT4VuV4qkA7PjqZCVv/Z4wDtJK1W8hJnEM4NTrv2xiVSO3U",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/mount.js": "sha384-eAm8c9K1SY4j66NnZ4pc4exzlek7iG67di9hU5U9S3PnaZnElkqRGpzOy2z4Uz2h",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/core/renderer.js": "sha384-U8lmuwr3m1X9VByHoEz7+llyNTBojEBIes+OzkM/OndBfgO5JaeqyaBfHngv48Rl",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/index.js": "sha384-dDKK+RVA9Pj7X7aJvv0zgepWNZQi9W20zZ1JgACZ4EbIQ9LjvLsss8gsQGiyvcRb",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/computed.js": "sha384-nlAK86Jy1IR3yFSePE38l6cjZqcu5SdnYRVQxJh/+2YQL3WhTHdZ18yCKeKL4ffm",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/core.js": "sha384-ZarTqipGKQj1fDd4f458q/elWtGRImklba48F0lhYFV0WlPkMUAWnlVOjW6C+VZh",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/devtools.js": "sha384-2d17bQWgg87At3C1G8xbB/I099QSMQSQLdH3U0NTrQ0CTCUncYr965cZK+CCGVvg",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/effect.js": "sha384-Dybr242NFaaG2ZUoDbSPm7jaU+o2D0JMA98LmTG0vsGF88sL6f98DqEWk7A4LR/+",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/env.js": "sha384-kvYgg7qYJH6PqBIb/I3zh1pucmlVrkB8hlWVEJGp8T0mh6yshsLexn1/fP8iAawg",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/owner.js": "sha384-UTiqLh7+HkGpqCBR4bhLhb/mfpD3Fr3KLM1N49aejUYABa7bkcTIW6eK/AlAD40m",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/reactivity/state.js": "sha384-w2HVkiWmSdb8h7qqr4OViqHJrDqlD/oInr+5Lal+lSvXWu3SPuZv35WWDPsEOgUq",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/server.js": "sha384-KzR4hGdiMl4Ep/PMsCCgaCmGzveYZRKHHvpzxHcK5t1gQ5F6YSCmAjDzf7/gRwhC",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/utils/dom.js": "sha384-ggrwnqwnZJfeQXMM46YlzkiNtYXk+WsvUMqdSdPypC4WWl6xflaRN8HEsVjbpC64",
-    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.8.0/src/utils/security.js": "sha384-YJPoeU3TzidNo/muNyzoZp9Tgre6kzpTocT5VxvVyIFTvD5qeXE53PVJr29TcbHx",
-    "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.1.0/src/index.js": "sha384-npYLxQ2rycUQIRr6yfzgpQ2tLLbGVZnkRaz6Iz5TjWqUFkY3iKooOeZMK01Wvm02"
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/boundary.js": "sha384-sgP+7Uk+gh1Gk39OqMxZEo9Mox6uM6upgCbk9n4HKa8L3LywliSiXjQPQrjj/OG/",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/brand.js": "sha384-SQKAavcGif93XT58P5unWneM/VMR1rPsGM/wF63kNN4YaR2RdK2mu2IwULo9VYix",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/each.js": "sha384-ple5ogdJi5exkzQbgaQ8jnLLOymkmnG8dG/B8L36QkDbmIOiuRL+IdNVNNLYh+3N",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/html.js": "sha384-5sS5ABTdRpfXmhwZuIyhqcSO7fCY1VFVlYcolWRfLsRVzytc9JnUkjfX2Adfy8WI",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/mount.js": "sha384-eAm8c9K1SY4j66NnZ4pc4exzlek7iG67di9hU5U9S3PnaZnElkqRGpzOy2z4Uz2h",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/core/renderer.js": "sha384-H2K6FI3+kv2iPxyLb8V9e9Ux4X95PcPQGYu/h7Gq9rk4brE1nLHKFvI4iG5vt7Uz",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/index.js": "sha384-dDKK+RVA9Pj7X7aJvv0zgepWNZQi9W20zZ1JgACZ4EbIQ9LjvLsss8gsQGiyvcRb",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/prod.js": "sha384-2Wg5h5XW9gULwwZPet1azoni63tKm9iTs9FrAoLV0vGUa77h5WPgqsG/F3TFPuBy",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/computed.js": "sha384-nlAK86Jy1IR3yFSePE38l6cjZqcu5SdnYRVQxJh/+2YQL3WhTHdZ18yCKeKL4ffm",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/core.js": "sha384-dBKT0ohkuylmZHrv0HAjRtTxrMNyo6FZTk8Fqf6LH+aAi3moXikSLGdlPaeZi5IV",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/devtools.js": "sha384-KyEdZp4AcE9RdgocIKg0Q3NKTIyCUPnMi8LLPGrDDhRCJ55DA/JcqSZRFjoHHR5X",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/effect.js": "sha384-EMCI2Kpw6k0EUn5QPC6tJLoON+nUgQ7L25AXgIrWLmhMCLKJq/jP+C6Bk/P6gGDY",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/env.js": "sha384-41791FgWw6cq/pCRB6up+hZExngmUr1tAVxQG58SdvonImEcU6jK7g14jzZAPBFL",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/owner.js": "sha384-r8/NbofI3PXPfKvjxBuhWcRZGMJQn+Ldbne0ghFkjELu6SjvpaWIHnxF8FuScUAp",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/runtime.js": "sha384-5CQnBBrMFUfcq+ahlgE4DX/nG0ua+Bo0l70VtRkXVPWQyvGtXoSScup7FHsQqbA2",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/reactivity/state.js": "sha384-w2HVkiWmSdb8h7qqr4OViqHJrDqlD/oInr+5Lal+lSvXWu3SPuZv35WWDPsEOgUq",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/server.js": "sha384-AUkKmA3MuV4DNg6PJHrNKz2rPk77nWA9hmSprmnu63YPcMrp/sxjREJZM7Go/mjr",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/utils/dom.js": "sha384-XsdCmmxzHfpBmOdz1648tCRrAMMHbWKIzvm4Aj2VIEpWJDIIaKmihqEARvxN6d+2",
+    "https://cdn.jsdelivr.net/npm/@zoijs/core@1.9.0/src/utils/security.js": "sha384-7UafFG7FtgE/ZSVl+gEOKHc7qewaF0V6hKLEqgI9yj9mGTxz62GTzkrUPfbOXOtT",
+    "https://cdn.jsdelivr.net/npm/@zoijs/sanitize@0.2.0/src/index.js": "sha384-NPkdR8v+DKPCcZJCIk3Vtom2mERpMfUZYWAD7MqoeNJDMhyeAPyRR9daEoGKahH3"
   }
 }
 </script>
@@ -116,7 +119,7 @@ sanitize('<p onclick="steal()">Hi <strong>there</strong> <script>evil()</script>
 
 ## IDs and in-page links
 
-*(Next release — `@zoijs/sanitize` 0.1.0 keeps ids as written and leaves `name`.)*
+(Since 0.2.0 — `@zoijs/sanitize` 0.1.0 kept ids as written and left `name`.)
 
 Every `id` in sanitized content is prefixed with **`user-content-`**, and the references that point at ids are rewritten to match, so in-page links and accessibility relationships keep working:
 

@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/devtools` are documented here.
 
-## Unreleased
+## 0.1.1 — 2026-10-05
 
 ### Documentation
 - **No-build import maps must map `@zoijs/core/devtools`.** The package imports that core subpath,
