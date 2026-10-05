@@ -2,6 +2,13 @@
 
 All notable changes to `@zoijs/testing` are documented here.
 
+## 0.1.1 — 2026-10-05
+
+### Documentation
+- **The README's API table lists `bindQueries(root)`** — the export `render` and `screen` are
+  built on, available since 0.1.0 but missing from the published README. No code change.
+- `LICENSE` uses LF line endings (same text).
+
 ## 0.1.0 — 2026-06-26
 
 Initial release — first-party DOM testing helpers for Zoijs.
