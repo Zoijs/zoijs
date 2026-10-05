@@ -6,7 +6,7 @@
     "securityFloor: the lowest published core with every known security fix — generated apps must not allow anything older.",
     "When a core release ships: set nextCore to its version, replace 'next' entries with it, then clear nextCore after publishing."
   ],
-  "nextCore": "1.9.0",
+  "nextCore": null,
   "securityFloor": "1.7.0",
   "capabilities": {
     "@zoijs/core": "1.0.0",
