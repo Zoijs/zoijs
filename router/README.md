@@ -157,7 +157,7 @@ the format you expect and `encodeURIComponent` it when building URLs. The server
 authorize every request — a client-side route check is not access control. See
 [route params](https://zoijs.dev/production-security#11-treat-router-parameters-as-data) in the production security checklist.
 
-**Keep encoded slashes encoded: `decodeSlash: false`** *(next release)*. When params feed paths, API
+**Keep encoded slashes encoded: `decodeSlash: false`**. When params feed paths, API
 URLs, or identifiers, opt out of turning `%2F` into `/`:
 
 ```js
@@ -179,7 +179,7 @@ router.go(`/users/${id}`);    // build a path
 `go()` adds a history entry, so the back button returns to the previous page.
 
 It navigates **within the app**, so it takes app paths — `"/about"`, `"?tab=2"`, `"#top"`.
-*(Next release:)* an absolute URL, any other scheme (`javascript:`, `https:` …), or a protocol-relative
+An absolute URL, any other scheme (`javascript:`, `https:` …), or a protocol-relative
 `//host` throws a clear `TypeError` (`go() only navigates within the app …`) instead of the
 browser's opaque `SecurityError`. To leave the app, use `location.assign(url)` or a plain `<a>`.
 

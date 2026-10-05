@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/storage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A tiny localStorage-backed reactive value for Zoijs — a drop-in, persistent createState. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",

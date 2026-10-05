@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/resource` are documented here.
 
-## Unreleased
+## 0.3.0 — 2026-10-05
 
 ### Added
 - **Failures reach `configure({ onError })` (CORE-3).** A failed fetch that becomes this resource's

@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/i18n",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tiny, reactive internationalization for Zoijs: a reactive locale, message lookup with plurals, and the platform's Intl formatters. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",

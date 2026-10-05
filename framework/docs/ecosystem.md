@@ -83,7 +83,7 @@ page) unmounts, its `onCleanup` runs. That single mechanism is why:
 No provider wraps your app. No context is threaded through. No lifecycle methods.
 A page is a function; it sets up what it needs; the core cleans it up.
 
-*(Next release.)* This holds even if more than one compatible copy of `@zoijs/core`
+This holds even if more than one compatible copy of `@zoijs/core`
 ends up on the page: copies using runtime protocol 1 (introduced in core 1.9.0) share
 **one** reactive runtime in a JavaScript realm (one graph, one owner tree, one `onError`
 hook, one Trusted Types policy). Core 1.8.0 and older don't participate — mixing one of

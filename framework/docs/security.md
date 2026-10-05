@@ -18,9 +18,9 @@ The core guarantee: **dynamic values fill text and attribute *slots* only — th
 | `${() => value}` in text | rendered as an **inert Text node** (escaped) | ✅ always |
 | `attr=${() => value}` | set via `setAttribute` (or property for `value`/`checked`) | ✅ |
 | URL attrs (`href`, `src`, `action`, `formaction`, `poster`, `ping`, `data`, `xlink:href`) | **scheme-checked** | ✅ unsafe schemes blocked |
-| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` *(next release)* | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
-| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` *(next release)* | **compile error** | ✅ data can't steer resolution/navigation |
-| `target="_blank"` on `<a>`/`<area>`/`<form>` *(next release)* | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
+| `srcset` / `imagesrcset`, `<meta http-equiv="refresh"> content`, SVG `<animate>`/`<set>` values aimed at `href` | **every URL inside is scheme-checked** | ✅ one unsafe URL refuses the value |
+| `<base …=${x}>`, `<meta http-equiv=${x}>`, SVG `attributeName=${x}` | **compile error** | ✅ data can't steer resolution/navigation |
+| `target="_blank"` on `<a>`/`<area>`/`<form>` | **`rel` gets `noopener noreferrer`** | ✅ no `window.opener`, no Referer |
 | `onclick=${fn}` | `addEventListener` with a **function reference** | ✅ strings ignored |
 
 ### Text is always escaped
@@ -46,7 +46,7 @@ html`<a href=${() => url}>link</a>`;
 
 The same check covers every URL a bound value can carry, in every mode (dev or production), on
 the client and in `@zoijs/ssr`. A refused value is not set (development mode warns, naming the
-attribute but not the value). *(Next release — core 1.8.0 checks only the URL attributes above.)*
+attribute but not the value). (Core 1.8.0 and older check only the URL attributes above.)
 
 - **`srcset` / `imagesrcset`** — each candidate URL is checked (parsed as HTML does, so a
   `data:image/…` URL keeps its commas); one unsafe candidate refuses the whole value.
@@ -60,8 +60,6 @@ attribute but not the value). *(Next release — core 1.8.0 checks only the URL 
   use the router's `base` option.
 
 ### `target="_blank"` opens without `window.opener`
-
-*(Next release.)*
 
 A Zoijs-rendered `<a>`, `<area>`, or `<form>` whose `target` is `_blank` — bound or written
 statically — always gets `rel` tokens `noopener` (the new page can't reach `window.opener`) and
@@ -210,7 +208,7 @@ Zoijs is friendly to a strict Content Security Policy:
   ```
 
   Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe.
-  From the next release (core 1.9.0), compatible copies of the core share one runtime and so
+  From core 1.9.0, compatible copies of the core share one runtime and so
   one `zoijs` policy (created once — no `'allow-duplicates'` needed); with core 1.8.0 and
   older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. Current limit: `@zoijs/sanitize` parses with `DOMParser` without
   a policy, so it fails under enforcement.

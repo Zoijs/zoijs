@@ -36,7 +36,7 @@ directly. You get the framework one of two ways:
   local files. Nothing is fetched at runtime from a third party, so a strict
   `script-src 'self'` works.
 
-> **Production tip:** pin an exact version (`@1.8.0`, not `@1` or `@latest`) with integrity
+> **Production tip:** pin an exact version (`@1.9.0`, not `@1` or `@latest`) with integrity
 > hashes, or vendor the files. A CDN URL that floats can change what your users run without
 > a deploy — and a build service that rewrites modules can't be integrity-pinned at all.
 
@@ -48,7 +48,7 @@ any fallback configuration.
 
 ## Ship production mode
 
-Load the production entry *(next release; on 1.8.0 call `configure({ dev: false })`)* in what you
+Load the production entry (core 1.9.0+; on older cores call `configure({ dev: false })`) in what you
 deploy so development warnings and the devtools hook are off: map `"@zoijs/core"` to `…/src/prod.js` (or the `/prod` subpath
 on a CDN) in your import map. Bundlers' production builds select it automatically.
 See [Production mode](concepts/production-mode.md).
@@ -248,7 +248,7 @@ silently run stale framework code. Two safe options:
 6. Sending **security headers**? Use the [production security checklist](production-security.md)
    and verify the live response with `curl -sI`.
 7. Does the import map load the **production entry** (`…/src/prod.js` or `@zoijs/core/prod`)?
-   Want failures in your monitoring? Add `configure({ onError })` (works in production) *(next release)*.
+   Want failures in your monitoring? Add `configure({ onError })` (works in production).
 8. Upload the folder. Done.
 
 ## What you do *not* need

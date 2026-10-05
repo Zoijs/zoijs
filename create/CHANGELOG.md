@@ -2,7 +2,7 @@
 
 All notable changes to `create-zoijs` are documented here.
 
-## Unreleased
+## 0.2.0 — 2026-10-05
 
 ### Security
 - **Generated apps pin `@zoijs/core` exactly and securely (SEC-7).** Templates allowed `^1.1.0` /
@@ -35,11 +35,11 @@ All notable changes to `create-zoijs` are documented here.
 - **"Next steps" match the template.** `minimal` prints `npm run dev` with no install step;
   `library` prints `npm install` / `npm test` instead of a `dev` script it doesn't have.
 
-### Release note
-- Templates use `@zoijs/core` from `core-cdn.json`. That file (and with it the
-  `minimal` import map) moves to the next core version only after that core is on npm,
-  so `create-zoijs` is published **last** — `release:check` reports it as BLOCKED until
-  then (see `framework/docs/releasing.md`).
+### Changed
+- **Generated apps target `@zoijs/core` 1.9.0.** Package templates depend on `^1.9.0`; the
+  `minimal` template's import map points at the exact 1.9.0 files on jsDelivr with an sha384
+  integrity hash for every module, including the production entry `src/prod.js` (first
+  shipped in 1.9.0), so the deploy step in each README works as written.
 
 ## 0.1.4 — 2026-06-27
 
