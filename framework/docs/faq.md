@@ -70,13 +70,13 @@ Yes — type definitions ship in the package, with full generics for state, comp
 
 Routing and SSR are intentionally **not in the core** — but they ship as optional packages: [`@zoijs/router`](../../router/README.md) for client-side routing and [`@zoijs/ssr`](../../ssr/README.md) for server-side rendering + static prerendering with in-place hydration. A global store is deliberately left out (state is local and composable); a `@zoijs/storage` reactive value covers persistence. Each optional package is opt-in and never compromises the no-build, small-core identity.
 
-## Do I get editor highlighting and IntelliSense?
+## Do I get autocomplete and type-checking?
 
-Yes, without any Zoijs-specific tooling. The `html` tag follows the `lit-html` convention,
-so a highlighter like VS Code's `bierner.lit-html` colours the markup inside `` html`` ``;
-and because every package ships `.d.ts`, you get autocomplete and optional type-checking
-of plain JavaScript (`checkJs`) — no build step, no migration to TypeScript. Scaffolded
-apps come pre-configured. See [Editor Setup](editor-setup.md).
+Yes, without any Zoijs-specific tooling. Every package ships `.d.ts`, so an editor that
+reads TypeScript declarations gives you autocomplete and hover docs for plain JavaScript,
+and you can opt into type-checking (`checkJs`, `// @ts-check`, `tsc --noEmit`) — no build
+step, no migration to TypeScript. Scaffolded apps include the `jsconfig.json`. See
+[Editor Setup](editor-setup.md).
 
 ## Can I use my own CSS / Tailwind / etc.?
 

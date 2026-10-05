@@ -2,6 +2,16 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## Unreleased
+
+### Changed
+- **Scaffolded apps are editor-neutral.** The `app`, `basic`, `typescript` and `library`
+  templates no longer write `.vscode/extensions.json`, which recommended three third-party
+  extensions. Zoijs doesn't recommend editors or editor extensions; autocomplete and
+  optional type-checking still come from the types every package ships, through the
+  `jsconfig.json` (`app`, `basic`) or `tsconfig.json` (`typescript`, `library`) that the
+  templates keep. Existing apps are unaffected — delete `.vscode/` if you don't want it.
+
 ## 0.2.0 — 2026-10-05
 
 ### Security
