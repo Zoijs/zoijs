@@ -1,0 +1,5 @@
+[
+  { "id": 1, "title": "Write docs" },
+  { "id": 2, "title": "Ship @zoijs/api" },
+  { "id": 3, "title": "<b>Not bold</b> — API data is text" }
+]

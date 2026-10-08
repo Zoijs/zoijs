@@ -13,12 +13,15 @@ or it isn't Zoijs.
 ## 1. Executive summary
 
 The ecosystem is **highly cohesive and loosely coupled.** It is one frozen
-nine-function core plus seven small optional packages and a zero-dependency starter
-CLI. Verified facts behind that claim:
+nine-function core plus twelve optional packages (eleven built only on the core, and
+`@zoijs/api` layered on two of them), a first-party ESLint plugin, and a zero-dependency
+starter CLI. Verified facts behind that claim:
 
 - Every optional package's source imports **only** from `@zoijs/core`'s public API
-  (`createState`, `onCleanup`, `html`, `mount`). No package imports another; no
-  package reaches into another's internals. (Grep-verified across all `src/`.)
+  (`createState`, `onCleanup`, `html`, `mount`). No package imports another — except
+  one declared, CI-checked layering exception (`@zoijs/api` builds on the public
+  `resource()` and `action()`, §4) — and no package reaches into another's internals.
+  (Grep-verified across all `src/`.)
 - The core is a closed set: `html`, `mount`, `createState`, `computed`, `each`,
   `configure`, `onCleanup` — plus the `ref` binding (1.1.0, **no new export**).
 - There is no provider, context, global store, dependency injection, event bus,
@@ -38,6 +41,7 @@ throughout.
 | **@zoijs/core** | Reactive rendering of templates to the DOM | Tagged-template parsing (once, cached); fine-grained reactivity (`createState`/`computed`/`each`); direct DOM updates (no VDOM); owner-scoped cleanup; `ref`; secure-by-default rendering | Routing, HTTP, forms, auth, storage, CLI, global store, DI, SSR, a build step |
 | **@zoijs/router** | Map a URL to a component | URL pattern matching, `:params`, `base` path, history navigation (`pushState`/`popstate`), active-link `aria-current` | Auth, authorization, loaders, data fetching, nested routing/outlets, SSR, transitions, middleware/guards, layouts |
 | **@zoijs/resource** | Read async data | Reactive `loading`/`data`/`error`, `refresh`, race-safety (a stale request can't clobber a newer one), auto initial load | Caching, retries, optimistic updates, a query client, mutations, invalidation |
+| **@zoijs/api** | Read and write same-origin HTTP data | `api(url, { params, query, debounce, timeout, initial, problemDetails })` = `resource()` + a GET request layer; `api.post/put/patch/delete(url, { query, invalidate, exclusive, timeout, problemDetails, idempotencyKey, retry, retryDelay })` = `action()` + JSON/FormData bodies, explicit invalidation, generated or caller-function idempotency keys, opt-in transient-failure retries (key required; GETs retry without one) with jittered backoff and `attempt()`/`retrying()` status; timeouts, opt-in normalized problem details, `initial` seeding for SSR: safe `/:name` params and `URLSearchParams` queries (scalars, shallow arrays), reactive params/queries via core `computed`/`effect`, debounce, `dispose()`, secret-key refusal, same-origin policy on the final URL, non-2xx → `ApiError`, JSON/text/204 handling, abort of superseded requests | Implicit retries, custom headers, fixed-string keys, retry cancel/retry-now controls, optimistic updates, automatic/URL-based invalidation, caching, deduplication, schemas, auth, CSRF, streaming, arbitrary error bodies, server-side fetching, cross-origin requests, other request options, its own lifecycle (that's `resource`) or reactivity (that's the core) |
 | **@zoijs/action** | Write async data | Reactive `pending`/`error`/`done`/`result`, `run()` (never throws), `reset`, race-safety | Retries, optimistic UI, transactions, queues, offline support, cache invalidation |
 | **@zoijs/storage** | Persist one simple reactive value | `createState`-shaped value backed by `localStorage` (JSON), graceful degrade to in-memory | Encryption, IndexedDB, cross-tab/session sync, schema validation, a persistence engine, custom serializers, TTL |
 | **@zoijs/forms** | Hold native-form state | Reactive `values`/`errors`/`touched`, per-field helpers, manual synchronous `validate`, `handleSubmit` (prevents reload) | Field registration, providers/context, schema validation, async validation, form builders, UI components, the network call |
@@ -133,9 +137,18 @@ structure.** Users are expected to delete, rename, and restructure freely.
 - Grep across every `src/`: each optional package imports **only** `@zoijs/core`
   (the `@zoijs/router`/`@zoijs/action`/… strings elsewhere are JSDoc comment
   examples, not imports). router also imports the type-only `TemplateResult`.
-- **No optional package imports another.** Notably, `@zoijs/forms` does **not**
-  import `@zoijs/action` — they're paired only in documentation/usage, a convention,
-  not a code dependency.
+- **No optional package imports another — with one declared exception.** Notably,
+  `@zoijs/forms` does **not** import `@zoijs/action` — they're paired only in
+  documentation/usage, a convention, not a code dependency.
+- **The one layering exception: `@zoijs/api` → `@zoijs/resource` and `@zoijs/action`.**
+  `@zoijs/api` is the high-level data-access layer, and its whole point is *not* to have a
+  second lifecycle: reads (`api(url)`) call the public `resource()`, writes
+  (`api.post/put/patch/delete`) call the public `action()`, and the package adds only the
+  shared request layer. It peer-depends on `@zoijs/core`, `@zoijs/resource` and
+  `@zoijs/action`, and uses nothing but their public APIs. The edges are declared in
+  `scripts/check-deps.mjs` (`LAYERED`); the gate rejects any other sideways import —
+  `resource` and `action` still can't import each other or `api` — and rejects chains (a
+  layered package can't be another's base).
 - `create-zoijs` has **zero** runtime dependencies (Node built-ins only); it merely
   *generates* apps that depend on `@zoijs/core`.
 - All dependence on the core is through its **public API** (`createState`,
@@ -145,12 +158,14 @@ structure.** Users are expected to delete, rename, and restructure freely.
 
 **Enforced, not just observed.** `scripts/check-deps.mjs` (run by the root
 `npm test`) fails the build if any package ships a runtime dependency, if an
-optional package peer-depends on anything but `@zoijs/core`, or if any package's
-source imports a sibling `@zoijs/*` package. The star is a CI gate.
+optional package peer-depends on anything but `@zoijs/core` (plus its declared layering
+base), or if any package's source imports an undeclared sibling `@zoijs/*` package. The
+star is a CI gate.
 
 **Recommendation:** none required. The dependency graph is a star: everything points
-at the public core, nothing points sideways. Keep it that way — a package needing
-another package's internals is the signal to stop.
+at the public core, and the only sideways edges are the declared `api → resource, action`
+layer over public APIs. Keep it that way — a new layering edge needs the same deliberate
+review, and a package needing another package's internals is the signal to stop.
 
 ## 5. Scope-creep risks (where we could accidentally become React/Vue/Angular)
 
@@ -299,7 +314,8 @@ and a sustainable long-term architecture.** Evidence:
   explicit non-responsibility list (§2). The hard rules (no build, no core growth,
   no global machinery) are enforced by the frozen, RFC-gated core (nine functions).
 - **Low coupling:** grep-verified — all packages depend only on the core's public
-  API; none imports another; `create-zoijs` has zero deps; no internal access (§4).
+  API; none imports another except the declared `api → resource, action` layer; `create-zoijs`
+  has zero deps; no internal access (§4).
 - **High cohesion:** each package is one small file doing one thing, with a
   recognizable reader-function design language across `createState` / `computed` /
   `resource` / `action` / `storage` / `router` (the one `forms` exception is noted
