@@ -6,6 +6,8 @@
 //      The core (framework) and the scaffolder (create) have no peers either.
 //   3. No package's source imports any @zoijs/* package except @zoijs/core — the
 //      "star": every package depends only on the public core, nothing sideways.
+//   The one declared exception is LAYERED below: a convenience package built ON another
+//   package's public API (not its internals), peer-depending on exactly that package too.
 //
 // Run with `node scripts/check-deps.mjs` (wired into the root `npm test`).
 
@@ -16,7 +18,11 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const CORE = "framework"; // publishes @zoijs/core
-const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "testing", "devtools", "i18n", "ssr", "sanitize"];
+const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "testing", "devtools", "i18n", "ssr", "sanitize", "api"];
+// Reviewed layering edges (framework/docs/scope.md §4): package dir → the sibling package names it
+// may import and must peer-depend on, in addition to @zoijs/core. Keep this list short — each entry
+// is a deliberate design decision, never a convenience. A layered package can't itself be a base.
+const LAYERED = { api: ["resource"] }; // @zoijs/api = resource() + a secure GET request layer
 const TOOLING = ["create", "eslint-plugin"]; // create-zoijs, @zoijs/eslint-plugin — zero deps, no peers
 const ALL = [CORE, ...OPTIONAL, ...TOOLING];
 
@@ -32,8 +38,9 @@ for (const pkg of ALL) {
 
   const peers = Object.keys(pj.peerDependencies || {});
   if (OPTIONAL.includes(pkg)) {
-    if (peers.length !== 1 || peers[0] !== "@zoijs/core") {
-      fail(`${pkg}: peerDependencies must be exactly {@zoijs/core}, got {${peers.join(", ") || "none"}}`);
+    const expected = ["@zoijs/core", ...(LAYERED[pkg] || []).map((d) => `@zoijs/${d}`)].sort();
+    if (peers.slice().sort().join() !== expected.join()) {
+      fail(`${pkg}: peerDependencies must be exactly {${expected.join(", ")}}, got {${peers.join(", ") || "none"}}`);
     }
   } else if (peers.length) {
     fail(`${pkg}: must have no peerDependencies, got {${peers.join(", ")}}`);
@@ -73,11 +80,16 @@ function importedZoijsPkgs(file) {
 for (const pkg of [CORE, ...OPTIONAL]) {
   for (const file of jsFiles(join(root, pkg, "src"))) {
     for (const dep of importedZoijsPkgs(file)) {
-      if (dep !== "core") {
+      if (dep !== "core" && !(LAYERED[pkg] || []).includes(dep)) {
         fail(`${pkg}: ${file.replace(root + "\\", "").replace(root + "/", "")} imports @zoijs/${dep} — only @zoijs/core is allowed (no sideways deps)`);
       }
     }
   }
+}
+
+// A layered package builds on a base that itself depends only on the core — no chains.
+for (const [pkg, bases] of Object.entries(LAYERED)) {
+  for (const base of bases) if (LAYERED[base]) fail(`${pkg}: layered on ${base}, which is itself layered — no dependency chains`);
 }
 
 // ---- report ----------------------------------------------------------------
@@ -89,5 +101,6 @@ if (failures.length) {
 }
 console.log(
   "✔ Supply-chain check passed: zero runtime dependencies across all packages; " +
-    "star topology intact (every package depends only on @zoijs/core)."
+    "star topology intact (every package depends only on @zoijs/core, plus the declared layering " +
+    Object.entries(LAYERED).map(([p, b]) => `${p} → ${b.join(", ")}`).join("; ") + ")."
 );
