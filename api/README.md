@@ -339,7 +339,8 @@ The body is sent with `JSON.stringify` and `Content-Type: application/json` (plu
 - Error messages never contain the body — not a value, not a key, not the platform's own
   serialization message.
 - No body (`run()`) means no body **and** no `Content-Type` — never the text `"undefined"`.
-- JSON only for now: `FormData`, files and other body types will come in a later version.
+- A `FormData` body is sent as multipart instead — see [File uploads](#file-uploads-formdata).
+  Other body types (`Blob`, `ArrayBuffer`, `URLSearchParams`, streams) are refused.
 
 Responses are parsed exactly like GETs (JSON, `204`/`205` → `null`, text as a string,
 non-2xx → `"http"`, invalid JSON → `"parse"`), and every URL gets the same same-origin checks.
@@ -353,8 +354,11 @@ non-2xx → `"http"`, invalid JSON → `"parse"`), and every URL gets the same s
 - **`invalidate`** — an `api()` resource, or an array of them, to refresh after success.
 - **`exclusive`** — `true` makes a double submit send once: while a run is pending, `run()` returns
   that run's promise instead of sending again. Default `false`, exactly as in `@zoijs/action`.
+- **`timeout`** and **`problemDetails`** — as for `api()`; see [Timeouts](#timeouts) and
+  [Problem details](#problem-details).
 
-Anything else — `headers`, `method`, `credentials`, `mode`, `redirect`, `cache`, … — throws.
+Anything else — `headers`, `method`, `credentials`, `mode`, `redirect`, `cache`, `initial`, … —
+throws.
 
 ### Invalidation
 
@@ -384,8 +388,9 @@ const save = api.post("/api/tasks", { invalidate: [tasks, dashboard] });
 
 - **Mutations are never retried** — not on network errors, not on 5xx. Repeating a POST can
   create a second order, payment or email; retries need idempotency on the server first.
-- **Nothing aborts a mutation.** An in-flight request runs to completion even if its component
-  unmounts — aborting would only stop the browser *waiting*, never undo the server operation.
+- **Unmounting doesn't abort a mutation.** An in-flight request runs to completion even if its
+  component unmounts. Only an explicit `timeout` aborts one — and that only stops the browser
+  *waiting*: it never undoes the server operation.
 - Updates aren't optimistic: the UI changes when the server answers and the invalidated
   resources reload.
 
@@ -393,6 +398,97 @@ Cookies are sent same-origin, as for any `fetch`. Protect state-changing endpoin
 [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) on the
 server, and authorize and validate every request there — client-side checks are not access
 control.
+
+### File uploads (`FormData`)
+
+```js
+const upload = api.post("/api/users/:id/photo", { invalidate: profile, exclusive: true });
+
+const form = new FormData();
+form.append("file", file);
+form.append("description", "Profile photo");
+await upload.run({ params: { id }, body: form }); // or upload.run(form) for a URL without /:name
+```
+
+- A `FormData` body goes to `fetch` as-is: no `JSON.stringify` and **no `Content-Type`** — the
+  browser writes `multipart/form-data` with its own boundary. (JSON bodies get
+  `application/json`; no body gets no `Content-Type`.)
+- It's recognized by the platform's own FormData brand check, so a FormData from another realm
+  (an iframe) works, while an object that only looks like one — `append()`/`entries()`, or
+  `Object.create(FormData.prototype)` — is refused. A FormData nested inside a JSON object, and
+  a DELETE body, are refused.
+- Invalidation, `exclusive`, `timeout` and `problemDetails` work as for JSON. The form is never
+  cloned, read or enumerated, and its field names and values never appear in errors.
+- Nothing about the file is checked in the browser. The **server** must authenticate, authorize,
+  and enforce file type and size, scan where appropriate, and control where files are stored.
+
+## Timeouts
+
+```js
+const users = api("/api/users", { timeout: 10_000 });
+const save = api.post("/api/orders", { timeout: 15_000 });
+```
+
+- Milliseconds, a finite number from `0` to `2147483647`; anything else throws a `TypeError`.
+  **`0` (the default) means no timeout.** Not reactive.
+- The clock starts when the request starts — **after** any `debounce` — and covers the whole
+  response. When it runs out, the request is really aborted (nothing is left running) and the
+  error is an `ApiError` of **type `"timeout"`**, `status` `null`, message
+  `"GET request timed out"` (no duration, no platform `AbortError` text).
+- `refresh()` uses the same timeout; a request replaced by `refresh()`, a reactive change,
+  `dispose()` or unmount is aborted quietly and is never reported as a timeout. Timers are
+  cleared when the request ends, however it ends.
+- **A mutation timeout doesn't mean the server didn't act.** The order may have been placed; the
+  browser just stopped waiting. Mutations are never retried after a timeout — reload the data
+  (or check with the server) before letting the user try again.
+
+## Problem details
+
+Error bodies are private by default: an `ApiError` never contains the response body. With
+`problemDetails: true` (on `api()` or a mutation), an error response whose type is
+`application/problem+json` ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) is read and
+normalized into `error.problem`:
+
+```js
+const save = api.post("/api/users", { problemDetails: true });
+await save.run({ email: "" });
+save.error()?.message;         // "POST request failed: 422 Unprocessable Content" — still generic
+save.error()?.problem?.detail; // "email is required"
+```
+
+- Only `type`, `title`, `detail`, `instance` (strings) and `status` (an integer) are kept, and
+  only with those types; extension members are ignored. `error.problem` is a frozen plain
+  object, or `null` — always `null` without the option, for other media types (even
+  `application/json`), and for 2xx responses (those are data, as always).
+- At most **64 KB** is read: a body declared or found to be larger is dropped, and a body that
+  isn't a JSON object is ignored. Either way the error stays the ordinary `"http"` error — a bad
+  problem body never turns it into a `"parse"` error.
+- The values come from the server and are **untrusted**: they are never put in `error.message`
+  (so they don't flow into logs by default). Render them as text, as Zoijs bindings do; don't
+  treat `instance` or `type` as a link to follow.
+
+## Server rendering: `initial`
+
+```js
+const users = api("/api/users", { initial: serverUsers });
+users.data();    // serverUsers — the same value, not a copy
+users.loading(); // false
+users.error();   // null
+```
+
+- `initial` seeds the resource and **skips the first request**. `refresh()` fetches normally, and
+  so do later reactive `params`/`query` changes — the seed stands for the URL as it was when the
+  resource was created. A change that builds the same URL sends nothing.
+- The key's **presence** counts: `{ initial: undefined }` and `{ initial: null }` seed too;
+  leaving the key out loads normally.
+- The value is kept exactly as given — never cloned, sanitized or merged — and renders with the
+  usual escaping.
+- **On the server**, `api(url, { initial })` creates the resource without any request, so a
+  component can render with server data. `api()` still has no server networking model: without
+  `initial` — or on `refresh()` — a request on the server fails with a `"security"` error, as
+  there is no page origin. Fetch on the server with your own code, pass the result as
+  `initial`, and serialize it for the client (see `@zoijs/ssr`'s `serialize`).
+- Mutations don't take `initial`.
 
 ## Responses
 
@@ -406,6 +502,7 @@ control.
 | the request couldn't be made (offline, DNS, refused, a cross-origin redirect) | unchanged | `ApiError`, `type: "network"` |
 | the URL isn't allowed (see below) — no request is sent | unchanged | `ApiError`, `type: "security"` |
 | reactive params/query produced something `api()` can't send — no request is sent | unchanged | `ApiError`, `type: "config"` |
+| the `timeout` ran out — the request is aborted | unchanged | `ApiError`, `type: "timeout"` |
 
 A string body is plain data. Zoijs renders it as text — it is never parsed as HTML or run as
 script. To render trusted HTML you must opt in yourself (see
@@ -420,19 +517,20 @@ import { api, ApiError } from "@zoijs/api";
 
 const users = api("/api/users");
 
-users.error()?.type;   // "http" | "network" | "security" | "parse" | "config"
+users.error()?.type;   // "http" | "network" | "security" | "parse" | "config" | "timeout"
 users.error()?.status; // 404 — the HTTP status ("http"/"parse"), otherwise null
 ```
 
 | Field | Value |
 |---|---|
 | `name` | `"ApiError"` |
-| `type` | `"http"`, `"network"`, `"security"`, `"parse"` or `"config"` |
+| `type` | `"http"`, `"network"`, `"security"`, `"parse"`, `"config"` or `"timeout"` |
 | `status` | the HTTP status, or `null` |
 | `statusText` | the HTTP status text, or `""` (HTTP/2 has none) |
 | `method` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"` |
 | `url` | origin + path, e.g. `"https://app.example.com/api/users"` — no query string or fragment; `null` for an unparseable URL |
 | `message` | e.g. `"GET request failed: 404 Not Found"`, `"POST request not sent: …"` — no URL path |
+| `problem` | normalized problem details with `problemDetails: true`, otherwise `null` (see [Problem details](#problem-details)) |
 
 The message is built to be **safe to log**: it never contains the URL path, query string or
 fragment, URL credentials, request or response headers, cookies, the request body, or the
@@ -471,10 +569,10 @@ see the [production security checklist](https://zoijs.dev/production-security).
 
 ## In this version
 
-- **JSON only.** Mutation bodies are JSON; `FormData` and file uploads aren't supported yet.
+- **JSON and `FormData` bodies only** — no `Blob`, `ArrayBuffer`, `URLSearchParams` or streams.
 - **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
-- **No retries, timeouts or optimistic updates.**
-- **Browser only.** It needs a page origin; on the server every request is refused.
+- **No retries, idempotency keys or optimistic updates.**
+- **Browser requests only.** Requests need a page origin; on the server, use `initial`.
 
 ## License
 

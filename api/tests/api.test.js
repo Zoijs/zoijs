@@ -298,7 +298,8 @@ test("errors never contain Authorization, Cookie, Bearer tokens, query strings o
     for (const secret of ["Authorization", "Cookie", "cookie-secret-value", "set-cookie-secret", "Bearer", "body-secret", "header-secret", "query-secret", "frag-secret", "q=", "WWW-Authenticate"]) {
       assert.ok(!dump.includes(secret), `${err.type} error leaks ${secret}`);
     }
-    assert.deepEqual(Object.keys(err).sort(), ["method", "name", "status", "statusText", "type", "url"]);
+    assert.deepEqual(Object.keys(err).sort(), ["method", "name", "problem", "status", "statusText", "type", "url"]);
+    assert.equal(err.problem, null, "the body stays private without problemDetails");
   }
   // api() never sends request credentials of its own: only an Accept header.
   assert.deepEqual(Object.keys(calls[0].init.headers), ["Accept"]);
