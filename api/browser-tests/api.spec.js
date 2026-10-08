@@ -828,3 +828,36 @@ test("GET: a reactive URL change or refresh() cancels a pending retry", async ({
   expect(seen.filter((x) => x.path === "/__retry/k/items")).toHaveLength(1);
   expect(seen.filter((x) => x.path === "/__retry/f/again")).toHaveLength(2); // initial + refresh, no stray retry
 });
+
+// ---- Phase 9: FormData retries (real network, real bytes) ---------------------------------------------
+
+test("a FormData upload that fails once (503) is retried with the same key and identical contents", async ({ page }) => {
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const keys = [];
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => (keys.push(init.headers["Idempotency-Key"]), realFetch(url, init));
+    const bytes = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) bytes[i] = i;
+    const form = new FormData();
+    form.append("description", "Profile photo ✓");
+    form.append("file", new File([bytes], "photo.png", { type: "image/png" }));
+    const id = "upload-" + Math.random().toString(36).slice(2); // a fresh fail-once path per run
+    const up = api.post("/__echo/flaky/:id", { idempotencyKey: true, retry: 2, retryDelay: 20 });
+    const echoed = await up.run({ params: { id }, body: form });
+    window.fetch = realFetch;
+    return { keys, echoed, done: up.done(), attempt: up.attempt(), names: [...form.keys()] };
+  });
+  expect(out.done).toBe(true);
+  expect(out.attempt).toBe(2); // 503 first, then the retry succeeded
+  expect(out.keys).toHaveLength(2);
+  expect(out.keys[1]).toBe(out.keys[0]);
+  expect(out.names).toEqual(["description", "file"]); // the caller's FormData is untouched
+  const parts = parseMultipart(out.echoed.contentType, out.echoed.body);
+  expect(parts).toHaveLength(2);
+  expect(parts[0].body.toString("utf8")).toBe("Profile photo ✓");
+  expect(parts[1].head).toContain('filename="photo.png"');
+  expect(parts[1].head).toContain("content-type: image/png");
+  expect([...parts[1].body]).toEqual([...Array(256).keys()]);
+});

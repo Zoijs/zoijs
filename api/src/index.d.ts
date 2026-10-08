@@ -208,7 +208,8 @@ export type ApiMutationOptions = ApiMutationBaseOptions &
         readonly idempotencyKey: ApiIdempotencyKey;
         /**
          * Extra attempts after the first. Only network errors, timeouts and HTTP 408, 425, 429,
-         * 500, 502, 503, 504 are retried. JSON bodies only (FormData with `retry` is a config error).
+         * 500, 502, 503, 504 are retried. A FormData body is replayed as the same FormData (its
+         * multipart boundary may differ between attempts).
          */
         readonly retry: ApiRetryCount;
         /** Base backoff in ms (default 250): retry n waits ~`retryDelay × 2^(n-1)` ±20 % jitter, at most 30 s. */

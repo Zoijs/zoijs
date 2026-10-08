@@ -315,10 +315,15 @@ test("Retry-After over the cap still fails rather than retrying early (Phase 6 r
   assert.deepEqual([m.attempt(), m.retrying(), m.error()?.status], [1, false, 503]);
 });
 
-test("FormData is still not retryable (pending cross-engine verification)", async () => {
-  stubFetch([ok()]);
-  const m = api.post("/upload", { idempotencyKey: () => "upload-1", retry: 1 });
-  await m.run(new FormData());
-  assert.ok(isConfig(m.error(), /a FormData body can't be retried/));
-  assert.equal(calls.length, 0);
+test("FormData retries reuse the caller key function's single value (Phase 9: FormData retries enabled)", async () => {
+  fake();
+  let n = 0;
+  stubFetch([status(503), ok()]);
+  const form = new FormData();
+  const m = api.post("/upload", { idempotencyKey: () => `upload-${++n}`, retry: 1 });
+  await drive(m.run(form));
+  assert.equal(n, 1);
+  assert.deepEqual(calls.map((c) => c.key), ["upload-1", "upload-1"]);
+  assert.ok(calls.every((c) => c.body === form));
+  assert.deepEqual([m.attempt(), m.done()], [2, true]);
 });

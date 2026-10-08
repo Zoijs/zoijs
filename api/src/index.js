@@ -819,7 +819,6 @@ function mutation(method, url, options) {
       const { params, body } = readRunInput(tpl, method, args);
       path = fillParams(tpl, params);
       payload = toPayload(body);
-      if (retry > 0 && payload && payload.form) throw configError("a FormData body can't be retried — use retry: 0 for uploads (the idempotency key is still sent)");
       if (keyFn) key = callerKey(keyFn);
       else if (idempotent && (key = newIdempotencyKey()) === null) throw configError("idempotencyKey needs crypto.randomUUID or crypto.getRandomValues, and this environment has neither");
     } catch (err) {

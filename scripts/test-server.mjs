@@ -13,7 +13,8 @@
 // POST /__echo (and /__echo/…) answers with the exact request it received — method, path,
 // Content-Type and the raw body as base64 (at most 1 MB) — so browser tests can check what a
 // browser really sent over the network instead of relying on Playwright's request interception
-// (WebKit's interception doesn't expose File/Blob bytes in multipart bodies).
+// (WebKit's interception doesn't expose File/Blob bytes in multipart bodies). The first POST to
+// /__echo/flaky/<id> answers 503 instead (each <id> fails once), so retries can be tested end to end.
 //
 // Every suite has its own port so suites can run concurrently (enforced by
 // scripts/tests/ci-consistency.test.mjs):
@@ -53,7 +54,13 @@ const send = (res, status, body, type = "text/plain; charset=utf-8") => {
 };
 
 const ECHO_LIMIT = 1024 * 1024;
+const flaky = new Set();
 async function echo(req, res, pathname) {
+  if (pathname.startsWith("/__echo/flaky/") && !flaky.has(pathname)) {
+    flaky.add(pathname);
+    for await (const _ of req); // drain the body
+    return send(res, 503, "Service Unavailable");
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
