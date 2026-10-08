@@ -88,8 +88,8 @@ export type ApiQueryValue = ApiQueryScalar | readonly ApiQueryScalar[];
 /** Query parameters, by key. Secret-looking keys (`token`, `password`, `api_key`, …) are refused. */
 export type ApiQuery = { readonly [key: string]: ApiQueryValue };
 
-/** The only options {@link api} accepts. Anything else is refused. */
-export interface ApiOptions<T = unknown> {
+/** Options every {@link api} resource accepts. */
+export interface ApiBaseOptions<T = unknown> {
   /**
    * Values for the URL's `/:name` segments — an object (read once), or a function returning one
    * (reactive: read state inside it and the request is sent again when it changes). Every
@@ -120,6 +120,29 @@ export interface ApiOptions<T = unknown> {
   /** Attach normalized `application/problem+json` details to HTTP errors as `error.problem`. Default `false`. */
   readonly problemDetails?: boolean;
 }
+
+/**
+ * The only options {@link api} accepts. Anything else (including the mutation-only
+ * `idempotencyKey`, `exclusive`, `invalidate`) is refused. `retryDelay` requires `retry`.
+ */
+export type ApiOptions<T = unknown> = ApiBaseOptions<T> &
+  (
+    | {
+        /** No retries (the default). */
+        readonly retry?: 0;
+        readonly retryDelay?: never;
+      }
+    | {
+        /**
+         * Extra attempts after the first, per logical load. Only network errors, timeouts and HTTP
+         * 408, 425, 429, 500, 502, 503, 504 are retried, replaying the same URL; a reactive change
+         * or `refresh()` starts a new load instead. Servers must not attach side effects to GETs.
+         */
+        readonly retry: ApiRetryCount;
+        /** Base backoff in ms (default 250): ~`retryDelay × 2^(n-1)` ±20 % jitter, at most 30 s. */
+        readonly retryDelay?: number;
+      }
+  );
 
 /** A JSON value a mutation can send. Objects are plain objects; `undefined` properties are left out. */
 export type ApiJson = string | number | boolean | null | readonly ApiJson[] | { readonly [key: string]: ApiJson | undefined };
@@ -188,7 +211,7 @@ export type ApiMutationOptions = ApiMutationBaseOptions &
          * 500, 502, 503, 504 are retried. JSON bodies only (FormData with `retry` is a config error).
          */
         readonly retry: ApiRetryCount;
-        /** Base backoff in ms (default 250): retry n waits `retryDelay × 2^(n-1)`, at most 30 s. */
+        /** Base backoff in ms (default 250): retry n waits ~`retryDelay × 2^(n-1)` ±20 % jitter, at most 30 s. */
         readonly retryDelay?: number;
       }
   );

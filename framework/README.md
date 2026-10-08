@@ -148,7 +148,7 @@ See the [Documentation site](https://zoijs.dev) for the full guide, tutorials, a
 - Production mode by loading `@zoijs/core/prod` (bundlers' production builds pick it automatically) — no build step required; `configure({ dev })` overrides.
 - Safety: self-triggering effects are warned + stopped; a throwing binding doesn't break others.
 
-**Out of the core (by design):** routing, SSR, data, forms, and i18n live in optional packages — `@zoijs/router`, `@zoijs/ssr`, `@zoijs/resource`/`@zoijs/action`, `@zoijs/forms`, `@zoijs/i18n` — not the core. **Not part of Zoijs at all:** plugins, a global store, JSX, a Virtual DOM, a mandatory build step, TypeScript-first setup.
+**Out of the core (by design):** routing, SSR, data, forms, and i18n live in optional packages — `@zoijs/router`, `@zoijs/ssr`, `@zoijs/resource`/`@zoijs/action` (with `@zoijs/api` on top for same-origin HTTP), `@zoijs/forms`, `@zoijs/i18n` — not the core. **Not part of Zoijs at all:** plugins, a global store, JSX, a Virtual DOM, a mandatory build step, TypeScript-first setup.
 
 ## Project Structure
 

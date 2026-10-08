@@ -527,12 +527,14 @@ const save = api.post("/api/orders", {
 
 ### Backoff and `Retry-After`
 
-- Retry *n* waits `retryDelay × 2^(n-1)`: with the default `retryDelay: 250`, that's 250 ms,
-  500 ms, 1 s, 2 s, 4 s. Every wait is capped at 30 s. There's **no jitter**: clients that fail at
-  the same moment retry at the same moments — the 30 s cap and the 5-retry limit bound that. `retryDelay` is milliseconds
-  (validated like `timeout`) and needs `retry`.
+- Retry *n* waits about `retryDelay × 2^(n-1)`, with **±20 % jitter** (a factor between 0.8 and
+  1.2) so clients that failed at the same moment don't all retry at the same moment. With the
+  default `retryDelay: 250`: 200–300 ms, 400–600 ms, 0.8–1.2 s, 1.6–2.4 s, 3.2–4.8 s. Every wait —
+  jitter included — is capped at 30 s. `retryDelay` is milliseconds (validated like `timeout`)
+  and needs `retry`.
 - On 429 and 503, a `Retry-After` header — seconds (`Retry-After: 5`) or an HTTP-date — makes the
-  wait at least that long. If it asks for **more than 30 s**, the mutation stops retrying and
+  wait at least that long, and is **not jittered**: never shorter than the server asked. If it
+  asks for **more than 30 s**, the request stops retrying and
   fails with that response instead of retrying early — deliberately: respecting the server's
   `Retry-After` matters more than one more attempt. An unparseable value is ignored.
 
@@ -556,7 +558,7 @@ const save = api.post("/api/orders", {
 - **FormData bodies can't be retried yet**: `retry > 0` with a FormData body is a `"config"` error
   and nothing is sent. Uploads can still send an idempotency key with `retry: 0`. (FormData replay
   is being verified across Chromium, Firefox and WebKit before it's enabled.)
-- GET resources (`api(url)`) don't retry.
+- GET resources retry too — see [GET retries](#get-retries).
 
 ### Showing retries in the UI
 
@@ -579,6 +581,36 @@ Two reactive readers sit next to the action's `pending()`, `done()`, `error()` a
 - `exclusive` joiners share one run, so they see the same values. Only the newest run writes them.
 - They are ordinary state: changing them never reports anything to `onError`, and they keep no
   timers, bodies or keys.
+
+## GET retries
+
+```js
+const users = api("/api/users", { retry: 2 });
+```
+
+- **Off by default.** `retry: n` (0–5) allows up to n extra attempts — `retry: 2` is at most 3
+  requests — with the same table as mutations: network errors, timeouts and HTTP 408, 425, 429,
+  500, 502, 503, 504; never other statuses, `"parse"`, `"config"` or `"security"`.
+- No idempotency key is needed: Zoijs treats GET as read-only. **Don't attach side effects to
+  GET endpoints** — a retried GET runs again on the server.
+- The same backoff, jitter, `retryDelay`, 30 s cap and `Retry-After` rules apply.
+  `retryDelay` without `retry` throws. `idempotencyKey`, `exclusive` and `invalidate` are
+  mutation-only and refused here.
+- **One logical load.** `loading()` stays `true` through every attempt and wait; retried failures
+  never show in `error()` and aren't reported to `onError`. A load that recovers ends with
+  `error()` `null` and the new `data()`; one that runs out reports its last error once (as
+  `kind: "resource"`).
+- Every attempt replays **the same URL**: params and query are read once per load. A reactive
+  change or `refresh()` cancels a scheduled retry and starts a **new** load (with a fresh retry
+  count) for the current URL — the old URL is never retried again. `dispose()` and unmount cancel
+  it too.
+- `debounce` runs once, before the first attempt; between attempts there's backoff, not debounce.
+  Each attempt gets its own `timeout`; backoff isn't counted.
+- `initial` isn't an attempt: no request until `refresh()` or a reactive change, which may then
+  retry.
+- With `problemDetails: true`, only the final error's problem body is read.
+- GET resources don't have `attempt()` / `retrying()`: a resource stays one plain
+  `data`/`loading`/`error` shape. Use `loading()` to show progress.
 
 ## Problem details
 
@@ -705,12 +737,29 @@ This is a client-side guard against requesting the wrong place, not access contr
 server must still authenticate and authorize every request. For cookies, credentials and CSP,
 see the [production security checklist](https://zoijs.dev/production-security).
 
+## Security at a glance
+
+`@zoijs/api` makes the short code the safe code in the browser. It is **not** access control:
+
+- **Your server must authenticate, authorize and validate every request.** Nothing here replaces
+  that, and cookies are sent same-origin as with any `fetch` — protect writes against
+  [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf).
+- **Cross-origin requests are blocked** — no trusted-origin list exists yet.
+- **Secret-looking query keys are refused**; credentials belong in headers or bodies, not URLs.
+- **Retries are opt-in and bounded** (≤ 5 extra attempts, ≤ 30 s waits); mutation retries
+  require an idempotency key.
+- **An `Idempotency-Key` only helps if your server stores and enforces it.**
+- **A client timeout doesn't prove the server didn't act** — the operation may have completed.
+- **Problem details are untrusted server text** — render them as text, never as HTML or a link.
+- **FormData isn't validated** — check file type, size and content on the server.
+
 ## In this version
 
 - **JSON and `FormData` bodies only** — no `Blob`, `ArrayBuffer`, `URLSearchParams` or streams.
 - **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
-- **No implicit retries** (mutation retries are opt-in and need an idempotency key), **no GET
-  retries, no custom headers, no fixed-string idempotency keys, no optimistic updates.**
+- **No implicit retries**: retries are opt-in (`retry`) and bounded (≤ 5, ≤ 30 s waits); mutation
+  retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
+  FormData retries (yet) or optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
 
 ## License

@@ -569,18 +569,20 @@ test("a FormData from another realm (iframe) is accepted; spoofs are refused", a
 // ---- Phase 6: idempotency keys and retries (real fetch) ------------------------------------------------
 
 // /__retry/<plan>: each request records its Idempotency-Key; the plan says how attempts answer —
-// "f" fail with 503, "n" drop the connection, "s" hang 600 ms, "k" succeed (the last letter repeats).
+// "f" fail with 503, "r" 503 + Retry-After: 1, "n" drop the connection, "s" hang 600 ms, "k" succeed
+// (the last letter repeats).
 async function retryRoute(page) {
   const seen = [];
   await page.route(/\/__retry\//, async (r) => {
     const req = r.request();
     const plan = new URL(req.url()).pathname.split("/")[2];
     const n = seen.filter((x) => x.path === new URL(req.url()).pathname && x.method === req.method()).length;
-    seen.push({ path: new URL(req.url()).pathname, method: req.method(), key: req.headers()["idempotency-key"] ?? null, body: req.postData() ?? null });
+    seen.push({ path: new URL(req.url()).pathname, method: req.method(), key: req.headers()["idempotency-key"] ?? null, body: req.postData() ?? null, at: Date.now() });
     const step = plan[Math.min(n, plan.length - 1)];
     if (step === "n") return r.abort("connectionreset");
     if (step === "s") await new Promise((res) => setTimeout(res, 600));
     if (step === "f") return r.fulfill({ status: 503, contentType: "application/json", body: "{}" }).catch(() => {});
+    if (step === "r") return r.fulfill({ status: 503, headers: { "Retry-After": "1" }, contentType: "application/json", body: "{}" }).catch(() => {});
     return r.fulfill({ status: req.method() === "GET" ? 200 : 201, contentType: "application/json", body: JSON.stringify({ ok: true, n }) }).catch(() => {});
   });
   return seen;
@@ -766,4 +768,55 @@ test("FormData replay: the same FormData sends equivalent multipart payloads twi
   expect([...Buffer.from(a[1].body, "base64")]).toEqual([...Array(256).keys()]);
   expect(a[2].head).toContain('filename="notes.txt"');
   expect(Buffer.from(a[2].body, "base64").toString("utf8")).toBe("plain text\r\n--not-a-boundary");
+});
+
+// ---- Phase 8: GET retries (real fetch) --------------------------------------------------------------------
+
+test("GET retry: 503, a dropped connection and a timeout each recover on the next attempt", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const out = await runInPage(page, `
+    const until = async (r) => { for (let i = 0; i < 300 && r.loading(); i++) await wait(10); return { data: r.data(), error: r.error() }; };
+    const a = await until(api("/__retry/fk/users", { retry: 2, retryDelay: 20 }));
+    const b = await until(api("/__retry/nk/users", { retry: 2, retryDelay: 20 }));
+    const c = await until(api("/__retry/sk/users", { retry: 1, retryDelay: 20, timeout: 200 }));
+    return [a, b, c];
+  `);
+  for (const r of out) expect(r).toEqual({ data: { ok: true, n: 1 }, error: null });
+  const count = (p) => seen.filter((x) => x.path === p).length;
+  expect([count("/__retry/fk/users"), count("/__retry/nk/users"), count("/__retry/sk/users")]).toEqual([2, 2, 2]);
+});
+
+test("GET Retry-After: the retry waits at least what the server asked", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  await runInPage(page, `
+    const r = api("/__retry/rk/users", { retry: 1, retryDelay: 10 });
+    for (let i = 0; i < 300 && r.loading(); i++) await wait(10);
+  `);
+  const hits = seen.filter((x) => x.path === "/__retry/rk/users");
+  expect(hits).toHaveLength(2);
+  expect(hits[1].at - hits[0].at).toBeGreaterThanOrEqual(950);
+});
+
+test("GET: a reactive URL change or refresh() cancels a pending retry", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  await runInPage(page, `
+    const plan = core.createState("f");
+    const r = api("/__retry/:plan/items", { params: () => ({ plan: plan.get() }), retry: 3, retryDelay: 300 });
+    await wait(100);       // "f" failed; a retry is waiting
+    plan.set("k");         // new URL: the old retry must never fire
+    await wait(900);
+    const s = api("/__retry/f/again", { retry: 3, retryDelay: 300 });
+    await wait(100);
+    s.refresh();           // fresh load now, fresh retry count; the old timer is cancelled
+    await wait(60);
+    s.dispose();
+    await wait(900);
+    r.dispose();
+  `);
+  expect(seen.filter((x) => x.path === "/__retry/f/items")).toHaveLength(1);
+  expect(seen.filter((x) => x.path === "/__retry/k/items")).toHaveLength(1);
+  expect(seen.filter((x) => x.path === "/__retry/f/again")).toHaveLength(2); // initial + refresh, no stray retry
 });
