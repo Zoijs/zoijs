@@ -135,8 +135,8 @@ export interface ApiDeleteInput {
   readonly params: ApiParams;
 }
 
-/** The only options a mutation factory accepts. Anything else (headers, method, credentials, …) is refused. */
-export interface ApiMutationOptions {
+/** Options every mutation factory accepts. */
+export interface ApiMutationBaseOptions {
   /** Static query parameters, with the same rules (and secret-key refusal) as `api()`. */
   readonly query?: ApiQuery;
   /**
@@ -147,28 +147,51 @@ export interface ApiMutationOptions {
   /** While a run is pending, `run()` returns that run's promise instead of sending again. Default `false`, like `@zoijs/action`. */
   readonly exclusive?: boolean;
   /**
-   * Milliseconds (0 to 2147483647; 0 = none) before the request is aborted and fails with type
-   * `"timeout"`. It only stops the browser waiting: the server may still complete the mutation,
-   * and it is never retried.
+   * Milliseconds (0 to 2147483647; 0 = none) before an attempt is aborted and fails with type
+   * `"timeout"` — a fresh window per attempt. It only stops the browser waiting: the server may
+   * still complete the mutation.
    */
   readonly timeout?: number;
   /** Attach normalized `application/problem+json` details to HTTP errors as `error.problem`. Default `false`. */
   readonly problemDetails?: boolean;
-  /**
-   * Send an `Idempotency-Key` header with a fresh cryptographically random UUID per `run()`, reused
-   * by every retry of that run. The server must store and enforce it — sending the header doesn't
-   * make an endpoint idempotent. Default `false`. Custom keys aren't supported yet.
-   */
-  readonly idempotencyKey?: boolean;
-  /**
-   * Extra attempts after the first (0–5; default 0 = never retried). Requires
-   * `idempotencyKey: true`. Only network errors, timeouts and HTTP 408, 425, 429, 500, 502, 503,
-   * 504 are retried; JSON bodies only (a FormData body with `retry > 0` is a config error).
-   */
-  readonly retry?: 0 | 1 | 2 | 3 | 4 | 5;
-  /** Base backoff in ms (default 250): retry n waits `retryDelay × 2^(n-1)`, at most 30 s. Needs `retry`. */
-  readonly retryDelay?: number;
 }
+
+/**
+ * Where a mutation's `Idempotency-Key` comes from: `true` — a fresh cryptographically random UUID
+ * per `run()`; or a function called once per `run()` that returns 1–255 visible ASCII characters
+ * (`!`–`~`, no spaces). A fixed string isn't accepted: it would be reused for every run.
+ * Sending the header doesn't make an endpoint idempotent — the server must store and enforce it.
+ */
+export type ApiIdempotencyKey = true | (() => string);
+
+/** How many extra attempts a mutation may make (`retry: 2` = at most 3 requests). */
+export type ApiRetryCount = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * The only options a mutation factory accepts. Anything else (headers, method, credentials, …) is
+ * refused. `retry` (and `retryDelay`) require an idempotency key — checked here and at runtime.
+ */
+export type ApiMutationOptions = ApiMutationBaseOptions &
+  (
+    | {
+        /** Send an `Idempotency-Key`, or not (`false`, the default). */
+        readonly idempotencyKey?: boolean | (() => string);
+        /** No retries (the default). */
+        readonly retry?: 0;
+        readonly retryDelay?: never;
+      }
+    | {
+        /** Required with `retry`: every retry of a run reuses its key. */
+        readonly idempotencyKey: ApiIdempotencyKey;
+        /**
+         * Extra attempts after the first. Only network errors, timeouts and HTTP 408, 425, 429,
+         * 500, 502, 503, 504 are retried. JSON bodies only (FormData with `retry` is a config error).
+         */
+        readonly retry: ApiRetryCount;
+        /** Base backoff in ms (default 250): retry n waits `retryDelay × 2^(n-1)`, at most 30 s. */
+        readonly retryDelay?: number;
+      }
+  );
 
 /**
  * A mutation: `@zoijs/action`'s reactive `pending()` / `error()` / `done()` / `result()` / `reset()`.
@@ -179,6 +202,14 @@ export interface ApiMutation<TResponse, TInput> extends Omit<Action<[TInput?], T
   run(input?: TInput): Promise<TResponse | undefined>;
   /** The failure, or `null` (reactive). */
   error(): ApiError | null;
+  /**
+   * The attempt in flight, or the last attempt of the latest run (reactive): 0 when idle or after
+   * `reset()`, 1 during the first request, 2 during the first retry, … During a backoff wait it
+   * stays at the attempt that just failed. Kept after the run ends, until the next run or `reset()`.
+   */
+  attempt(): number;
+  /** `true` from the latest run's first retryable failure until the run ends (reactive). Always `false` without `retry`. */
+  retrying(): boolean;
 }
 
 /** `api()` and its mutation factories. */

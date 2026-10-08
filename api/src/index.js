@@ -30,7 +30,7 @@
 // target origin — never the URL path, query string, fragment, credentials, request headers or the
 // response body — so they are safe to log. The `url` field keeps origin + path for debugging. Client-side checks never replace server-side authentication and authorization.
 
-import { onCleanup, computed, effect } from "@zoijs/core";
+import { onCleanup, computed, effect, createState } from "@zoijs/core";
 import { resource } from "@zoijs/resource";
 import { action } from "@zoijs/action";
 
@@ -646,6 +646,11 @@ const MAX_RETRIES = 5; // at most 6 attempts — no retry storms
 const MAX_RETRY_WAIT = 30_000; // a cap on every wait; a longer Retry-After ends the retries instead
 const DEFAULT_RETRY_DELAY = 250; // retry n waits retryDelay × 2^(n-1): 250, 500, 1000, …
 
+// A caller's key (from an idempotencyKey function): 1–255 visible ASCII characters (! to ~). No
+// spaces, control characters (so no CR/LF/NUL header injection) or non-ASCII, and no
+// normalization — what's accepted is sent byte for byte.
+const KEY_FORMAT = /^[\x21-\x7e]{1,255}$/;
+
 // A v4 UUID from the platform's CSPRNG — randomUUID, or getRandomValues where randomUUID isn't
 // available (insecure contexts). null when neither exists: never weaker randomness.
 function newIdempotencyKey() {
@@ -670,7 +675,7 @@ function newIdempotencyKey() {
 function mutation(method, url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError(`api.${method.toLowerCase()}(url): url must be a non-empty string`);
   let query, invalidate = [], exclusive = false, timeout = 0, problemDetails = false;
-  let idempotent = false, retry = 0, retryDelay;
+  let idempotent = false, keyFn = null, retry = 0, retryDelay;
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
       if (key === "query") {
@@ -681,8 +686,13 @@ function mutation(method, url, options) {
       else if (key === "timeout") timeout = value === undefined ? 0 : readMs(value, "timeout");
       else if (key === "problemDetails") problemDetails = readFlag(value, "problemDetails");
       else if (key === "idempotencyKey") {
-        if (value !== undefined && typeof value !== "boolean") throw configError("idempotencyKey must be true or false — keys are generated per run(); custom keys aren't supported yet");
+        // A fixed string is refused on purpose: it would be reused by EVERY run() of this mutation,
+        // so a second, different order would be deduplicated into the first. A function gives
+        // one key per logical run.
+        if (typeof value === "string") throw configError("idempotencyKey can't be a fixed string — it would be reused for every run(); pass () => key, evaluated once per run");
+        if (value !== undefined && typeof value !== "boolean" && typeof value !== "function") throw configError("idempotencyKey must be true (a generated key) or a function returning one key per run()");
         idempotent = !!value;
+        if (typeof value === "function") keyFn = value;
       } else if (key === "retry") {
         if (value === undefined) continue;
         if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_RETRIES) throw configError(`retry must be a whole number from 0 to ${MAX_RETRIES} (extra attempts after the first)`);
@@ -698,8 +708,8 @@ function mutation(method, url, options) {
   const tpl = parseTemplate(url);
   const entries = query === undefined ? [] : queryEntries(query);
 
-  // Backoff waits, cancelled when the owning component goes away: an attempt already sent may
-  // finish, but no NEW attempt starts for a UI that's gone.
+  // Backoff waits, cancelled when the owning component goes away (or on reset()): an attempt
+  // already sent may finish, but no NEW attempt starts for a UI that's gone.
   let torn = false;
   const waits = new Set();
   const sleep = (ms) =>
@@ -707,14 +717,25 @@ function mutation(method, url, options) {
       const w = { resolve, id: setTimeout(() => (waits.delete(w), resolve(true)), ms) };
       waits.add(w);
     });
-  onCleanup(() => {
-    torn = true;
+  const cancelWaits = () => {
     for (const w of waits) {
       clearTimeout(w.id);
       w.resolve(false);
     }
     waits.clear();
+  };
+  onCleanup(() => {
+    torn = true;
+    cancelWaits();
   });
+
+  // Retry observability, alongside (not instead of) the action's own state. attempt(): 0 idle, then
+  // the number of the attempt in flight or last finished — kept after the run ends, until the next
+  // run or reset(). retrying(): true from the first retryable failure until the run ends. Only the
+  // newest run writes them (a superseded run's attempts aren't shown); exclusive joiners share it.
+  const attempt = createState(0);
+  const retrying = createState(false);
+  let owner = null; // the call whose status is shown
 
   // The action's fn: build, serialize and key ONCE per logical run, then send — replaying the same
   // request on a retryable failure. Only the final outcome reaches the action (one pending → done
@@ -723,13 +744,22 @@ function mutation(method, url, options) {
   const send = (...args) => {
     const call = { ok: false };
     lastCall = call;
+    owner = call;
+    attempt.set(0);
+    retrying.set(false);
+    const show = (n, isRetrying) => {
+      if (owner !== call) return;
+      attempt.set(n);
+      retrying.set(isRetrying);
+    };
     let path, payload, key;
     try {
       const { params, body } = readRunInput(tpl, method, args);
       path = fillParams(tpl, params);
       payload = toPayload(body);
       if (retry > 0 && payload && payload.form) throw configError("a FormData body can't be retried — use retry: 0 for uploads (the idempotency key is still sent)");
-      if (idempotent && (key = newIdempotencyKey()) === null) throw configError("idempotencyKey needs crypto.randomUUID or crypto.getRandomValues, and this environment has neither");
+      if (keyFn) key = callerKey(keyFn);
+      else if (idempotent && (key = newIdempotencyKey()) === null) throw configError("idempotencyKey needs crypto.randomUUID or crypto.getRandomValues, and this environment has neither");
     } catch (err) {
       if (!(err instanceof ConfigError)) throw err;
       return Promise.reject(new ApiError(`${method} request not sent: ${err.message.slice("api(): ".length)}`, { type: "config", method }));
@@ -744,20 +774,30 @@ function mutation(method, url, options) {
         throw err instanceof ApiError ? err : new ApiError(`${method} request failed`, { type: "network", method });
       });
     return (async () => {
-      for (let attempt = 0; ; attempt++) {
+      for (let n = 0; ; n++) {
+        show(n + 1, n > 0);
         try {
-          const value = await attemptOnce(retry - attempt);
+          const value = await attemptOnce(retry - n);
           call.ok = true;
+          show(n + 1, false);
           return value;
         } catch (err) {
-          if (attempt >= retry || torn || !isRetryable(err)) throw err;
-          let wait = Math.min(retryDelay * 2 ** attempt, MAX_RETRY_WAIT);
-          const after = RETRY_AFTER.get(err);
-          if (after !== undefined) {
-            if (after > MAX_RETRY_WAIT) throw err; // the server asked for longer than we'd wait
-            wait = Math.max(wait, after);
+          const again = n < retry && !torn && owner === call && isRetryable(err);
+          let wait = again ? Math.min(retryDelay * 2 ** n, MAX_RETRY_WAIT) : 0;
+          const after = again ? RETRY_AFTER.get(err) : undefined;
+          // Intentional: when the server asks for a longer wait than we're willing to take, we
+          // fail now rather than retry EARLIER than it asked. Respecting Retry-After matters more
+          // than one more attempt.
+          if (!again || (after !== undefined && after > MAX_RETRY_WAIT)) {
+            show(n + 1, false);
+            throw err;
           }
-          if (!(await sleep(wait))) throw err; // torn down while waiting: stop, don't send again
+          if (after !== undefined) wait = Math.max(wait, after);
+          show(n + 1, true); // waiting: attempt() stays at the attempt that just failed
+          if (!(await sleep(wait))) {
+            show(n + 1, false);
+            throw err; // torn down or reset while waiting: stop, don't send again
+          }
         }
       }
     })();
@@ -780,8 +820,35 @@ function mutation(method, url, options) {
     error: act.error,
     done: act.done,
     result: act.result,
-    reset: act.reset,
+    /** The attempt in flight, or the last one of the latest run; 0 when idle or after reset(). */
+    attempt: () => attempt.get(),
+    /** True while the latest run is waiting to retry or retrying. */
+    retrying: () => retrying.get(),
+    // The action's reset() (it already stops the in-flight run from settling), plus: the retry
+    // status clears, and a retry still waiting to be sent is cancelled — nobody is waiting for it.
+    reset() {
+      owner = null;
+      cancelWaits();
+      act.reset();
+      attempt.set(0);
+      retrying.set(false);
+    },
   };
+}
+
+// Evaluate the caller's key function once for a logical run and validate what it returns. Neither
+// a thrown error's message nor the bad value is echoed: either may be secret.
+function callerKey(fn) {
+  let value;
+  try {
+    value = fn();
+  } catch {
+    throw configError("the idempotencyKey function threw");
+  }
+  if (typeof value !== "string" || !KEY_FORMAT.test(value)) {
+    throw configError("the idempotencyKey function must return 1–255 visible ASCII characters (no spaces or control characters)");
+  }
+  return value;
 }
 
 // invalidate: one api() resource or an array of them → their (deduplicated) refreshers. Only real

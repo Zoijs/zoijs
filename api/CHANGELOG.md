@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON and FormData bodies, explicit invalidation, timeouts, opt-in problem details, `initial` seeding, idempotency keys and opt-in mutation retries.
+Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON and FormData bodies, explicit invalidation, timeouts, opt-in problem details, `initial` seeding, idempotency keys and opt-in mutation retries with retry status.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -99,3 +99,18 @@ Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/pa
   final error in `error()` and `onError`, invalidation once after eventual success, the request
   built and the JSON body serialized once, a fresh `timeout` per attempt, scheduled retries
   cancelled on unmount. FormData bodies can't be retried.
+- **`idempotencyKey: () => key`** — the caller's key, from a function called once per logical
+  `run()` (not per retry; once for joined `exclusive` calls). It must return 1–255 visible ASCII
+  characters (`!`–`~`; no spaces or control characters, so no header injection), sent unchanged;
+  otherwise — or if it throws — a `"config"` error before any request, without echoing the value
+  or the thrown message. A fixed string is refused (it would be reused for every run).
+- **`attempt()` / `retrying()`** on every mutation — reactive retry status beside the action's own
+  state: `attempt()` is the attempt in flight or last finished (0 idle/after `reset()`), kept
+  after the run; `retrying()` is true from the first retryable failure until the run ends.
+  Exclusive joiners share them; only the newest run writes them.
+- `reset()` also cancels a scheduled retry, and a run superseded by a newer `run()` isn't
+  retried.
+- Types: mutation options are a union — `retry` (1–5 literal) requires `idempotencyKey: true` or
+  a key function, and `retryDelay` requires `retry`, at compile time as well as at runtime.
+- FormData bodies are still not retryable; a cross-engine browser test now verifies FormData
+  replay, ahead of enabling it.

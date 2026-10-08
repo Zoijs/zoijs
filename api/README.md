@@ -481,8 +481,34 @@ retries a mutation, it always sends an idempotency key.
   new one. A call that joins an `exclusive` run shares that run's key and attempts.
 - The key goes only in that header — never in the URL, query, body, `error.message`,
   `error.url`, problem details, the console or monitoring. Treat it like a credential.
-- It works without `retry` too (a single attempt with a key). Custom, caller-supplied keys aren't
-  supported yet: `idempotencyKey` is `true` or `false`.
+- It works without `retry` too (a single attempt with a key).
+
+### Your own keys
+
+When the operation already has an identity — a checkout session, a draft, a client-side
+operation id — pass a **function** that returns the key for the operation being run:
+
+```js
+const save = api.post("/api/orders", {
+  idempotencyKey: () => currentOperationId(),
+  retry: 2,
+});
+```
+
+- The function is called **once per logical `run()`** — not per retry, and only once for
+  `exclusive` calls that join a run. The next independent `run()` calls it again.
+- It must return **1–255 visible ASCII characters** (`!` to `~`): no spaces, no control
+  characters (so no CR, LF or NUL — a key can never inject a header), no non-ASCII. Nothing is
+  trimmed or normalized: what's accepted is sent byte for byte. Anything else — or a function
+  that throws — fails the run with a `"config"` error before any request; neither the value nor
+  the thrown message is echoed.
+- A **fixed string** (`idempotencyKey: "checkout-abc"`) is refused with a `TypeError`: the same
+  key would be sent by *every* `run()` of that mutation, so the server would treat a second,
+  different order as a repeat of the first.
+- **Each key must stand for exactly one logical server operation.** Don't return a key that was
+  already used for a different operation — the server will (correctly) treat it as a repeat.
+- Your keys get the same privacy as generated ones: only in the header, never in URLs, bodies,
+  errors or monitoring.
 
 ### What's retried
 
@@ -502,11 +528,13 @@ retries a mutation, it always sends an idempotency key.
 ### Backoff and `Retry-After`
 
 - Retry *n* waits `retryDelay × 2^(n-1)`: with the default `retryDelay: 250`, that's 250 ms,
-  500 ms, 1 s, 2 s, 4 s. No jitter. Every wait is capped at 30 s. `retryDelay` is milliseconds
+  500 ms, 1 s, 2 s, 4 s. Every wait is capped at 30 s. There's **no jitter**: clients that fail at
+  the same moment retry at the same moments — the 30 s cap and the 5-retry limit bound that. `retryDelay` is milliseconds
   (validated like `timeout`) and needs `retry`.
 - On 429 and 503, a `Retry-After` header — seconds (`Retry-After: 5`) or an HTTP-date — makes the
   wait at least that long. If it asks for **more than 30 s**, the mutation stops retrying and
-  fails with that response instead of retrying early. An unparseable value is ignored.
+  fails with that response instead of retrying early — deliberately: respecting the server's
+  `Retry-After` matters more than one more attempt. An unparseable value is ignored.
 
 ### One logical run
 
@@ -522,10 +550,35 @@ retries a mutation, it always sends an idempotency key.
 - With `problemDetails: true`, only the final error's problem body is read; retried responses are
   discarded unread.
 - **When the component unmounts**, an attempt already sent may finish (its result is ignored, as
-  `@zoijs/action` does), but a scheduled retry is cancelled and no new attempt starts.
-- **FormData bodies can't be retried**: `retry > 0` with a FormData body is a `"config"` error and
-  nothing is sent. Uploads can still use `idempotencyKey: true` with `retry: 0`.
+  `@zoijs/action` does), but a scheduled retry is cancelled and no new attempt starts. The same
+  goes for `reset()`, and for a run superseded by a newer (non-`exclusive`) `run()`: nobody is
+  waiting for its result, so it isn't retried.
+- **FormData bodies can't be retried yet**: `retry > 0` with a FormData body is a `"config"` error
+  and nothing is sent. Uploads can still send an idempotency key with `retry: 0`. (FormData replay
+  is being verified across Chromium, Firefox and WebKit before it's enabled.)
 - GET resources (`api(url)`) don't retry.
+
+### Showing retries in the UI
+
+```js
+${() => (save.retrying() ? html`<p>Retrying request…</p>` : null)}
+```
+
+Two reactive readers sit next to the action's `pending()`, `done()`, `error()` and `result()`:
+
+| | idle | 1st attempt | waiting after a failure | 2nd attempt | succeeded | gave up |
+|---|---|---|---|---|---|---|
+| `attempt()` | 0 | 1 | 1 | 2 | 2 (kept) | last attempt (kept) |
+| `retrying()` | `false` | `false` | `true` | `true` | `false` | `false` |
+| `pending()` | `false` | `true` | `true` | `true` | `false` | `false` |
+
+- `attempt()` is the attempt in flight, or the last one finished; it's kept after the run ends
+  until the next `run()` (which starts again at 1) or `reset()` (back to 0).
+- Without `retry`, `attempt()` goes 0 → 1 and `retrying()` stays `false`; both methods exist on
+  every mutation.
+- `exclusive` joiners share one run, so they see the same values. Only the newest run writes them.
+- They are ordinary state: changing them never reports anything to `onError`, and they keep no
+  timers, bodies or keys.
 
 ## Problem details
 
@@ -657,7 +710,7 @@ see the [production security checklist](https://zoijs.dev/production-security).
 - **JSON and `FormData` bodies only** — no `Blob`, `ArrayBuffer`, `URLSearchParams` or streams.
 - **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
 - **No implicit retries** (mutation retries are opt-in and need an idempotency key), **no GET
-  retries, no custom headers or idempotency keys, no optimistic updates.**
+  retries, no custom headers, no fixed-string idempotency keys, no optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
 
 ## License

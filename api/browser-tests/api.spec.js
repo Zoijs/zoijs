@@ -676,3 +676,94 @@ test("unmount during backoff cancels the scheduled retry; rendered errors never 
   expect(text).toMatch(/^POST request failed: 503/);
   expect(text).not.toContain(shownKeys[0]);
 });
+
+// ---- Phase 7: key functions, retry status, FormData replay verification ---------------------------------
+
+test("a key function is called once per run; its key is reused by the retry", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const out = await runInPage(page, `
+    let calls = 0;
+    const m = api.post("/__retry/nk/orders", { idempotencyKey: () => "op-" + (++calls), retry: 2, retryDelay: 20 });
+    await m.run({ a: 1 });
+    return { calls, done: m.done() };
+  `);
+  expect(out).toEqual({ calls: 1, done: true });
+  expect(seen.filter((x) => x.method === "POST").map((x) => x.key)).toEqual(["op-1", "op-1"]);
+});
+
+test("attempt() / retrying() follow a real retry; exclusive joiners see the same status", async ({ page }) => {
+  await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const out = await runInPage(page, `
+    const m = api.post("/__retry/fk/orders", { exclusive: true, idempotencyKey: true, retry: 2, retryDelay: 150 });
+    const samples = [[m.attempt(), m.retrying()]];
+    const a = m.run({ n: 1 });
+    const b = m.run({ n: 2 }); // joins
+    samples.push([m.attempt(), m.retrying()]);
+    await wait(80);   // first attempt failed (503); waiting 150 ms to retry
+    samples.push([m.attempt(), m.retrying(), m.pending()]);
+    await Promise.all([a, b]);
+    samples.push([m.attempt(), m.retrying(), m.pending(), m.done()]);
+    m.reset();
+    samples.push([m.attempt(), m.retrying()]);
+    return samples;
+  `);
+  expect(out).toEqual([[0, false], [1, false], [1, true, true], [2, false, false, true], [0, false]]);
+});
+
+// Evidence for (not yet enablement of) FormData retries: send ONE FormData object twice with the
+// platform fetch and check the server sees semantically equal multipart payloads each time — text
+// fields, file names, MIME types and exact binary bytes. Boundaries may differ; contents may not.
+test("FormData replay: the same FormData sends equivalent multipart payloads twice", async ({ page }) => {
+  const bodies = [];
+  await page.route(/\/__multipart/, async (r) => {
+    const req = r.request();
+    bodies.push({ type: req.headers()["content-type"], buf: req.postDataBuffer() });
+    await r.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+  });
+  await page.goto(EXAMPLE);
+  const before = await page.evaluate(async () => {
+    const bytes = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) bytes[i] = i;
+    const form = new FormData();
+    form.append("description", "Profile photo ✓");
+    form.append("file", new File([bytes], "photo.png", { type: "image/png" }));
+    form.append("blob", new Blob(["plain text\r\n--not-a-boundary"], { type: "text/plain" }), "notes.txt");
+    const snapshot = async () => Promise.all([...form.entries()].map(async ([k, v]) => [k, typeof v === "string" ? v : [v.name, v.type, v.size, Array.from(new Uint8Array(await v.arrayBuffer())).join(",")]]));
+    const first = await snapshot();
+    await fetch("/__multipart", { method: "POST", body: form });
+    await fetch("/__multipart", { method: "POST", body: form });
+    const after = await snapshot();
+    return JSON.stringify(first) === JSON.stringify(after);
+  });
+  expect(before).toBe(true); // the caller's FormData isn't changed by being sent
+  expect(bodies).toHaveLength(2);
+  const parse = ({ type, buf }) => {
+    const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type);
+    expect(boundary).not.toBeNull();
+    const sep = Buffer.from("--" + (boundary[1] || boundary[2]));
+    const parts = [];
+    let at = buf.indexOf(sep);
+    while (at !== -1) {
+      const next = buf.indexOf(sep, at + sep.length);
+      if (next === -1) break;
+      const part = buf.subarray(at + sep.length + 2, next - 2); // skip CRLF after the boundary and before the next
+      const split = part.indexOf("\r\n\r\n");
+      const head = part.subarray(0, split).toString("latin1").toLowerCase().split("\r\n").map((l) => l.replace(/\s+/g, " ").trim()).sort().join("|");
+      parts.push({ head, body: part.subarray(split + 4).toString("base64") });
+      at = next;
+    }
+    return parts;
+  };
+  const [a, b] = bodies.map(parse);
+  expect(a).toHaveLength(3);
+  expect(b).toEqual(a);
+  expect(a[0].head).toContain('name="description"');
+  expect(Buffer.from(a[0].body, "base64").toString("utf8")).toBe("Profile photo ✓");
+  expect(a[1].head).toContain('filename="photo.png"');
+  expect(a[1].head).toContain("content-type: image/png");
+  expect([...Buffer.from(a[1].body, "base64")]).toEqual([...Array(256).keys()]);
+  expect(a[2].head).toContain('filename="notes.txt"');
+  expect(Buffer.from(a[2].body, "base64").toString("utf8")).toBe("plain text\r\n--not-a-boundary");
+});

@@ -40,7 +40,7 @@ test("api.post / put / patch / delete exist; api.get doesn't (api(url) is the GE
 test("a mutation is an action: run / pending / error / done / result / reset, nothing runs until run()", async () => {
   stubFetch();
   const add = api.post("/api/tasks");
-  assert.deepEqual(Object.keys(add).sort(), ["done", "error", "pending", "reset", "result", "run"]);
+  assert.deepEqual(Object.keys(add).sort(), ["attempt", "done", "error", "pending", "reset", "result", "retrying", "run"]);
   assert.equal(add.pending(), false);
   assert.equal(add.done(), false);
   assert.equal(add.error(), null);
