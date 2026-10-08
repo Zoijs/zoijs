@@ -18,6 +18,7 @@ through one app — the **Task Board** demo — that uses five of them together.
 | [`@zoijs/router`](../../router/README.md) | Client-side routing | `createRouter` → `view`, `link`, `go`, `path`, `query` |
 | [`@zoijs/resource`](../../resource/README.md) | Reading async data | `resource(fetcher)` → `data`, `loading`, `error`, `refresh` |
 | [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
+| [`@zoijs/api`](../../api/README.md) | Same-origin HTTP | `api(url, options?)` → a resource; `api.post` / `put` / `patch` / `delete(url, options?)` → an action; `ApiError` |
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
@@ -39,6 +40,7 @@ npm install @zoijs/core
 npm install @zoijs/router      # routing
 npm install @zoijs/resource    # reading data
 npm install @zoijs/action      # writing data
+npm install @zoijs/api         # same-origin HTTP (needs @zoijs/resource + @zoijs/action)
 npm install @zoijs/head        # title & meta
 npm install @zoijs/storage     # persistence (localStorage)
 npm install @zoijs/forms       # form state + validation
@@ -65,6 +67,23 @@ Every package is:
 - **Built on the core's public API** — they use `createState`, `onCleanup`,
   `html`, and `mount` just like your own code. There is no private core access
   and **no core changes** were needed to add any of them.
+
+One package is **layered** on purpose: `@zoijs/api` is the high-level data layer, so it is
+built on `@zoijs/resource` (reads) and `@zoijs/action` (writes) rather than re-implementing
+them, and it is larger than the rest. That is the only sideways dependency, declared and
+CI-checked ([scope §4](scope.md#4-coupling-analysis)) — no other package may import a sibling:
+
+```text
+@zoijs/api ──► @zoijs/resource ──► @zoijs/core
+     └───────► @zoijs/action ───► @zoijs/core
+```
+
+```js
+import { api } from "@zoijs/api";
+
+const users = api("/api/users");                               // GET as a resource
+const create = api.post("/api/users", { invalidate: users });  // POST as an action
+```
 
 ## How they work together
 

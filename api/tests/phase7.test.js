@@ -22,7 +22,12 @@ function stubFetch(script) {
     });
   };
 }
+// Jitter (±20 %) is pinned to its midpoint so backoff times are exact; phase8.test.js covers jitter.
+test.beforeEach(() => {
+  mock.method(Math, "random", () => 0.5);
+});
 test.afterEach(() => {
+  mock.restoreAll();
   globalThis.fetch = realFetch;
   mock.timers.reset();
 });

@@ -6,9 +6,10 @@ from a laptop.** Then sync the docs-site CDN pins.
 
 ## How a package is published
 
-Every one of the 14 packages (`core`, `router`, `resource`, `action`, `head`, `forms`,
-`storage`, `i18n`, `ssr`, `sanitize`, `testing`, `devtools`, `eslint-plugin`, `create`)
-publishes the same way, through [`publish.yml`](../../.github/workflows/publish.yml):
+Every one of the 15 packages (`core`, `router`, `resource`, `action`, `head`, `forms`,
+`storage`, `i18n`, `ssr`, `sanitize`, `testing`, `devtools`, `eslint-plugin`, `create`, `api`)
+publishes the same way — after its first version exists on npm (see
+[First publish of a new package](#first-publish-of-a-new-package)), through [`publish.yml`](../../.github/workflows/publish.yml):
 
 1. **Bump** the package's `version`, update its `CHANGELOG.md`/README, and merge to `main`
    through a reviewed pull request (CI must be green).
@@ -57,8 +58,9 @@ skip the npm-registry checks) or `npm run release:check -- --all --offline`.
 These can't be configured from repository files; a maintainer does them once:
 
 1. **npm → each package → Settings → Trusted Publisher → GitHub Actions**: owner `Zoijs`,
-   repository `zoijs`, workflow `publish.yml`, environment `npm-release`. Do this for all
-   14 packages (all already exist on npm, so no first publish is needed).
+   repository `zoijs`, workflow `publish.yml`, environment `npm-release`. Do this for every
+   package. The first 14 already exist on npm; a package that doesn't yet (such as
+   `@zoijs/api`) needs the one-time bootstrap below first.
 2. Then, per package, **Settings → Publishing access → "Require two-factor authentication
    and disallow tokens"**, and **revoke the old `NPM_TOKEN`** automation token on npm and
    delete the `NPM_TOKEN` repository secret on GitHub.
@@ -66,6 +68,39 @@ These can't be configured from repository files; a maintainer does them once:
    branches/tags limited to tags matching `*-v*`; no secrets.
 4. **GitHub → Settings → Rules**: protect tags matching `*-v*` (only maintainers may create
    or delete them) and keep `main` requiring review from Code Owners (`.github/` is owned).
+
+## First publish of a new package
+
+npm can only attach a Trusted Publisher to a package that **already exists** on the registry,
+so a brand-new package's first version can't come from `publish.yml`. Bootstrap it once,
+without putting any token in CI, then switch it to the normal flow. For `@zoijs/api` 0.1.0:
+
+1. **Merge** the release to `main` through a reviewed PR with CI green, and check locally:
+   `npm run release:check -- api-v0.1.0` → `READY`.
+2. **Tag and let CI vet the exact commit**: `git tag api-v0.1.0 && git push origin api-v0.1.0`.
+   The full CI suite and the verify job run at the tag. When the publish job then waits for
+   `npm-release` approval, **reject** it — it can't publish yet (no Trusted Publisher), and the
+   tag plus green CI is the record of what gets published.
+3. **Publish once from a maintainer machine**, from a clean checkout of that tag, logged in
+   interactively with 2FA (`npm login`, OTP prompt) — **no automation or granular token is
+   created, stored, or put in CI**:
+
+   ```sh
+   git checkout api-v0.1.0 && git status --porcelain   # must print nothing
+   npm run release:check -- api-v0.1.0                 # READY
+   cd api && npm publish --access public --ignore-scripts
+   npm logout
+   ```
+
+4. **On npm, for the new package**: add the Trusted Publisher (owner `Zoijs`, repository
+   `zoijs`, workflow `publish.yml`, environment `npm-release`), then **Publishing access →
+   "Require two-factor authentication and disallow tokens"**.
+5. From then on the package releases exactly like the others: bump, merge, tag; CI publishes
+   with provenance.
+
+Tradeoff: the bootstrap version carries no npm provenance statement (that needs the CI
+publish); every later version does. Don't "fix" this by adding an `NPM_TOKEN` secret — that
+would be a long-lived credential in CI for every future release.
 
 ## Emergencies
 

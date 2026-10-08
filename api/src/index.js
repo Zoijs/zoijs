@@ -466,7 +466,7 @@ export function api(url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError("api(url): url must be a non-empty string");
   if (arguments.length > 2) throw new TypeError("api(url, options): too many arguments — api() always performs a GET");
 
-  let params, query, debounce = 0, timeout = 0, problemDetails = false;
+  let params, query, debounce = 0, timeout = 0, problemDetails = false, retry = 0, retryDelay;
   let seeded = false, initial; // `initial` counts when the key is PRESENT, even as undefined
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
@@ -475,13 +475,16 @@ export function api(url, options) {
       else if (key === "debounce") debounce = value === undefined ? 0 : readMs(value, "debounce");
       else if (key === "timeout") timeout = value === undefined ? 0 : readMs(value, "timeout");
       else if (key === "problemDetails") problemDetails = readFlag(value, "problemDetails");
+      else if (key === "retry") retry = readRetry(value);
+      else if (key === "retryDelay") retryDelay = value === undefined ? undefined : readMs(value, "retryDelay");
       else if (key === "initial") {
         seeded = true;
         initial = value; // kept as given: not cloned, sanitized or merged
-      } else throw configError(`unsupported option "${key}" — api() accepts params, query, debounce, timeout, initial and problemDetails (it always performs a GET)`);
+      } else throw configError(`unsupported option "${key}" — api() accepts params, query, debounce, timeout, initial, problemDetails, retry and retryDelay (it always performs a GET)`);
     }
   }
-  const transport = { timeout, problemDetails };
+  if (retryDelay !== undefined && retry === 0) throw configError("retryDelay has no effect without retry");
+  if (retryDelay === undefined) retryDelay = DEFAULT_RETRY_DELAY;
 
   // Static parts are checked once, now, and throw a TypeError. Functions are checked on every run.
   const tpl = parseTemplate(url);
@@ -495,6 +498,8 @@ export function api(url, options) {
   let current = null; // computed() of evaluate(), when params or query is a function
   let scope = null; // the effect that owns `current` and the tracker
   let inner = null; // the resource
+  let load = null; // the current logical load (its retries stop when another one starts)
+  const waits = waiter(); // its retry backoff
 
   const clearTimer = () => {
     if (timer !== null) clearTimeout(timer);
@@ -504,6 +509,7 @@ export function api(url, options) {
     if (disposed) return;
     disposed = true;
     clearTimer();
+    waits.cancel();
     if (controller) controller.abort();
     controller = null;
     if (scope) scope.dispose(); // disposes the computed and the tracker with it
@@ -541,15 +547,22 @@ export function api(url, options) {
 
   inner = resource(() => {
     clearTimer(); // whatever triggered this load supersedes a pending debounced one
+    waits.cancel(); // …and the previous load's scheduled retry: it must not fire for an old URL
     // A newer load supersedes the old one: resource() already ignores its result; abort it too.
     if (controller) controller.abort();
     controller = null;
     const req = current ? current.peek() : fixed; // current values, even before the batched effect runs
     lastKey = req.key;
+    const mine = (load = {});
     if (req.error) return Promise.reject(req.error);
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     controller = ac;
-    return request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, transport).then(
+    // One logical load: every retry replays THIS url; a reactive change or refresh() starts a new one.
+    const attemptOnce = (left) =>
+      request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, { timeout, problemDetails: problemFor(problemDetails, left) }).catch((err) => {
+        throw err instanceof ApiError ? err : new ApiError(`${METHOD} request failed`, { type: "network" });
+      });
+    return withRetries(attemptOnce, retry, retryDelay, () => !disposed && load === mine, waits.sleep).then(
       // Disposed mid-flight: settle with the data already held — nothing changes, loading ends.
       (value) => (disposed ? inner.data() : value),
       (err) => {
@@ -637,14 +650,78 @@ function serializeBody(body) {
   return text;
 }
 
-// ---- mutation retries ------------------------------------------------------------------------
-// Off by default; opt-in only together with idempotencyKey: true (any method). Only failures that
-// may pass on another attempt are retried; everything else ends the run at once.
+// ---- retries (GET loads and mutation runs share this) --------------------------------------------
+// Off by default. Mutations opt in only together with an idempotency key; GETs just with `retry`.
+// Only failures that may pass on another attempt are retried; everything else ends at once.
 const RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const isRetryable = (e) => e.type === "network" || e.type === "timeout" || (e.type === "http" && RETRY_STATUS.has(e.status));
 const MAX_RETRIES = 5; // at most 6 attempts — no retry storms
 const MAX_RETRY_WAIT = 30_000; // a cap on every wait; a longer Retry-After ends the retries instead
-const DEFAULT_RETRY_DELAY = 250; // retry n waits retryDelay × 2^(n-1): 250, 500, 1000, …
+const DEFAULT_RETRY_DELAY = 250; // retry n waits ~retryDelay × 2^(n-1): 250, 500, 1000, … (±20 %)
+
+function readRetry(value) {
+  if (value === undefined) return 0;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_RETRIES) throw configError(`retry must be a whole number from 0 to ${MAX_RETRIES} (extra attempts after the first)`);
+  return value;
+}
+
+// Cancellable backoff waits: sleep(ms) resolves true when the time is up, false if cancel() ran.
+function waiter() {
+  const waits = new Set();
+  return {
+    sleep: (ms) =>
+      new Promise((resolve) => {
+        const w = { resolve, id: setTimeout(() => (waits.delete(w), resolve(true)), ms) };
+        waits.add(w);
+      }),
+    cancel() {
+      for (const w of waits) {
+        clearTimeout(w.id);
+        w.resolve(false);
+      }
+      waits.clear();
+    },
+  };
+}
+
+// How long to wait before retry n+1 (n = attempts already failed − 1), or null to stop.
+//   - A usable Retry-After (429/503) wins and is never shortened: the wait is at least what the
+//     server asked (and at least the plain backoff). Intentional: when it asks for longer than
+//     MAX_RETRY_WAIT we stop rather than retry EARLIER than asked — respecting the server matters
+//     more than one more attempt.
+//   - Otherwise exponential backoff with ±20 % jitter (factor 0.8–1.2), so clients that failed
+//     together don't all retry together; capped at MAX_RETRY_WAIT. Math.random is fine here:
+//     this is timing, not an identifier or a secret.
+function retryWait(err, n, base) {
+  const backoff = base * 2 ** n;
+  const after = RETRY_AFTER.get(err);
+  if (after !== undefined) return after > MAX_RETRY_WAIT ? null : Math.max(after, Math.min(backoff, MAX_RETRY_WAIT));
+  return Math.min(backoff * (0.8 + 0.4 * Math.random()), MAX_RETRY_WAIT);
+}
+
+// Run attemptOnce(attemptsLeftAfterThis) until it succeeds, a failure isn't retryable, retries run
+// out, alive() turns false (superseded, disposed, unmounted, reset) or a wait is cancelled. Only
+// the final outcome leaves here — intermediate failures are never surfaced or reported.
+// show(attempt, retrying) reports progress (mutations' attempt()/retrying()).
+async function withRetries(attemptOnce, retry, retryDelay, alive, sleep, show) {
+  for (let n = 0; ; n++) {
+    if (show) show(n + 1, n > 0);
+    try {
+      const value = await attemptOnce(retry - n);
+      if (show) show(n + 1, false);
+      return value;
+    } catch (err) {
+      const wait = n < retry && alive() && isRetryable(err) ? retryWait(err, n, retryDelay) : null;
+      if (wait === null || (show && show(n + 1, true), !(await sleep(wait)))) {
+        if (show) show(n + 1, false);
+        throw err;
+      }
+    }
+  }
+}
+
+// With retries left, a retryable status isn't the final error: don't read its problem body.
+const problemFor = (problemDetails, left) => (problemDetails && left > 0 ? (status) => !RETRY_STATUS.has(status) : problemDetails);
 
 // A caller's key (from an idempotencyKey function): 1–255 visible ASCII characters (! to ~). No
 // spaces, control characters (so no CR/LF/NUL header injection) or non-ASCII, and no
@@ -693,11 +770,8 @@ function mutation(method, url, options) {
         if (value !== undefined && typeof value !== "boolean" && typeof value !== "function") throw configError("idempotencyKey must be true (a generated key) or a function returning one key per run()");
         idempotent = !!value;
         if (typeof value === "function") keyFn = value;
-      } else if (key === "retry") {
-        if (value === undefined) continue;
-        if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_RETRIES) throw configError(`retry must be a whole number from 0 to ${MAX_RETRIES} (extra attempts after the first)`);
-        retry = value;
-      } else if (key === "retryDelay") retryDelay = value === undefined ? undefined : readMs(value, "retryDelay");
+      } else if (key === "retry") retry = readRetry(value);
+      else if (key === "retryDelay") retryDelay = value === undefined ? undefined : readMs(value, "retryDelay");
       else if (key === "initial") throw configError("initial is for api() resources — a mutation has no data until it runs");
       else throw configError(`unsupported option "${key}" — a mutation accepts query, invalidate, exclusive, timeout, problemDetails, idempotencyKey, retry and retryDelay`);
     }
@@ -711,22 +785,10 @@ function mutation(method, url, options) {
   // Backoff waits, cancelled when the owning component goes away (or on reset()): an attempt
   // already sent may finish, but no NEW attempt starts for a UI that's gone.
   let torn = false;
-  const waits = new Set();
-  const sleep = (ms) =>
-    new Promise((resolve) => {
-      const w = { resolve, id: setTimeout(() => (waits.delete(w), resolve(true)), ms) };
-      waits.add(w);
-    });
-  const cancelWaits = () => {
-    for (const w of waits) {
-      clearTimeout(w.id);
-      w.resolve(false);
-    }
-    waits.clear();
-  };
+  const waits = waiter();
   onCleanup(() => {
     torn = true;
-    cancelWaits();
+    waits.cancel();
   });
 
   // Retry observability, alongside (not instead of) the action's own state. attempt(): 0 idle, then
@@ -768,39 +830,16 @@ function mutation(method, url, options) {
       request(path, entries, undefined, method, payload, {
         timeout, // a fresh window per attempt
         idempotencyKey: key,
-        // A retryable status that will be retried isn't the final error: don't read its body.
-        problemDetails: problemDetails && left > 0 ? (status) => !RETRY_STATUS.has(status) : problemDetails,
+        problemDetails: problemFor(problemDetails, left),
       }).catch((err) => {
         throw err instanceof ApiError ? err : new ApiError(`${method} request failed`, { type: "network", method });
       });
-    return (async () => {
-      for (let n = 0; ; n++) {
-        show(n + 1, n > 0);
-        try {
-          const value = await attemptOnce(retry - n);
-          call.ok = true;
-          show(n + 1, false);
-          return value;
-        } catch (err) {
-          const again = n < retry && !torn && owner === call && isRetryable(err);
-          let wait = again ? Math.min(retryDelay * 2 ** n, MAX_RETRY_WAIT) : 0;
-          const after = again ? RETRY_AFTER.get(err) : undefined;
-          // Intentional: when the server asks for a longer wait than we're willing to take, we
-          // fail now rather than retry EARLIER than it asked. Respecting Retry-After matters more
-          // than one more attempt.
-          if (!again || (after !== undefined && after > MAX_RETRY_WAIT)) {
-            show(n + 1, false);
-            throw err;
-          }
-          if (after !== undefined) wait = Math.max(wait, after);
-          show(n + 1, true); // waiting: attempt() stays at the attempt that just failed
-          if (!(await sleep(wait))) {
-            show(n + 1, false);
-            throw err; // torn down or reset while waiting: stop, don't send again
-          }
-        }
-      }
-    })();
+    // While waiting, attempt() stays at the attempt that just failed. A torn-down, reset or
+    // superseded run stops: nobody is waiting for it, so it sends nothing more.
+    return withRetries(attemptOnce, retry, retryDelay, () => !torn && owner === call, waits.sleep, show).then((value) => {
+      call.ok = true;
+      return value;
+    });
   };
   const act = action(send, { exclusive });
 
@@ -828,7 +867,7 @@ function mutation(method, url, options) {
     // status clears, and a retry still waiting to be sent is cancelled — nobody is waiting for it.
     reset() {
       owner = null;
-      cancelWaits();
+      waits.cancel();
       act.reset();
       attempt.set(0);
       retrying.set(false);

@@ -27,7 +27,12 @@ function stubFetch(script) {
     });
   };
 }
+// Jitter (±20 %) is pinned to its midpoint so backoff times are exact; phase8.test.js covers jitter.
+test.beforeEach(() => {
+  mock.method(Math, "random", () => 0.5);
+});
 test.afterEach(() => {
+  mock.restoreAll();
   globalThis.fetch = realFetch;
   mock.timers.reset();
   globalThis.setTimeout = realSetTimeout;
@@ -98,9 +103,8 @@ test("invalid retry, retryDelay and idempotencyKey values throw at the factory",
   for (const fixed of ["unsupported value", "my-key", ""]) {
     assert.throws(() => api.post("/x", { idempotencyKey: fixed }), /idempotencyKey can't be a fixed string/, "fixed strings are refused (Phase 7)");
   }
-  for (const opt of ["idempotencyKey", "retry", "retryDelay"]) {
-    assert.throws(() => api("/x", { [opt]: 1 }), /unsupported option/, `${opt} is mutation-only`);
-  }
+  assert.throws(() => api("/x", { idempotencyKey: true }), /unsupported option/, "idempotencyKey is mutation-only");
+  assert.throws(() => api("/x", { retryDelay: 1 }), /retryDelay has no effect without retry/, "GET has the same retryDelay rule (Phase 8)");
   api.post("/x", { idempotencyKey: true, retry: 5, retryDelay: 0 });
 });
 

@@ -214,8 +214,7 @@ api.post("/x", { idempotencyKey: true, retry: 1.5 });
 api.post("/x", { idempotencyKey: "my-key" });
 // @ts-expect-error — retryDelay is milliseconds
 api.post("/x", { idempotencyKey: true, retry: 1, retryDelay: "250" });
-// @ts-expect-error — GET resources don't retry
-api("/x", { retry: 1 });
+api("/x", { retry: 1 }); // GET retries are allowed since Phase 8 (no idempotency key needed)
 // @ts-expect-error — nor take idempotency keys
 api("/x", { idempotencyKey: true });
 
@@ -255,3 +254,24 @@ api.post("/orders", { idempotencyKey: true, retry: someNumber });
 keyed.attempt(1);
 
 void [att, rtr, okOpts, k, rc];
+
+// ---- Phase 8: GET retries ---------------------------------------------------------------------------------
+const retried = api<Task[]>("/api/tasks", { retry: 2, retryDelay: 100, timeout: 5000, problemDetails: true });
+const retriedData: Task[] | undefined = retried.data();
+api("/api/tasks", { retry: 0 });
+api("/api/tasks", { retry: 5, query: () => ({ q: "x" }), debounce: 250, initial: [] });
+
+// @ts-expect-error — retryDelay needs retry
+api("/api/tasks", { retryDelay: 100 });
+// @ts-expect-error — retry 0 takes no retryDelay
+api("/api/tasks", { retry: 0, retryDelay: 100 });
+// @ts-expect-error — GET retry counts are 1–5 literals too
+api("/api/tasks", { retry: 6 });
+// @ts-expect-error — no idempotency keys on GET
+api("/api/tasks", { retry: 1, idempotencyKey: true });
+// @ts-expect-error — no exclusive on GET
+api("/api/tasks", { exclusive: true });
+// @ts-expect-error — the seed still has to match T
+api<Task[]>("/api/tasks", { retry: 1, initial: 1 });
+
+void [retriedData];
