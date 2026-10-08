@@ -136,6 +136,7 @@ test("package and deployment docs link to the canonical page instead of copying 
     "ssr/README.md",
     "sanitize/README.md",
     "storage/README.md",
+    "api/README.md",
     "create/templates/app/README.md",
     "create/templates/basic/README.md",
     "create/templates/typescript/README.md",

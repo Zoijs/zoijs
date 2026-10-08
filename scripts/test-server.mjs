@@ -14,7 +14,7 @@
 // Every suite has its own port so suites can run concurrently (enforced by
 // scripts/tests/ci-consistency.test.mjs):
 //   framework 7310 · router 3100 · resource 3200 · head 3300 · action 3400 · storage 3600 ·
-//   forms 3700 · sanitize 3800 · examples/task-board 3500 · examples/admin 3520 · examples/contacts 3530
+//   forms 3700 · sanitize 3800 · api 3900 · examples/task-board 3500 · examples/admin 3520 · examples/contacts 3530
 
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";

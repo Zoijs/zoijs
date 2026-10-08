@@ -51,6 +51,7 @@ export const PACKAGES = {
   core: "framework", router: "router", resource: "resource", action: "action", head: "head",
   forms: "forms", storage: "storage", i18n: "i18n", ssr: "ssr", sanitize: "sanitize",
   testing: "testing", devtools: "devtools", "eslint-plugin": "eslint-plugin", create: "create",
+  api: "api",
 };
 const LIFECYCLE = ["preinstall", "install", "postinstall", "prepare", "prepack", "postpack", "prepublish", "prepublishOnly", "publish", "postpublish"];
 // Files that must never ship in a tarball.
