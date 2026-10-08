@@ -1,4 +1,4 @@
-// @zoijs/api example: a same-origin JSON list, an HTTP error, and a blocked cross-origin URL.
+// @zoijs/api example: a same-origin JSON list, a params URL, an HTTP error, and a blocked cross-origin URL.
 // The "API" is static JSON served next to this page.
 
 import { html, mount, each } from "@zoijs/core";
@@ -14,6 +14,16 @@ function Tasks() {
         if (tasks.error()) return html`<p role="alert">Failed: ${tasks.error().message}</p>`;
         return html`<ul>${each(() => tasks.data() ?? [], (t) => t.id, (t) => html`<li>${t.title}</li>`)}</ul>`;
       }}
+    </section>
+  `;
+}
+
+// Route-style params: the value fills exactly one encoded path segment.
+function TaskDetail({ file }) {
+  const task = api("./data/tasks/:file", { params: { file } });
+  return html`
+    <section id="detail">
+      ${() => (task.data() ? html`<p><strong>${task.data().title}</strong> — ${task.data().done ? "done" : "open"}</p>` : html`<p class="muted">${task.error() ? task.error().message : "Loading…"}</p>`)}
     </section>
   `;
 }
@@ -36,6 +46,8 @@ function App() {
   return html`
     <h1>@zoijs/api</h1>
     ${Tasks()}
+    <h2>Task detail (params)</h2>
+    ${TaskDetail({ file: "2.json" })}
     <h2>HTTP error</h2>
     ${Failing({ id: "missing", url: "./data/missing.json" })}
     <h2>Cross-origin (blocked, no request is sent)</h2>

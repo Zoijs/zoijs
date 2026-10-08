@@ -24,6 +24,11 @@ test("example: refresh() sends another GET", async ({ page }) => {
   await expect(page.locator("#tasks li")).toHaveCount(3);
 });
 
+test("example: params fill the task-detail URL", async ({ page }) => {
+  await page.goto(EXAMPLE);
+  await expect(page.locator("#detail strong")).toHaveText("Ship @zoijs/api");
+});
+
 test("example: a 404 is a structured http ApiError", async ({ page }) => {
   await page.goto(EXAMPLE);
   const alert = page.locator("#missing [role=alert]");
@@ -91,7 +96,122 @@ test("real fetch: a redirect to another origin fails; a same-origin redirect is 
 test("real fetch: a network failure is type network", async ({ page }) => {
   await page.route(/\/__api\/down/, (r) => r.abort("connectionrefused"));
   await page.goto(EXAMPLE);
-  const { error } = await run(page, "/__api/down?token=secret");
+  const { error } = await run(page, "/__api/down?cursor=secret");
   expect(error).toMatchObject({ name: "ApiError", type: "network", status: null, method: "GET", url: "http://127.0.0.1:3900/__api/down" });
   expect(error.message).not.toContain("secret");
+});
+
+// ---- Phase 2: params / query / reactive queries, with real fetch and URL --------------------------
+
+// Every /__echo/ request answers with the URL the browser actually sent.
+async function echo(page, { delay } = {}) {
+  await page.route(/\/__echo\//, async (r) => {
+    const url = r.request().url();
+    const ms = delay ? delay(url) : 0;
+    if (ms) await new Promise((res) => setTimeout(res, ms));
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url }) }).catch(() => {});
+  });
+}
+
+test("params: one encoded segment each; traversal can't leave the route", async ({ page }) => {
+  await echo(page);
+  await page.goto(EXAMPLE);
+  const sent = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const out = {};
+    for (const name of ["abc/123", "../../admin", "%2e%2e", "a b?c#d", "café", "//evil.example"]) {
+      const r = api("/__echo/files/:name/meta", { params: { name } });
+      for (let i = 0; i < 200 && r.loading(); i++) await new Promise((res) => setTimeout(res, 10));
+      out[name] = r.data()?.url ?? r.error()?.type;
+    }
+    return out;
+  });
+  const base = "http://127.0.0.1:3900/__echo/files/";
+  expect(sent).toEqual({
+    "abc/123": `${base}abc%2F123/meta`,
+    "../../admin": `${base}..%2F..%2Fadmin/meta`,
+    "%2e%2e": `${base}%252e%252e/meta`,
+    "a b?c#d": `${base}a%20b%3Fc%23d/meta`,
+    "café": `${base}caf%C3%A9/meta`,
+    "//evil.example": `${base}%2F%2Fevil.example/meta`,
+  });
+});
+
+test("query: encoded by URLSearchParams, merged with the template's query, no fragment sent", async ({ page }) => {
+  await echo(page);
+  await page.goto(EXAMPLE);
+  const url = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const r = api("/__echo/search?page=1&keep=yes#frag", { query: { q: "a b&c=d?#✓", page: 2, exact: true, none: null } });
+    for (let i = 0; i < 200 && r.loading(); i++) await new Promise((res) => setTimeout(res, 10));
+    return r.data().url;
+  });
+  const u = new URL(url);
+  expect(u.pathname).toBe("/__echo/search");
+  expect([...u.searchParams]).toEqual([["page", "2"], ["keep", "yes"], ["q", "a b&c=d?#✓"], ["exact", "true"]]);
+  expect(url).not.toContain("#");
+});
+
+test("the built URL is still checked: cross-origin templates and secret keys never request", async ({ page }) => {
+  const external = [];
+  page.on("request", (r) => {
+    if (!r.url().startsWith("http://127.0.0.1:3900/")) external.push(r.url());
+  });
+  await echo(page);
+  await page.goto(EXAMPLE);
+  const result = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const settle = async (r) => {
+      for (let i = 0; i < 200 && r.loading(); i++) await new Promise((res) => setTimeout(res, 10));
+      return r.error()?.type ?? "ok";
+    };
+    const cross = await settle(api("http://localhost:3900/__echo/:id", { params: { id: 1 }, query: { a: 1 } }));
+    let secret;
+    try {
+      api("/__echo/reset", { query: { access_token: "x" } });
+    } catch (e) {
+      secret = e instanceof TypeError ? e.name : "other";
+    }
+    return { cross, secret };
+  });
+  expect(result).toEqual({ cross: "security", secret: "TypeError" });
+  expect(external).toEqual([]);
+});
+
+test("reactive query: refetches on change, latest wins, nothing after unmount", async ({ page }) => {
+  // q=a answers slowly, so it would land last if stale answers weren't ignored.
+  await echo(page, { delay: (url) => (url.includes("q=a&") || url.endsWith("q=a") ? 400 : 20) });
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const core = await import("/framework/src/index.js");
+    const { api } = await import("/api/src/index.js");
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => {
+      sent.push(String(url).replace(location.origin, ""));
+      return realFetch(url, init);
+    };
+    const q = core.createState("a");
+    let results;
+    const host = document.createElement("div");
+    const unmount = core.mount(() => {
+      results = api("/__echo/search", { query: () => ({ q: q.get() }) });
+      return core.html`<p>${() => results.data()?.url ?? ""}</p>`;
+    }, host);
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    await wait(0);
+    q.set("ab");
+    await wait(0);
+    q.set("abc");
+    await wait(600); // past the slow q=a answer
+    const shown = host.textContent;
+    unmount();
+    q.set("after-unmount");
+    await wait(200);
+    window.fetch = realFetch;
+    return { sent, shown, data: results.data()?.url };
+  });
+  expect(out.sent).toEqual(["/__echo/search?q=a", "/__echo/search?q=ab", "/__echo/search?q=abc"]);
+  expect(out.shown).toBe("http://127.0.0.1:3900/__echo/search?q=abc");
+  expect(out.data).toBe("http://127.0.0.1:3900/__echo/search?q=abc");
 });
