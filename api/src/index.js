@@ -32,16 +32,22 @@
 
 import { onCleanup, computed, effect } from "@zoijs/core";
 import { resource } from "@zoijs/resource";
+import { action } from "@zoijs/action";
+
+// Every object api() returns, mapped to its internals. Module-private, so it can't be forged: an
+// object that merely has a refresh() method is not an api() resource (invalidation checks this).
+const RESOURCES = new WeakMap();
 
 const METHOD = "GET";
 // `type/json`, `type/anything+json`, with optional parameters (`; charset=utf-8`).
 const JSON_TYPE = /^[^/\s;]+\/(?:[^/\s;]+\+)?json$/;
+const ACCEPT = "application/json, text/plain;q=0.9, */*;q=0.8";
 
 /** A failed api() request. `type`: "http" | "network" | "security" | "parse" | "config". */
 export class ApiError extends Error {
   /**
    * @param {string} message
-   * @param {{ type: string, status?: number | null, statusText?: string, url?: string | null, cause?: unknown }} details
+   * @param {{ type: string, status?: number | null, statusText?: string, method?: string, url?: string | null, cause?: unknown }} details
    */
   constructor(message, details) {
     super(message, details.cause !== undefined ? { cause: details.cause } : undefined);
@@ -49,7 +55,7 @@ export class ApiError extends Error {
     this.type = details.type;
     this.status = details.status ?? null;
     this.statusText = details.statusText ?? "";
-    this.method = METHOD;
+    this.method = details.method ?? METHOD;
     this.url = details.url ?? null;
   }
 }
@@ -72,15 +78,15 @@ const baseHref = (page) => (globalThis.document && typeof globalThis.document.ba
 
 // Resolve `input` against the page, apply the query entries, then check the FINAL URL against the
 // page origin. Returns the URL, or throws a security/config ApiError.
-function resolveSameOrigin(input, entries) {
+function resolveSameOrigin(input, entries, method) {
   const page = pageLocation();
-  if (!page) throw new ApiError(`${METHOD} blocked: api() needs an http(s) page origin to check the URL against`, { type: "security" });
+  if (!page) throw new ApiError(`${method} blocked: api() needs an http(s) page origin to check the URL against`, { type: "security", method });
   let target;
   try {
     target = new URL(input, baseHref(page));
   } catch {
     // Don't echo the raw input: it may be what the developer considers secret.
-    throw new ApiError(`${METHOD} blocked: invalid URL`, { type: "security" });
+    throw new ApiError(`${method} blocked: invalid URL`, { type: "security", method });
   }
   // An option key replaces every value the template had for it: delete, then append each value.
   for (const [key, values] of entries) {
@@ -89,14 +95,14 @@ function resolveSameOrigin(input, entries) {
   }
   target.hash = ""; // never part of an HTTP request
   for (const key of target.searchParams.keys()) {
-    if (isSensitiveKey(key)) throw new ApiError(sensitiveMessage(key), { type: "config", url: safeUrl(target) });
+    if (isSensitiveKey(key)) throw new ApiError(sensitiveMessage(key), { type: "config", method, url: safeUrl(target) });
   }
   if (target.username || target.password) {
-    throw new ApiError(`${METHOD} blocked: credentials in the URL are not allowed`, { type: "security", url: safeUrl(target) });
+    throw new ApiError(`${method} blocked: credentials in the URL are not allowed`, { type: "security", method, url: safeUrl(target) });
   }
   // Same origin AND an http(s) URL: a blob: URL inherits the page's origin but isn't an API request.
   if (!isHttp(target) || target.origin !== page.origin) {
-    throw new ApiError(`${METHOD} blocked: ${isHttp(target) ? target.origin : target.protocol} is not the page's origin (api() allows same-origin URLs only)`, { type: "security", url: safeUrl(target) });
+    throw new ApiError(`${method} blocked: ${isHttp(target) ? target.origin : target.protocol} is not the page's origin (api() allows same-origin URLs only)`, { type: "security", method, url: safeUrl(target) });
   }
   return target;
 }
@@ -105,31 +111,34 @@ const isHttp = (u) => u.protocol === "https:" || u.protocol === "http:";
 // The `url` field of an error: origin + path. No credentials, query string or fragment.
 const safeUrl = (u) => (isHttp(u) ? u.origin + u.pathname : u.protocol);
 
-async function request(input, entries, signal) {
-  const target = resolveSameOrigin(input, entries);
+// The one transport for every method. `body` is an already-serialized JSON string, or undefined
+// for no body (and then no Content-Type). Responses are parsed the same way for every method.
+async function request(input, entries, signal, method = METHOD, body) {
+  const target = resolveSameOrigin(input, entries, method);
   const where = safeUrl(target);
   let res;
   try {
     res = await globalThis.fetch(target.href, {
-      method: METHOD,
+      method,
       mode: "same-origin",
       credentials: "same-origin",
-      headers: { Accept: "application/json, text/plain;q=0.9, */*;q=0.8" },
+      headers: body === undefined ? { Accept: ACCEPT } : { Accept: ACCEPT, "Content-Type": "application/json" },
+      body,
       signal,
     });
   } catch {
     // The platform's message can include the full URL; ours carries none of it.
-    throw new ApiError(`${METHOD} request failed: network error`, { type: "network", url: where });
+    throw new ApiError(`${method} request failed: network error`, { type: "network", method, url: where });
   }
   // Defense in depth for fetch implementations that don't enforce mode "same-origin".
   if (res.redirected && res.url && !sameOrigin(res.url, target.origin)) {
     discard(res);
-    throw new ApiError(`${METHOD} request blocked: redirected to another origin`, { type: "security", url: where });
+    throw new ApiError(`${method} request blocked: redirected to another origin`, { type: "security", method, url: where });
   }
   if (!res.ok) {
     discard(res);
     const statusText = typeof res.statusText === "string" ? res.statusText : "";
-    throw new ApiError(`${METHOD} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", status: res.status, statusText, url: where });
+    throw new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where });
   }
   if (res.status === 204 || res.status === 205) {
     discard(res);
@@ -140,14 +149,14 @@ async function request(input, entries, signal) {
   try {
     text = await res.text();
   } catch {
-    throw new ApiError(`${METHOD} request failed: network error while reading the response`, { type: "network", status: res.status, url: where });
+    throw new ApiError(`${method} request failed: network error while reading the response`, { type: "network", method, status: res.status, url: where });
   }
   if (!JSON_TYPE.test(mediaType)) return text;
   if (text === "") return null;
   try {
     return JSON.parse(text);
   } catch {
-    throw new ApiError(`${METHOD} request failed: the response is not valid JSON`, { type: "parse", status: res.status, url: where });
+    throw new ApiError(`${method} request failed: the response is not valid JSON`, { type: "parse", method, status: res.status, url: where });
   }
 }
 
@@ -416,7 +425,7 @@ export function api(url, options) {
     });
   });
 
-  return {
+  const handle = {
     data: inner.data,
     loading: inner.loading,
     error: inner.error,
@@ -426,4 +435,144 @@ export function api(url, options) {
     },
     dispose,
   };
+  // For invalidation: refresh only while alive — a disposed/unmounted target is skipped quietly.
+  RESOURCES.set(handle, () => {
+    if (!disposed) inner.refresh();
+  });
+  return handle;
 }
+
+// ---- mutations: api.post / api.put / api.patch / api.delete ------------------------------------
+
+// The run() argument. Without `/:name` placeholders in the URL, it IS the body (`run(body)`); with
+// them, it must be `{ params, body? }`. The rule depends only on the URL, never on the argument's
+// shape, so a body that happens to have a `params` key is still just a body.
+function readRunInput(tpl, method, args) {
+  if (args.length > 1) throw configError("run() takes one argument");
+  const input = args[0];
+  if (!tpl.names.size) {
+    if (method === "DELETE" && input !== undefined) throw configError("DELETE sends no body — call run() with no argument");
+    return { params: undefined, body: input };
+  }
+  const allowed = method === "DELETE" ? "{ params }" : "{ params, body }";
+  if (input === null || typeof input !== "object" || Array.isArray(input)) throw configError(`the URL has /:name placeholders, so run() takes ${allowed}`);
+  let params, body;
+  for (const [key, value] of ownEntries(input, "run()'s argument")) {
+    if (key === "params") params = value;
+    else if (key === "body" && method !== "DELETE") body = value;
+    else throw configError(`run() takes ${allowed}, not "${key}"${method === "DELETE" && key === "body" ? " (DELETE sends no body)" : ""}`);
+  }
+  return { params, body };
+}
+
+// JSON.stringify, but refusing what it would silently change: functions and symbols (dropped),
+// non-finite numbers (become null), non-plain objects such as Map/Set/class instances (become {}),
+// and bigint (not JSON). Cycles throw on their own. Values with toJSON (e.g. Date) are sent as their toJSON.
+// `undefined` means no body; inside an object an undefined property is left out, as JSON does.
+function serializeBody(body) {
+  if (body === undefined) return undefined;
+  let text;
+  try {
+    text = JSON.stringify(body, (_key, value) => {
+      const t = typeof value;
+      if (t === "function" || t === "symbol") throw new ConfigError("a function or symbol");
+      if (t === "bigint") throw new ConfigError("a bigint"); // never coerced
+      if (t === "number" && !Number.isFinite(value)) throw new ConfigError("a non-finite number");
+      if (t === "object" && value !== null && !Array.isArray(value)) {
+        const proto = Object.getPrototypeOf(value);
+        if (proto !== Object.prototype && proto !== null) throw new ConfigError("an object that isn't a plain object or array");
+      }
+      return value;
+    });
+  } catch (err) {
+    // Never the body, a key path, or the platform's message (it can quote property names).
+    const what = err instanceof ConfigError ? err.message : "a cycle or a getter/toJSON that threw";
+    throw configError(`the request body can't be sent as JSON: it contains ${what}`);
+  }
+  return text;
+}
+
+function mutation(method, url, options) {
+  if (typeof url !== "string" || url.trim() === "") throw new TypeError(`api.${method.toLowerCase()}(url): url must be a non-empty string`);
+  let query, invalidate = [], exclusive = false;
+  if (options !== undefined) {
+    for (const [key, value] of ownEntries(options, "options")) {
+      if (key === "query") {
+        if (typeof value === "function") throw configError("a mutation's query is static — pass an object (per-call values go in the URL's params)");
+        query = value;
+      } else if (key === "invalidate") invalidate = readTargets(value);
+      else if (key === "exclusive") {
+        if (value !== undefined && typeof value !== "boolean") throw configError("exclusive must be true or false");
+        exclusive = !!value;
+      } else throw configError(`unsupported option "${key}" — a mutation accepts only query, invalidate and exclusive`);
+    }
+  }
+  const tpl = parseTemplate(url);
+  const entries = query === undefined ? [] : queryEntries(query);
+
+  // The action's fn: build, serialize, send. Anything wrong becomes error() — run() never rejects.
+  let lastCall = null;
+  const send = (...args) => {
+    const call = { ok: false };
+    lastCall = call;
+    try {
+      const { params, body } = readRunInput(tpl, method, args);
+      const path = fillParams(tpl, params);
+      const text = serializeBody(body);
+      return request(path, entries, undefined, method, text).then(
+        (value) => {
+          call.ok = true;
+          return value;
+        },
+        (err) => {
+          throw err instanceof ApiError ? err : new ApiError(`${method} request failed`, { type: "network", method });
+        },
+      );
+    } catch (err) {
+      if (!(err instanceof ConfigError)) throw err;
+      return Promise.reject(new ApiError(`${method} request not sent: ${err.message.slice("api(): ".length)}`, { type: "config", method }));
+    }
+  };
+  const act = action(send, { exclusive });
+
+  return {
+    // Invalidate after the action has settled, only when THIS call's request succeeded on the
+    // server. A call that joined an exclusive run (send wasn't called) doesn't invalidate twice.
+    run(...args) {
+      const before = lastCall;
+      const pending = act.run(...args);
+      const call = lastCall !== before ? lastCall : null;
+      return pending.then((value) => {
+        if (call && call.ok) for (const refresh of invalidate) refresh();
+        return value;
+      });
+    },
+    pending: act.pending,
+    error: act.error,
+    done: act.done,
+    result: act.result,
+    reset: act.reset,
+  };
+}
+
+// invalidate: one api() resource or an array of them → their (deduplicated) refreshers. Only real
+// api() resources are accepted; the caller's array is read, not kept or mutated.
+function readTargets(value) {
+  const list = Array.isArray(value) ? value : [value];
+  const out = new Set();
+  for (let i = 0; i < list.length; i++) {
+    const refresh = list[i] !== null && typeof list[i] === "object" ? RESOURCES.get(list[i]) : undefined;
+    if (!refresh) throw configError(`invalidate${Array.isArray(value) ? `[${i}]` : ""} must be a resource returned by api()`);
+    out.add(refresh);
+  }
+  return [...out];
+}
+
+/** POST a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+api.post = (url, options) => mutation("POST", url, options);
+/** PUT a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+api.put = (url, options) => mutation("PUT", url, options);
+/** PATCH a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+api.patch = (url, options) => mutation("PATCH", url, options);
+/** DELETE, with no body. `run()`, or `run({ params })` when the URL has `/:name` segments. */
+api.delete = (url, options) => mutation("DELETE", url, options);
