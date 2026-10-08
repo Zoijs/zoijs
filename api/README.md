@@ -356,6 +356,8 @@ non-2xx → `"http"`, invalid JSON → `"parse"`), and every URL gets the same s
   that run's promise instead of sending again. Default `false`, exactly as in `@zoijs/action`.
 - **`timeout`** and **`problemDetails`** — as for `api()`; see [Timeouts](#timeouts) and
   [Problem details](#problem-details).
+- **`idempotencyKey`**, **`retry`** and **`retryDelay`** — see
+  [Idempotency keys and retries](#idempotency-keys-and-retries). Mutation-only.
 
 Anything else — `headers`, `method`, `credentials`, `mode`, `redirect`, `cache`, `initial`, … —
 throws.
@@ -384,10 +386,11 @@ const save = api.post("/api/tasks", { invalidate: [tasks, dashboard] });
   resource or a mutation throws a `TypeError`: resources are tracked privately, so they can't
   be spoofed. Nothing is invalidated by guessing from URLs.
 
-### No retries, no cancellation, no optimism
+### No implicit retries, no cancellation, no optimism
 
-- **Mutations are never retried** — not on network errors, not on 5xx. Repeating a POST can
-  create a second order, payment or email; retries need idempotency on the server first.
+- **Mutations are never retried unless you opt in** with `idempotencyKey: true` and `retry` — see
+  [Idempotency keys and retries](#idempotency-keys-and-retries). Repeating a POST can create a
+  second order, payment or email.
 - **Unmounting doesn't abort a mutation.** An in-flight request runs to completion even if its
   component unmounts. Only an explicit `timeout` aborts one — and that only stops the browser
   *waiting*: it never undoes the server operation.
@@ -439,8 +442,90 @@ const save = api.post("/api/orders", { timeout: 15_000 });
   `dispose()` or unmount is aborted quietly and is never reported as a timeout. Timers are
   cleared when the request ends, however it ends.
 - **A mutation timeout doesn't mean the server didn't act.** The order may have been placed; the
-  browser just stopped waiting. Mutations are never retried after a timeout — reload the data
-  (or check with the server) before letting the user try again.
+  browser just stopped waiting. A timed-out mutation is only retried if you opted in with an
+  idempotency key and `retry`; otherwise reload the data (or check with the server) before
+  letting the user try again.
+- With `retry`, **each attempt gets its own `timeout` window**; the backoff waits between
+  attempts aren't counted.
+
+## Idempotency keys and retries
+
+```js
+const createOrder = api.post("/api/orders", {
+  idempotencyKey: true,
+  retry: 2,
+  timeout: 10_000,
+});
+
+await createOrder.run({ sku: "ABC-123", quantity: 1 });
+```
+
+> **The server contract.** Sending an `Idempotency-Key` header does **not** make an endpoint
+> idempotent. Your server must store each key and, when it sees a key again, return the original
+> outcome instead of performing the operation a second time — according to its own idempotency
+> policy (how long keys are kept, what a key reused with a different body means). Zoijs can't
+> prevent duplicates without that cooperation.
+
+**Retries are off by default** — a mutation makes exactly one attempt. To retry, you opt in
+twice: `idempotencyKey: true` *and* `retry`. `retry` without `idempotencyKey: true` throws, for
+**every** method: PUT, PATCH and DELETE aren't assumed to be idempotent either. So: if Zoijs
+retries a mutation, it always sends an idempotency key.
+
+### Idempotency keys
+
+- `idempotencyKey: true` sends `Idempotency-Key: <uuid>` — a v4 UUID from
+  `crypto.randomUUID()` (or built from `crypto.getRandomValues()` where `randomUUID` isn't
+  available). Never `Math.random`; with no cryptographic source the run fails with a `"config"`
+  error and nothing is sent.
+- **One key per logical `run()`**: every retry of that run reuses it, and the next `run()` gets a
+  new one. A call that joins an `exclusive` run shares that run's key and attempts.
+- The key goes only in that header — never in the URL, query, body, `error.message`,
+  `error.url`, problem details, the console or monitoring. Treat it like a credential.
+- It works without `retry` too (a single attempt with a key). Custom, caller-supplied keys aren't
+  supported yet: `idempotencyKey` is `true` or `false`.
+
+### What's retried
+
+`retry: n` means **up to n extra attempts** after the first — `retry: 2` is at most 3 requests.
+`n` is a whole number from 0 to 5.
+
+| Failure | Retried? |
+|---|---|
+| network error (offline, connection reset, DNS) | yes |
+| `"timeout"` (the `timeout` option ran out) | yes |
+| HTTP 408, 425, 429, 500, 502, 503, 504 | yes |
+| any other HTTP status — e.g. 400, 401, 403, 404, 405, 409, 410, 412, 422 | no |
+| `"parse"`, `"config"`, `"security"` | never |
+
+409 Conflict isn't retried: it isn't assumed to mean "idempotency key in use".
+
+### Backoff and `Retry-After`
+
+- Retry *n* waits `retryDelay × 2^(n-1)`: with the default `retryDelay: 250`, that's 250 ms,
+  500 ms, 1 s, 2 s, 4 s. No jitter. Every wait is capped at 30 s. `retryDelay` is milliseconds
+  (validated like `timeout`) and needs `retry`.
+- On 429 and 503, a `Retry-After` header — seconds (`Retry-After: 5`) or an HTTP-date — makes the
+  wait at least that long. If it asks for **more than 30 s**, the mutation stops retrying and
+  fails with that response instead of retrying early. An unparseable value is ignored.
+
+### One logical run
+
+- `pending()` stays `true` through every attempt and wait; `done()` becomes `true` only when an
+  attempt succeeds, and `result()` is that response.
+- Failed attempts that are retried never show in `error()` and are never reported to
+  `configure({ onError })`: a mutation that recovers reports nothing. If every attempt fails,
+  `error()` is the **last** attempt's error and it is reported once.
+- `invalidate` refreshes its resources **once**, after the run finally succeeds — never after a
+  failed attempt, never after exhaustion.
+- The request is built **once per run** and replayed exactly: same method, URL, query, key and
+  body bytes. A JSON body is serialized once — getters and `toJSON` run once, not per attempt.
+- With `problemDetails: true`, only the final error's problem body is read; retried responses are
+  discarded unread.
+- **When the component unmounts**, an attempt already sent may finish (its result is ignored, as
+  `@zoijs/action` does), but a scheduled retry is cancelled and no new attempt starts.
+- **FormData bodies can't be retried**: `retry > 0` with a FormData body is a `"config"` error and
+  nothing is sent. Uploads can still use `idempotencyKey: true` with `retry: 0`.
+- GET resources (`api(url)`) don't retry.
 
 ## Problem details
 
@@ -571,7 +656,8 @@ see the [production security checklist](https://zoijs.dev/production-security).
 
 - **JSON and `FormData` bodies only** — no `Blob`, `ArrayBuffer`, `URLSearchParams` or streams.
 - **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
-- **No retries, idempotency keys or optimistic updates.**
+- **No implicit retries** (mutation retries are opt-in and need an idempotency key), **no GET
+  retries, no custom headers or idempotency keys, no optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
 
 ## License

@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON and FormData bodies, explicit invalidation, timeouts, opt-in problem details and `initial` seeding.
+Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON and FormData bodies, explicit invalidation, timeouts, opt-in problem details, `initial` seeding, idempotency keys and opt-in mutation retries.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -87,3 +87,15 @@ Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/pa
   multipart boundary), recognized by the platform's brand check (cross-realm ok, look-alikes and
   `Object.create(FormData.prototype)` refused). Blob, ArrayBuffer, URLSearchParams and streams
   are still refused.
+- **`idempotencyKey: true`** on mutations — an `Idempotency-Key` header with a v4 UUID from
+  `crypto.randomUUID()` / `getRandomValues()` (never `Math.random`; neither available → a
+  `"config"` error, nothing sent). One key per logical `run()`, reused by its retries and shared
+  by joined `exclusive` calls. Never in URLs, bodies, errors or monitoring.
+- **`retry: 0–5`** (extra attempts; default 0) and **`retryDelay`** (base ms, default 250) on
+  mutations — `retry` requires `idempotencyKey: true` for every method. Retried: network errors,
+  timeouts, HTTP 408/425/429/500/502/503/504; never other statuses, parse, config or security.
+  Exponential backoff capped at 30 s; `Retry-After` (seconds or HTTP-date) on 429/503 lengthens
+  the wait, and one over 30 s ends the retries. One logical run: `pending()` throughout, only the
+  final error in `error()` and `onError`, invalidation once after eventual success, the request
+  built and the JSON body serialized once, a fresh `timeout` per attempt, scheduled retries
+  cancelled on unmount. FormData bodies can't be retried.

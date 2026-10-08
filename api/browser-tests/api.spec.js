@@ -565,3 +565,114 @@ test("a FormData from another realm (iframe) is accepted; spoofs are refused", a
   expect(seen[0]).toMatch(/^multipart\/form-data; boundary=/);
   expect(out.results).toEqual(["config", "config"]);
 });
+
+// ---- Phase 6: idempotency keys and retries (real fetch) ------------------------------------------------
+
+// /__retry/<plan>: each request records its Idempotency-Key; the plan says how attempts answer —
+// "f" fail with 503, "n" drop the connection, "s" hang 600 ms, "k" succeed (the last letter repeats).
+async function retryRoute(page) {
+  const seen = [];
+  await page.route(/\/__retry\//, async (r) => {
+    const req = r.request();
+    const plan = new URL(req.url()).pathname.split("/")[2];
+    const n = seen.filter((x) => x.path === new URL(req.url()).pathname && x.method === req.method()).length;
+    seen.push({ path: new URL(req.url()).pathname, method: req.method(), key: req.headers()["idempotency-key"] ?? null, body: req.postData() ?? null });
+    const step = plan[Math.min(n, plan.length - 1)];
+    if (step === "n") return r.abort("connectionreset");
+    if (step === "s") await new Promise((res) => setTimeout(res, 600));
+    if (step === "f") return r.fulfill({ status: 503, contentType: "application/json", body: "{}" }).catch(() => {});
+    return r.fulfill({ status: req.method() === "GET" ? 200 : 201, contentType: "application/json", body: JSON.stringify({ ok: true, n }) }).catch(() => {});
+  });
+  return seen;
+}
+const runInPage = (page, src) =>
+  page.evaluate(async (src) => {
+    const core = await import("/framework/src/index.js");
+    const { api } = await import("/api/src/index.js");
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    return new Function("core", "api", "wait", `return (async () => { ${src} })()`)(core, api, wait);
+  }, src);
+
+test("retry: a failed POST succeeds on retry with the SAME Idempotency-Key; a new run gets a new key", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const out = await runInPage(page, `
+    const m = api.post("/__retry/nk/orders", { idempotencyKey: true, retry: 2, retryDelay: 20 });
+    const first = await m.run({ sku: "ABC-123" });
+    const second = await m.run({ sku: "ABC-123" });
+    return { first, second, done: m.done(), error: m.error() };
+  `);
+  expect(out.first).toEqual({ ok: true, n: 1 });
+  expect(out.done).toBe(true);
+  expect(out.error).toBeNull();
+  const posts = seen.filter((x) => x.method === "POST");
+  expect(posts.map((x) => x.body)).toEqual(['{"sku":"ABC-123"}', '{"sku":"ABC-123"}', '{"sku":"ABC-123"}']);
+  expect(posts[0].key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  expect(posts[1].key).toBe(posts[0].key);
+  expect(posts[2].key).not.toBe(posts[0].key); // the second run.run(): first attempt succeeded ("k" repeats)
+});
+
+test("retry: 503 and timeouts are retried; exhaustion ends with the final error", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const out = await runInPage(page, `
+    const a = api.post("/__retry/fk/a", { idempotencyKey: true, retry: 1, retryDelay: 20 });
+    const b = api.post("/__retry/sk/b", { idempotencyKey: true, retry: 1, retryDelay: 20, timeout: 200 });
+    const c = api.put("/__retry/f/c", { idempotencyKey: true, retry: 2, retryDelay: 20 });
+    await a.run({}); await b.run({}); await c.run({});
+    return { a: a.done(), b: b.done(), c: [c.done(), c.error()?.type, c.error()?.status] };
+  `);
+  expect(out).toEqual({ a: true, b: true, c: [false, "http", 503] });
+  const count = (p) => seen.filter((x) => x.path.startsWith(p)).length;
+  expect([count("/__retry/fk/"), count("/__retry/sk/"), count("/__retry/f/")]).toEqual([2, 2, 3]);
+});
+
+test("retry + exclusive + invalidation: one sequence, one key, one refresh after eventual success", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  await runInPage(page, `
+    const list = api("/__retry/k/list");
+    await wait(100);
+    const m = api.post("/__retry/fk/orders", { exclusive: true, idempotencyKey: true, retry: 2, retryDelay: 30, invalidate: list });
+    await Promise.all([m.run({ n: 1 }), m.run({ n: 2 })]);
+    await wait(150);
+    list.dispose();
+  `);
+  const posts = seen.filter((x) => x.method === "POST");
+  expect(posts).toHaveLength(2);
+  expect(new Set(posts.map((x) => x.key)).size).toBe(1);
+  expect(seen.filter((x) => x.method === "GET")).toHaveLength(2); // initial load + one invalidation
+});
+
+test("unmount during backoff cancels the scheduled retry; rendered errors never show the key", async ({ page }) => {
+  const seen = await retryRoute(page);
+  await page.goto(EXAMPLE);
+  const text = await runInPage(page, `
+    let m;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const unmount = core.mount(() => {
+      m = api.post("/__retry/f/gone", { idempotencyKey: true, retry: 3, retryDelay: 300 });
+      return core.html\`<p></p>\`;
+    }, host);
+    m.run({});
+    await wait(100); // first attempt failed; a retry is waiting
+    unmount();
+    await wait(800);
+    const shown = document.createElement("div");
+    document.body.append(shown);
+    let x;
+    core.mount(() => {
+      x = api.post("/__retry/f/shown", { idempotencyKey: true, retry: 1, retryDelay: 10 });
+      return core.html\`\${() => (x.error() ? core.html\`<p role="alert">\${x.error().message}</p>\` : null)}\`;
+    }, shown);
+    await x.run({ secret: 1 });
+    await wait(20);
+    return shown.textContent;
+  `);
+  expect(seen.filter((x) => x.path === "/__retry/f/gone")).toHaveLength(1);
+  const shownKeys = seen.filter((x) => x.path === "/__retry/f/shown").map((x) => x.key);
+  expect(shownKeys).toHaveLength(2);
+  expect(text).toMatch(/^POST request failed: 503/);
+  expect(text).not.toContain(shownKeys[0]);
+});
