@@ -83,7 +83,11 @@ test("real fetch: cross-origin, protocol-relative and backslash URLs are refused
   expect((await run(page, "http://127.0.0.1:3900/api/examples/tasks/data/tasks.json")).data).toHaveLength(3);
 });
 
-test("real fetch: a redirect to another origin fails; a same-origin redirect is followed", async ({ page }) => {
+test("real fetch: a redirect to another origin fails; a same-origin redirect is followed", async ({ page, browserName }) => {
+  // Playwright can't fulfill a 3xx in WebKit ("Cannot fulfill with redirect status"), so the faked
+  // redirect can't be built there. The client-side redirect check is unit-tested; Chromium and
+  // Firefox cover the browser's own mode: "same-origin" enforcement.
+  test.skip(browserName === "webkit", "Playwright route.fulfill can't return a redirect in WebKit");
   await page.route("**/__api/away", (r) => r.fulfill({ status: 302, headers: { Location: "http://localhost:3900/api/examples/tasks/data/tasks.json" } }));
   await page.route("**/__api/moved", (r) => r.fulfill({ status: 302, headers: { Location: "/api/examples/tasks/data/tasks.json" } }));
   await page.goto(EXAMPLE);
@@ -510,31 +514,57 @@ test("initial: no request on creation; refresh() fetches", async ({ page }) => {
   expect(out.sent).toBe(1);
 });
 
+// FormData bodies are checked against what the test server's POST /__echo actually received
+// (scripts/test-server.mjs) — real network bytes, not Playwright's request interception, which in
+// WebKit doesn't expose File/Blob contents of multipart bodies.
+function parseMultipart(contentType, base64) {
+  const buf = Buffer.from(base64, "base64");
+  const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(contentType || "");
+  expect(boundary, `multipart Content-Type: ${contentType}`).not.toBeNull();
+  const sep = Buffer.from("--" + (boundary[1] || boundary[2]));
+  const parts = [];
+  let at = buf.indexOf(sep);
+  while (at !== -1) {
+    const next = buf.indexOf(sep, at + sep.length);
+    if (next === -1) break;
+    const part = buf.subarray(at + sep.length + 2, next - 2); // skip CRLF after the boundary and before the next
+    const split = part.indexOf("\r\n\r\n");
+    const head = part.subarray(0, split).toString("latin1").toLowerCase().split("\r\n").map((l) => l.replace(/\s+/g, " ").trim()).sort().join("|");
+    parts.push({ head, body: part.subarray(split + 4) });
+    at = next;
+  }
+  return parts;
+}
+
 test("FormData is sent as multipart with a browser-generated boundary; JSON and none differ", async ({ page }) => {
-  const seen = [];
-  await page.route(/\/__upload/, async (r) => {
-    const req = r.request();
-    seen.push({ type: req.headers()["content-type"] ?? null, body: req.postData() ?? "" });
-    await r.fulfill({ status: 201, contentType: "application/json", body: "{}" });
-  });
   await page.goto(EXAMPLE);
-  await page.evaluate(async () => {
+  const out = await page.evaluate(async () => {
     const { api } = await import("/api/src/index.js");
+    let posts = 0;
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => (posts++, realFetch(url, init));
     const form = new FormData();
     form.append("description", "Profile photo");
     form.append("file", new Blob(["PNGDATA"], { type: "image/png" }), "me.png");
-    const up = api.post("/__upload/:id", { exclusive: true });
-    await Promise.all([up.run({ params: { id: 7 }, body: form }), up.run({ params: { id: 7 }, body: form })]);
-    const plain = api.post("/__upload");
-    await plain.run({ a: 1 });
-    await plain.run();
+    const up = api.post("/__echo/upload/:id", { exclusive: true });
+    const [a, b] = await Promise.all([up.run({ params: { id: 7 }, body: form }), up.run({ params: { id: 7 }, body: form })]);
+    const plain = api.post("/__echo/plain");
+    const json = await plain.run({ a: 1 });
+    const none = await plain.run();
+    window.fetch = realFetch;
+    return { posts, same: a === b, upload: a, json, none };
   });
-  expect(seen).toHaveLength(3); // exclusive: the double submit sent once
-  expect(seen[0].type).toMatch(/^multipart\/form-data; boundary=/);
-  expect(seen[0].body).toContain('name="description"');
-  expect(seen[0].body).toContain("PNGDATA");
-  expect(seen[1]).toEqual({ type: "application/json", body: '{"a":1}' });
-  expect(seen[2].type).toBeNull();
+  expect(out.posts).toBe(3); // exclusive: the double submit sent once
+  expect(out.same).toBe(true);
+  expect(out.upload.path).toBe("/__echo/upload/7");
+  expect(out.upload.contentType).toMatch(/^multipart\/form-data; boundary=/);
+  const parts = parseMultipart(out.upload.contentType, out.upload.body);
+  expect(parts.map((p) => p.head.includes('name="description"') || p.head.includes('name="file"'))).toEqual([true, true]);
+  expect(parts[1].body.toString("utf8")).toBe("PNGDATA");
+  expect(out.json.contentType).toBe("application/json");
+  expect(Buffer.from(out.json.body, "base64").toString("utf8")).toBe('{"a":1}');
+  expect(out.none.contentType).toBeNull();
+  expect(out.none.body).toBe("");
 });
 
 test("a FormData from another realm (iframe) is accepted; spoofs are refused", async ({ page }) => {
@@ -718,14 +748,8 @@ test("attempt() / retrying() follow a real retry; exclusive joiners see the same
 // platform fetch and check the server sees semantically equal multipart payloads each time — text
 // fields, file names, MIME types and exact binary bytes. Boundaries may differ; contents may not.
 test("FormData replay: the same FormData sends equivalent multipart payloads twice", async ({ page }) => {
-  const bodies = [];
-  await page.route(/\/__multipart/, async (r) => {
-    const req = r.request();
-    bodies.push({ type: req.headers()["content-type"], buf: req.postDataBuffer() });
-    await r.fulfill({ status: 201, contentType: "application/json", body: "{}" });
-  });
   await page.goto(EXAMPLE);
-  const before = await page.evaluate(async () => {
+  const out = await page.evaluate(async () => {
     const bytes = new Uint8Array(256);
     for (let i = 0; i < 256; i++) bytes[i] = i;
     const form = new FormData();
@@ -734,40 +758,24 @@ test("FormData replay: the same FormData sends equivalent multipart payloads twi
     form.append("blob", new Blob(["plain text\r\n--not-a-boundary"], { type: "text/plain" }), "notes.txt");
     const snapshot = async () => Promise.all([...form.entries()].map(async ([k, v]) => [k, typeof v === "string" ? v : [v.name, v.type, v.size, Array.from(new Uint8Array(await v.arrayBuffer())).join(",")]]));
     const first = await snapshot();
-    await fetch("/__multipart", { method: "POST", body: form });
-    await fetch("/__multipart", { method: "POST", body: form });
+    const sent = [];
+    for (let i = 0; i < 2; i++) sent.push(await (await fetch("/__echo/multipart", { method: "POST", body: form })).json());
     const after = await snapshot();
-    return JSON.stringify(first) === JSON.stringify(after);
+    return { unchanged: JSON.stringify(first) === JSON.stringify(after), sent };
   });
-  expect(before).toBe(true); // the caller's FormData isn't changed by being sent
-  expect(bodies).toHaveLength(2);
-  const parse = ({ type, buf }) => {
-    const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type);
-    expect(boundary).not.toBeNull();
-    const sep = Buffer.from("--" + (boundary[1] || boundary[2]));
-    const parts = [];
-    let at = buf.indexOf(sep);
-    while (at !== -1) {
-      const next = buf.indexOf(sep, at + sep.length);
-      if (next === -1) break;
-      const part = buf.subarray(at + sep.length + 2, next - 2); // skip CRLF after the boundary and before the next
-      const split = part.indexOf("\r\n\r\n");
-      const head = part.subarray(0, split).toString("latin1").toLowerCase().split("\r\n").map((l) => l.replace(/\s+/g, " ").trim()).sort().join("|");
-      parts.push({ head, body: part.subarray(split + 4).toString("base64") });
-      at = next;
-    }
-    return parts;
-  };
-  const [a, b] = bodies.map(parse);
+  expect(out.unchanged).toBe(true); // the caller's FormData isn't changed by being sent
+  expect(out.sent).toHaveLength(2);
+  const [a, b] = out.sent.map((r) => parseMultipart(r.contentType, r.body));
   expect(a).toHaveLength(3);
-  expect(b).toEqual(a);
+  // Semantically equal on both sends: same part headers and exact bytes (boundaries may differ).
+  expect(b.map((p) => [p.head, p.body.toString("base64")])).toEqual(a.map((p) => [p.head, p.body.toString("base64")]));
   expect(a[0].head).toContain('name="description"');
-  expect(Buffer.from(a[0].body, "base64").toString("utf8")).toBe("Profile photo ✓");
+  expect(a[0].body.toString("utf8")).toBe("Profile photo ✓");
   expect(a[1].head).toContain('filename="photo.png"');
   expect(a[1].head).toContain("content-type: image/png");
-  expect([...Buffer.from(a[1].body, "base64")]).toEqual([...Array(256).keys()]);
+  expect([...a[1].body]).toEqual([...Array(256).keys()]);
   expect(a[2].head).toContain('filename="notes.txt"');
-  expect(Buffer.from(a[2].body, "base64").toString("utf8")).toBe("plain text\r\n--not-a-boundary");
+  expect(a[2].body.toString("utf8")).toBe("plain text\r\n--not-a-boundary");
 });
 
 // ---- Phase 8: GET retries (real fetch) --------------------------------------------------------------------
