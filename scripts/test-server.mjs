@@ -10,6 +10,10 @@
 // a directory serves its index.html; anything else (missing, outside <root>, or a dotfile /
 // dot-directory such as .git/ or .env) is a 404.
 // GET /__ready answers 200 — Playwright's webServer.url waits on it (most roots have no index).
+// POST /__echo (and /__echo/…) answers with the exact request it received — method, path,
+// Content-Type and the raw body as base64 (at most 1 MB) — so browser tests can check what a
+// browser really sent over the network instead of relying on Playwright's request interception
+// (WebKit's interception doesn't expose File/Blob bytes in multipart bodies).
 //
 // Every suite has its own port so suites can run concurrently (enforced by
 // scripts/tests/ci-consistency.test.mjs):
@@ -48,10 +52,24 @@ const send = (res, status, body, type = "text/plain; charset=utf-8") => {
   res.end(body);
 };
 
+const ECHO_LIMIT = 1024 * 1024;
+async function echo(req, res, pathname) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > ECHO_LIMIT) return send(res, 413, "Too large");
+    chunks.push(chunk);
+  }
+  const body = JSON.stringify({ method: req.method, path: pathname, contentType: req.headers["content-type"] ?? null, body: Buffer.concat(chunks).toString("base64") });
+  send(res, 200, body, "application/json; charset=utf-8");
+}
+
 const server = createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, "http://127.0.0.1").pathname);
     if (pathname === "/__ready") return send(res, 200, "ok");
+    if (req.method === "POST" && (pathname === "/__echo" || pathname.startsWith("/__echo/"))) return await echo(req, res, pathname);
     let file = resolve(ROOT, "." + pathname);
     const dotSegment = pathname.split(/[\\/]+/).some((s) => s.startsWith("."));
     if (pathname.includes("\0") || dotSegment || !inside(file)) return send(res, 404, "Not found");
