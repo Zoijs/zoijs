@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: the secure GET foundation, plus safe dynamic URLs and reactive queries.
+Initial release: the secure GET foundation, safe dynamic URLs, reactive params and queries, debounce and explicit disposal.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -27,8 +27,8 @@ Initial release: the secure GET foundation, plus safe dynamic URLs and reactive 
   throws. `params` fill whole `/:name` segments, each value encoded once as exactly one segment
   (`""`, `"."` and `".."` refused); a missing or unused param, an unsupported placeholder
   (`:id?`, `:id*`, `:{id}`) or a non-primitive value throws. `query` is applied with
-  `URLSearchParams.set` (replacing the URL's own value for that key); `null`/`undefined` are left
-  out; objects and arrays throw. The final URL then goes through every same-origin check.
+  `URLSearchParams` (`delete` + `append`, replacing every value the URL had for that key);
+  `null`/`undefined` are left out; objects throw. The final URL then goes through every same-origin check.
 - **Reactive queries** — `query: () => ({ q: search.get() })` runs in a core `computed()`; an
   `effect()` owned by the component refetches when the built query changes (batched per
   microtask, not repeated after a manual `refresh()`, disposed on unmount). Static queries create
@@ -39,3 +39,17 @@ Initial release: the secure GET foundation, plus safe dynamic URLs and reactive 
 - `ApiError` type `"config"`: a reactive query's unsupported value or secret key (no request is
   sent); a throwing query function is kept as `cause`.
 - Requires `@zoijs/core` 1.2.0 or newer (`effect`).
+- **Reactive params** — `params: () => ({ id: id.get() })`, mirroring reactive queries: every
+  path rule applies to each result, and a bad one (missing/unused/`".."`/non-scalar, or a throw)
+  is a `"config"` `error()` with no request and no value in the message. Params and query share
+  one computed, so a change to either rebuilds the URL once.
+- **Query arrays** — `tag: ["a", "b"]` → `tag=a&tag=b` (repeated keys, one level deep;
+  `null`/`undefined` elements skipped; `[]` removes the key). Nested arrays, objects and
+  unsupported elements throw. Secret-looking keys are refused whatever the value type.
+- **`debounce: ms`** — reactive changes to params and query wait for one shared quiet window (0 to
+  2147483647; invalid values throw). The first load and `refresh()` are immediate; `refresh()`
+  cancels a pending debounced refetch. No timer is ever created for a static `api()`.
+- **`dispose()`** — aborts the in-flight request (the resource keeps its data and stops loading,
+  nothing is reported), cancels a pending debounce and removes the reactive computed/effect from
+  the graph. Idempotent; runs automatically on component unmount. `refresh()` afterwards throws an
+  `ApiError` of type `"config"`.

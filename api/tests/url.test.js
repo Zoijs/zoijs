@@ -178,7 +178,7 @@ test("query values are encoded by URLSearchParams (Unicode, reserved characters)
 test("an existing query string is kept; option keys replace the template's", async () => {
   assert.equal((await requested("/api/users?active=true", { query: { page: 2 } })).url, "https://app.example.com/api/users?active=true&page=2");
   assert.equal((await requested("/api/users?page=1", { query: { page: 2 } })).url, "https://app.example.com/api/users?page=2");
-  assert.equal((await requested("/api/users?page=1&page=3&x=1", { query: { page: 2 } })).url, "https://app.example.com/api/users?page=2&x=1", "every duplicate is replaced");
+  assert.equal((await requested("/api/users?page=1&page=3&x=1", { query: { page: 2 } })).url, "https://app.example.com/api/users?x=1&page=2", "every duplicate is replaced (delete + append)");
   assert.equal((await requested("/api/users?page=1", { query: { page: null } })).url, "https://app.example.com/api/users?page=1", "null contributes nothing");
   assert.equal((await requested("/api/users?", { query: { a: 1 } })).url, "https://app.example.com/api/users?a=1");
 });
@@ -193,10 +193,10 @@ test("fragments are never requested and never reach errors", async () => {
 
 test("unsupported query values are refused with a hint toward the function form", () => {
   stubFetch();
-  for (const v of [{ active: true }, [1, 2], () => "x", Symbol("s"), NaN, -Infinity, new Date(0)]) {
+  for (const v of [{ active: true }, () => "x", Symbol("s"), NaN, -Infinity, new Date(0)]) {
     throwsConfig(() => api("/api/search", { query: { filter: v } }), /query\.filter must be a string, number, bigint, boolean, null or undefined/);
   }
-  throwsConfig(() => api("/api/search", { query: { q: { get: () => "" } } }), /query: \(\) => \(\{ … \}\)/);
+  throwsConfig(() => api("/api/search", { query: { q: { get: () => "" } } }), /pass a function: \(\) => \(\{ … \}\)/);
   for (const bad of [null, "q=1", [], 5]) throwsConfig(() => api("/api/search", { query: bad }), /query must be a plain object/);
   assert.equal(calls.length, 0);
 });

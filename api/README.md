@@ -84,9 +84,9 @@ unmounts, is also aborted.
 
 ## Dynamic URLs: `params` and `query`
 
-`api(url, options)` accepts exactly two options, `params` and `query`. Any other option
-(`method`, `headers`, `body`, …) throws a `TypeError` — `api()` is always a GET. You never call
-`encodeURIComponent` or build a query string yourself.
+`api(url, options)` accepts exactly three options: `params`, `query` and `debounce`. Any other
+option (`method`, `headers`, `body`, …) throws a `TypeError` — `api()` is always a GET. You never
+call `encodeURIComponent`, build a query string, or wire up `refresh()` timers yourself.
 
 ### Path parameters
 
@@ -107,8 +107,8 @@ const task = api("/api/tasks/:id", { params: { id: taskId } });
   symbols, `null` and `undefined` throw, so `[object Object]` can't end up in a URL.
 - **Strict:** a placeholder with no param throws, and so does a param the URL doesn't use —
   `params: { userId }` for `:id` is caught immediately instead of requesting `/users/:id`.
-- `params` are read once, when `api()` is called. They are **not reactive**: for a different id,
-  create a new `api()` (router pages remount on navigation, so a page's `api()` does this).
+- A plain-object `params` is read once, when `api()` is called. For a param that changes, pass a
+  function — see [Reactive params and queries](#reactive-params-and-queries).
 
 ### Query parameters
 
@@ -124,18 +124,30 @@ const users = api("/api/users", { query: { active: true, page: 2 } });
 | `true` / `false` | `exact=true` / `exact=false` |
 | `""` | `empty=` |
 | `null` / `undefined` | left out |
-| objects, arrays, functions, symbols, `NaN` | throw a `TypeError` (arrays aren't supported yet) |
+| `["new", "featured"]` | `tag=new&tag=featured` — repeated keys, each value encoded on its own |
+| `["a", null, "b"]` | `tag=a&tag=b` — `null`/`undefined` elements are skipped |
+| `[]` | no `tag` at all (and removes any `tag` the URL had) |
+| objects, nested arrays, functions, symbols, `NaN` (also as array elements) | throw a `TypeError` |
 
-The query is applied with `URLSearchParams.set`, after the URL is resolved. A query already in
-the URL is kept, and a `query` key **replaces** the URL's value(s) for that key:
-`api("/api/users?page=1&active=true", { query: { page: 2 } })` requests
-`/api/users?page=2&active=true`. A `null`/`undefined` value leaves the URL's own value alone.
+```js
+const products = api("/api/products", { query: { tag: ["new", "featured"] } });
+// GET /api/products?tag=new&tag=featured
+```
+
+Arrays are one level deep, never JSON-encoded or comma-joined. Caller arrays and objects are only
+read — frozen ones work.
+
+The query is applied with the platform `URLSearchParams` after the URL is resolved. A query
+already in the URL is kept, and a `query` key **replaces every value** the URL had for that key
+(`delete`, then `append` each value — so it moves to the end):
+`api("/api/products?tag=old&page=1", { query: { tag: ["a", "b"] } })` requests
+`/api/products?page=1&tag=a&tag=b`. A `null`/`undefined` value leaves the URL's own value alone.
 Fragments (`#…`) are never sent.
 
-### Reactive queries
+### Reactive params and queries
 
-Pass a **function** to make the query reactive. Read state inside it with `.get()`; when that
-state changes, the request is sent again automatically:
+Pass a **function** as `params` or `query` to make it reactive. Read state inside it with
+`.get()`; when that state changes, the URL is rebuilt and the request is sent again automatically:
 
 ```js
 import { html, createState, each } from "@zoijs/core";
@@ -152,23 +164,83 @@ function Search() {
 }
 ```
 
-- The function runs inside a core `computed()`; an `effect()` calls `refresh()` when the query
-  it builds changes. It's the same tracking as everywhere else in Zoijs — no polling, no
-  subscriptions of its own.
-- Changes in the same synchronous block are batched: `q.set("a"); page.set(2)` sends **one**
-  request with both values. A change that builds the same query (e.g. `q.get().trim()`) sends none.
+```js
+const id = createState("1");
+const user = api("/api/users/:id", { params: () => ({ id: id.get() }) });
+// GET /api/users/1 — then id.set("2") → GET /api/users/2
+```
+
+Both can be reactive at once, and every Phase 2 rule still applies to what the functions return:
+
+```js
+const results = api("/api/search/:scope", {
+  params: () => ({ scope: scope.get() }),
+  query: () => ({ q: q.get(), tag: selectedTags.get() }),
+  debounce: 250,
+});
+```
+
+- The functions run inside one core `computed()`; an `effect()` calls `refresh()` when the URL
+  they build changes. It's the same tracking as everywhere else in Zoijs — no polling, no
+  subscriptions of its own. A change that builds the same URL (e.g. `q.get().trim()`, or a new
+  array with the same values) sends nothing.
+- Changes in the same synchronous block are batched: `id.set("43"); page.set(2)` sends **one**
+  request with both values.
 - Only the latest request can update the data; earlier ones are aborted.
 - `refresh()` always uses the current values, and isn't repeated by the automatic refetch.
-- Tracking belongs to the component that called `api()` and stops when it unmounts.
-- A plain-object `query` is static: no `computed` or `effect` is created for it. Passing state
-  itself (`query: { q }`) throws — use the function form.
-- There's no debounce: every committed change sends a request (stale ones are aborted).
-- If the function throws, returns an unsupported value or a secret-looking key, no request is
-  sent and `error()` is an `ApiError` of type `"config"` (a throw is kept as its `cause`).
+- A plain-object `params` or `query` is static: no `computed`, `effect` or timer is created for it.
+  Passing state itself (`query: { q }`) throws — use the function form.
+- If a function throws, or returns something `api()` can't send (a missing, unused or `".."`
+  param, an object, a secret-looking key), no request is sent and `error()` is an `ApiError` of
+  type `"config"` (a throw is kept as its `cause`). The message names the param or key, never the
+  value. The next valid change recovers.
 
-Values are read as ordinary property accesses: `params` and a static `query` once, when `api()`
-is called; a query function's result each time it runs. Getters work and run once per read;
-nothing is copied, merged or mutated.
+Values are read as ordinary property accesses: static `params`/`query` once, when `api()` is
+called; a function's result each time it runs. Getters work and run once per read; nothing is
+copied, merged or mutated.
+
+### Debounce
+
+```js
+const q = createState("");
+const results = api("/api/search", { query: () => ({ q: q.get() }), debounce: 250 });
+```
+
+Typing `a`, `ab`, `abc`, `abcd` quickly sends **one** request, for `abcd`, 250 ms after the last
+change — no timer code in your component.
+
+- `debounce` is milliseconds, a finite number from `0` to `2147483647` (the browser timer limit).
+  Negative numbers, `NaN`, `Infinity`, strings and anything else throw a `TypeError`. `0` (the
+  default) refetches as soon as the batched change runs, with no timer.
+- The **first load is immediate**; only reactive changes wait. Changes to `params` and `query`
+  share one window: each change restarts it, and one request goes out with the latest values.
+  Changing back to what was last requested cancels the pending refetch.
+- **`refresh()` is never debounced**: it loads now with the current values and cancels a pending
+  automatic refetch, so nothing is sent twice.
+- With no reactive `params`/`query`, `debounce` does nothing and costs nothing.
+
+### Lifetime and `dispose()`
+
+An `api()` called while a component renders belongs to that component. When it unmounts, its
+request is aborted, its tracking and any pending debounce are dropped — **you don't need to call
+anything**.
+
+For an `api()` created **outside** a component (at module level, in a store, in a test), nothing
+owns it, so its reactive tracking would last as long as the state it reads. Stop it yourself:
+
+```js
+const events = api("/api/events", { query: () => ({ topic: topic.get() }) });
+
+// later
+events.dispose();
+```
+
+`dispose()` aborts the in-flight request (the resource keeps the data it had and stops loading —
+nothing is reported to `onError`), cancels a pending debounce, and removes the `computed`/`effect`
+from the reactive graph, so later state changes send nothing. It is idempotent and safe inside a
+component too (the unmount that follows is a no-op). After it — including after the owning
+component unmounts — `refresh()` throws an `ApiError` of type `"config"` rather than quietly
+starting again.
 
 ### Secrets don't belong in URLs
 
@@ -195,7 +267,7 @@ credentials in a header or a request body — and authorize on the server.
 | any status outside 200–299 (400, 401, 403, 404, 409, 500, 503, …) | unchanged | `ApiError`, `type: "http"` |
 | the request couldn't be made (offline, DNS, refused, a cross-origin redirect) | unchanged | `ApiError`, `type: "network"` |
 | the URL isn't allowed (see below) — no request is sent | unchanged | `ApiError`, `type: "security"` |
-| a reactive query produced an unsupported value or a secret-looking key — no request is sent | unchanged | `ApiError`, `type: "config"` |
+| reactive params/query produced something `api()` can't send — no request is sent | unchanged | `ApiError`, `type: "config"` |
 
 A string body is plain data. Zoijs renders it as text — it is never parsed as HTML or run as
 script. To render trusted HTML you must opt in yourself (see
@@ -260,11 +332,8 @@ see the [production security checklist](https://zoijs.dev/production-security).
 
 ## In this version
 
-- **GET only.** `api()` accepts only `params` and `query`, and always performs a GET.
+- **GET only.** `api()` accepts only `params`, `query` and `debounce`, and always performs a GET.
   For writes, use [`@zoijs/action`](../action/README.md).
-- **Reactive queries, static params.** Only a `query` function refetches on change; `params` are
-  fixed per `api()` call. Router pages remount on navigation, so a page's `api()` loads again.
-- **No debounce, no arrays in queries.**
 - **Browser only.** It needs a page origin; on the server every request is refused.
 
 ## License

@@ -74,8 +74,7 @@ api("/users/:id", { params: { id: null } });
 api("/users/:id", { params: { id: { nested: 1 } } });
 // @ts-expect-error — query values can't be objects
 api("/search", { query: { filter: { active: true } } });
-// @ts-expect-error — query values can't be arrays (not supported yet)
-api("/search", { query: { tags: ["a", "b"] } });
+api("/search", { query: { tags: ["a", "b"] } }); // arrays are repeated keys (Phase 3)
 // @ts-expect-error — pass a function, not a state object
 api("/search", { query: { q: search } });
 // @ts-expect-error — the query function must return an object of query values
@@ -84,3 +83,32 @@ api("/search", { query: () => ({ q: { deep: 1 } }) });
 api("/search", {}, {});
 
 void [task, pv, qv, configType];
+
+// ---- Phase 3: dispose, debounce, reactive params, query arrays ----------------------------------
+import type { ApiParams, ApiQueryScalar } from "../src/index.js";
+
+declare const tags: { get(): readonly string[] };
+declare const userId: { get(): string };
+
+const live = api<Task>("/api/users/:id", { params: () => ({ id: userId.get() }), debounce: 250 });
+live.dispose();
+const disposeFn: () => void = live.dispose;
+api("/products", { query: { tag: ["new", "featured"], n: [1, 2], b: [true, null, undefined], big: [1n] } });
+const frozenTags: readonly string[] = Object.freeze(["a", "b"]);
+api("/products", { query: { tag: frozenTags } });
+api("/search/:scope", { params: () => ({ scope: "docs" }), query: () => ({ q: search.get(), tag: tags.get() }), debounce: 250 });
+const p3: ApiParams = { id: 1 };
+const s3: ApiQueryScalar = undefined;
+
+// @ts-expect-error — nested arrays aren't supported
+api("/p", { query: { filter: [["a"]] } });
+// @ts-expect-error — no objects inside arrays
+api("/p", { query: { filter: [{ name: "a" }] } });
+// @ts-expect-error — debounce is a number of milliseconds
+api("/p", { query: () => ({}), debounce: "250" });
+// @ts-expect-error — params functions return param values, not arrays
+api("/u/:id", { params: () => ({ id: ["1"] }) });
+// @ts-expect-error — params functions can't return null values
+api("/u/:id", { params: () => ({ id: null }) });
+
+void [disposeFn, p3, s3];
