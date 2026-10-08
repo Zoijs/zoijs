@@ -494,16 +494,18 @@ test("JSON is serialized once per run: toJSON/getters run once, every attempt se
   assert.equal(getterCalls, 1);
 });
 
-test("FormData can't be retried (config error, nothing sent); with retry 0 it still gets a key", async () => {
-  stubFetch([ok()]);
+test("FormData is retried by replaying the same FormData with the same key; retry 0 still gets a key", async () => {
+  const t = timers();
+  stubFetch(["network", ok()]);
   const form = new FormData();
   form.append("secret-field", "secret-value");
   const r = api.post("/upload", { idempotencyKey: true, retry: 2 });
-  await r.run(form);
-  assert.equal(r.error().type, "config");
-  assert.match(r.error().message, /a FormData body can't be retried/);
-  assert.ok(!r.error().message.includes("secret"));
-  assert.equal(calls.length, 0);
+  await drive(t, r.run(form));
+  assert.equal(r.error(), null);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((c) => c.body === form), "the caller's FormData itself, not a copy");
+  assert.equal(calls[0].key, calls[1].key);
+  stubFetch([ok()]);
   const once = api.post("/upload", { idempotencyKey: true });
   await once.run(form);
   assert.equal(calls.length, 1);
