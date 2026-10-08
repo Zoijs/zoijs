@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: the secure GET foundation.
+Initial release: the secure GET foundation, plus safe dynamic URLs and reactive queries.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -23,3 +23,19 @@ Initial release: the secure GET foundation.
   origin; anything else (including credentials in the URL, or no page origin) is refused before a
   request is made. Requests use `mode: "same-origin"` and `credentials: "same-origin"`, so the
   browser also refuses cross-origin redirects.
+- **`api(url, { params, query })`** — the only two options; anything else (`method`, `headers`, …)
+  throws. `params` fill whole `/:name` segments, each value encoded once as exactly one segment
+  (`""`, `"."` and `".."` refused); a missing or unused param, an unsupported placeholder
+  (`:id?`, `:id*`, `:{id}`) or a non-primitive value throws. `query` is applied with
+  `URLSearchParams.set` (replacing the URL's own value for that key); `null`/`undefined` are left
+  out; objects and arrays throw. The final URL then goes through every same-origin check.
+- **Reactive queries** — `query: () => ({ q: search.get() })` runs in a core `computed()`; an
+  `effect()` owned by the component refetches when the built query changes (batched per
+  microtask, not repeated after a manual `refresh()`, disposed on unmount). Static queries create
+  no computed or effect.
+- **Secret-looking query keys are refused** (`token`, `access_token`, `password`, `api_key`,
+  `authorization`, `session`, …, matched exactly after normalizing case and separators), in
+  `query` and in the URL itself.
+- `ApiError` type `"config"`: a reactive query's unsupported value or secret key (no request is
+  sent); a throwing query function is kept as `cause`.
+- Requires `@zoijs/core` 1.2.0 or newer (`effect`).

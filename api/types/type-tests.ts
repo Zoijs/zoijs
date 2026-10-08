@@ -43,3 +43,44 @@ api("/api/tasks", { method: "POST" });
 new ApiError("x", { type: "timeout" });
 
 void [asResource, loading, data, first, err, status, type, method, rawData, isError];
+
+// ---- Phase 2: params / query --------------------------------------------------------------------
+import type { ApiOptions, ApiParamValue, ApiQueryValue } from "../src/index.js";
+
+declare const id: string;
+declare const search: { get(): string };
+declare const page: { get(): number };
+
+const task: ApiResource<Task> = api<Task>("/api/tasks/:id", { params: { id } });
+api("/api/users/:id", { params: { id: 1 } });
+api("/api/users/:id", { params: { id: 1n } });
+api("/api/flags/:on", { params: { on: true } });
+api("/api/search", { query: { q: "zoijs", page: 2, big: 3n, exact: true, missing: null, other: undefined } });
+api("/api/search", { query: () => ({ q: search.get(), page: page.get() }) });
+api("/api/search", { params: {}, query: {} });
+const opts: ApiOptions = { query: { q: "x" } };
+api("/x", opts);
+const pv: ApiParamValue = "x";
+const qv: ApiQueryValue = null;
+const configType: ApiErrorType = "config";
+
+// @ts-expect-error — no method option: api() is GET-only
+api("/users", { method: "POST" });
+// @ts-expect-error — no headers option
+api("/users", { headers: {} });
+// @ts-expect-error — params can't be null
+api("/users/:id", { params: { id: null } });
+// @ts-expect-error — params can't be objects
+api("/users/:id", { params: { id: { nested: 1 } } });
+// @ts-expect-error — query values can't be objects
+api("/search", { query: { filter: { active: true } } });
+// @ts-expect-error — query values can't be arrays (not supported yet)
+api("/search", { query: { tags: ["a", "b"] } });
+// @ts-expect-error — pass a function, not a state object
+api("/search", { query: { q: search } });
+// @ts-expect-error — the query function must return an object of query values
+api("/search", { query: () => ({ q: { deep: 1 } }) });
+// @ts-expect-error — at most two arguments
+api("/search", {}, {});
+
+void [task, pv, qv, configType];

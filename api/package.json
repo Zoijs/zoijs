@@ -1,7 +1,7 @@
 {
   "name": "@zoijs/api",
   "version": "0.1.0",
-  "description": "Same-origin GET requests as a Zoijs resource: api(url) with HTTP errors, JSON parsing and a same-origin policy built in. No JSX, no build step.",
+  "description": "Same-origin GET requests as a Zoijs resource: api(url, { params, query }) with safe URL building, reactive queries, HTTP errors, JSON parsing and a same-origin policy built in. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -44,7 +44,7 @@
     "no-jsx"
   ],
   "peerDependencies": {
-    "@zoijs/core": "^1.0.0",
+    "@zoijs/core": "^1.2.0",
     "@zoijs/resource": "^0.3.0"
   },
   "scripts": {

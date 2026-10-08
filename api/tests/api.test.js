@@ -158,8 +158,8 @@ test("a 2xx JSON response that isn't JSON is a parse error", async () => {
 });
 
 test("a network failure is type network and doesn't carry the platform message", async () => {
-  const r = await load("/api/x?access_token=s3cret", () => {
-    throw new TypeError("fetch failed: https://app.example.com/api/x?access_token=s3cret");
+  const r = await load("/api/x?cursor=s3cret", () => {
+    throw new TypeError("fetch failed: https://app.example.com/api/x?cursor=s3cret");
   });
   const err = r.error();
   assert.equal(err.type, "network");
@@ -291,11 +291,11 @@ test("errors never contain Authorization, Cookie, Bearer tokens, query strings o
     () => new Response("{nope", { headers: { "Content-Type": "application/json" } }),
   ];
   for (const respond of responses) {
-    const r = await load("/api/me?api_key=query-secret#frag-secret", respond);
+    const r = await load("/api/me?q=query-secret#frag-secret", respond);
     const err = r.error();
     assert.ok(err instanceof ApiError);
     const dump = [err.message, String(err), err.stack, JSON.stringify(err), JSON.stringify(Object.getOwnPropertyNames(err).map((k) => err[k]))].join("\n");
-    for (const secret of ["Authorization", "Cookie", "cookie-secret-value", "set-cookie-secret", "Bearer", "body-secret", "header-secret", "query-secret", "frag-secret", "api_key", "WWW-Authenticate"]) {
+    for (const secret of ["Authorization", "Cookie", "cookie-secret-value", "set-cookie-secret", "Bearer", "body-secret", "header-secret", "query-secret", "frag-secret", "q=", "WWW-Authenticate"]) {
       assert.ok(!dump.includes(secret), `${err.type} error leaks ${secret}`);
     }
     assert.deepEqual(Object.keys(err).sort(), ["method", "name", "status", "statusText", "type", "url"]);
