@@ -92,8 +92,11 @@ test("invalid retry, retryDelay and idempotencyKey values throw at the factory",
     assert.throws(() => api.post("/x", { idempotencyKey: true, retry: 1, retryDelay: bad }), /retryDelay must be a finite number of milliseconds/, String(bad));
   }
   assert.throws(() => api.post("/x", { retryDelay: 100 }), /retryDelay has no effect without retry/);
-  for (const bad of ["unsupported value", "my-key", () => "k", 1, {}, null]) {
-    assert.throws(() => api.post("/x", { idempotencyKey: bad }), /idempotencyKey must be true or false/);
+  for (const bad of [1, {}, null, [], 10n]) {
+    assert.throws(() => api.post("/x", { idempotencyKey: bad }), /idempotencyKey must be true \(a generated key\) or a function/);
+  }
+  for (const fixed of ["unsupported value", "my-key", ""]) {
+    assert.throws(() => api.post("/x", { idempotencyKey: fixed }), /idempotencyKey can't be a fixed string/, "fixed strings are refused (Phase 7)");
   }
   for (const opt of ["idempotencyKey", "retry", "retryDelay"]) {
     assert.throws(() => api("/x", { [opt]: 1 }), /unsupported option/, `${opt} is mutation-only`);

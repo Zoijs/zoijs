@@ -218,3 +218,40 @@ api.post("/x", { idempotencyKey: true, retry: 1, retryDelay: "250" });
 api("/x", { retry: 1 });
 // @ts-expect-error — nor take idempotency keys
 api("/x", { idempotencyKey: true });
+
+// ---- Phase 7: key functions, retry status, invalid combinations -----------------------------------------
+import type { ApiMutationOptions, ApiIdempotencyKey, ApiRetryCount } from "../src/index.js";
+
+const keyed = api.post<{ id: number }, { sku: string }>("/orders", { idempotencyKey: () => "op-1", retry: 2 });
+const att: number = keyed.attempt();
+const rtr: boolean = keyed.retrying();
+api.post("/orders", { idempotencyKey: () => "op-1" });
+api.post("/orders", { idempotencyKey: true, retry: 5, retryDelay: 100 });
+api.post("/orders", { idempotencyKey: false });
+api.post("/orders", { retry: 0 });
+api.post("/orders", {});
+const okOpts: ApiMutationOptions = { idempotencyKey: true, retry: 1, timeout: 1000, exclusive: true };
+const k: ApiIdempotencyKey = () => "x";
+const rc: ApiRetryCount = 3;
+
+// @ts-expect-error — retry without an idempotency key
+api.post("/orders", { retry: 2 });
+// @ts-expect-error — retry with idempotencyKey: false
+api.post("/orders", { idempotencyKey: false, retry: 2 });
+// @ts-expect-error — retryDelay without retry
+api.post("/orders", { idempotencyKey: true, retryDelay: 100 });
+// @ts-expect-error — retryDelay with retry: 0
+api.post("/orders", { idempotencyKey: true, retry: 0, retryDelay: 100 });
+// @ts-expect-error — a fixed string key would be reused for every run()
+api.post("/orders", { idempotencyKey: "checkout-abc" });
+// @ts-expect-error — the key function returns a string
+api.post("/orders", { idempotencyKey: () => 42 });
+// @ts-expect-error — retry counts are 1–5 literals, not any number
+api.post("/orders", { idempotencyKey: true, retry: 7 });
+declare const someNumber: number;
+// @ts-expect-error — a plain number could be anything: pass a literal 1–5
+api.post("/orders", { idempotencyKey: true, retry: someNumber });
+// @ts-expect-error — attempt() takes no arguments
+keyed.attempt(1);
+
+void [att, rtr, okOpts, k, rc];
