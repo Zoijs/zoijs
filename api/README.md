@@ -420,7 +420,8 @@ await upload.run({ params: { id }, body: form }); // or upload.run(form) for a U
   (an iframe) works, while an object that only looks like one — `append()`/`entries()`, or
   `Object.create(FormData.prototype)` — is refused. A FormData nested inside a JSON object, and
   a DELETE body, are refused.
-- Invalidation, `exclusive`, `timeout` and `problemDetails` work as for JSON. The form is never
+- Invalidation, `exclusive`, `timeout`, `problemDetails` and retries work as for JSON (retries replay
+  the same FormData — see [One logical run](#one-logical-run)). The form is never
   cloned, read or enumerated, and its field names and values never appear in errors.
 - Nothing about the file is checked in the browser. The **server** must authenticate, authorize,
   and enforce file type and size, scan where appropriate, and control where files are stored.
@@ -555,9 +556,12 @@ const save = api.post("/api/orders", {
   `@zoijs/action` does), but a scheduled retry is cancelled and no new attempt starts. The same
   goes for `reset()`, and for a run superseded by a newer (non-`exclusive`) `run()`: nobody is
   waiting for its result, so it isn't retried.
-- **FormData bodies can't be retried yet**: `retry > 0` with a FormData body is a `"config"` error
-  and nothing is sent. Uploads can still send an idempotency key with `retry: 0`. (FormData replay
-  is being verified across Chromium, Firefox and WebKit before it's enabled.)
+- **FormData bodies are retried by replaying the same FormData object** — not cloned, not
+  re-serialized, no `Content-Type` set by `api()`. The browser builds the multipart body again for
+  each attempt, so the **boundary may differ** between attempts; the fields, file names, MIME types
+  and bytes are the same (verified in Chromium, Firefox and WebKit). As for any mutation, a retry
+  doesn't mean the first attempt failed to execute on the server — the idempotency key is what
+  lets the server recognize the repeat, and only if it enforces it.
 - GET resources retry too — see [GET retries](#get-retries).
 
 ### Showing retries in the UI
@@ -759,7 +763,7 @@ see the [production security checklist](https://zoijs.dev/production-security).
 - **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
 - **No implicit retries**: retries are opt-in (`retry`) and bounded (≤ 5, ≤ 30 s waits); mutation
   retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
-  FormData retries (yet) or optimistic updates.**
+  or optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
 
 ## License

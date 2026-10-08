@@ -36,7 +36,9 @@ HTTP-error handling, and a same-origin security model built in.
   (network, timeout, 408/425/429/500/502/503/504), exponential backoff with ±20 % jitter capped at
   30 s, and `Retry-After` honored. GET retries replay one URL per load. Mutation retries require
   an **idempotency key** — generated (`idempotencyKey: true`) or from a function — sent as
-  `Idempotency-Key`; `attempt()` / `retrying()` expose progress. FormData bodies aren't retried yet.
+  `Idempotency-Key`; `attempt()` / `retrying()` expose progress. FormData bodies are retried by
+  replaying the same FormData (verified in Chromium, Firefox and WebKit; the multipart boundary may
+  differ between attempts).
 
 ### Security model
 - **Same-origin only**: the final URL must be http(s) on the page's origin; credentials in URLs,
