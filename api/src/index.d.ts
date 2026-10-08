@@ -154,6 +154,20 @@ export interface ApiMutationOptions {
   readonly timeout?: number;
   /** Attach normalized `application/problem+json` details to HTTP errors as `error.problem`. Default `false`. */
   readonly problemDetails?: boolean;
+  /**
+   * Send an `Idempotency-Key` header with a fresh cryptographically random UUID per `run()`, reused
+   * by every retry of that run. The server must store and enforce it — sending the header doesn't
+   * make an endpoint idempotent. Default `false`. Custom keys aren't supported yet.
+   */
+  readonly idempotencyKey?: boolean;
+  /**
+   * Extra attempts after the first (0–5; default 0 = never retried). Requires
+   * `idempotencyKey: true`. Only network errors, timeouts and HTTP 408, 425, 429, 500, 502, 503,
+   * 504 are retried; JSON bodies only (a FormData body with `retry > 0` is a config error).
+   */
+  readonly retry?: 0 | 1 | 2 | 3 | 4 | 5;
+  /** Base backoff in ms (default 250): retry n waits `retryDelay × 2^(n-1)`, at most 30 s. Needs `retry`. */
+  readonly retryDelay?: number;
 }
 
 /**

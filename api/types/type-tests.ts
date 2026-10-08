@@ -199,3 +199,22 @@ api.delete("/x/:id").run({ params: { id: 1 }, body: new FormData() });
 timed.error()!.problem!.detail = "x";
 
 void [seededData, prob, detail, timeoutType];
+
+// ---- Phase 6: idempotency keys and retries ---------------------------------------------------------
+const createOrder = api.post<{ id: number }, { sku: string; quantity: number }>("/orders", { idempotencyKey: true, retry: 2, retryDelay: 500, timeout: 10_000, exclusive: true });
+createOrder.run({ sku: "ABC-123", quantity: 1 });
+api.delete("/orders/:id", { idempotencyKey: true, retry: 5 });
+api.patch("/x", { idempotencyKey: false, retry: 0 });
+
+// @ts-expect-error — retry is 0–5
+api.post("/x", { idempotencyKey: true, retry: 6 });
+// @ts-expect-error — retry is a whole number
+api.post("/x", { idempotencyKey: true, retry: 1.5 });
+// @ts-expect-error — idempotencyKey is a boolean (custom keys aren't supported yet)
+api.post("/x", { idempotencyKey: "my-key" });
+// @ts-expect-error — retryDelay is milliseconds
+api.post("/x", { idempotencyKey: true, retry: 1, retryDelay: "250" });
+// @ts-expect-error — GET resources don't retry
+api("/x", { retry: 1 });
+// @ts-expect-error — nor take idempotency keys
+api("/x", { idempotencyKey: true });

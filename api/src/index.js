@@ -119,7 +119,10 @@ const safeUrl = (u) => (isHttp(u) ? u.origin + u.pathname : u.protocol);
 //   signal:  aborts the request when api() replaces or disposes it — never reported as a timeout;
 //   opts.timeout: ms (0 = none) from the moment fetch starts, covering the response body too. It
 //            aborts the real request (no race left running) and fails with type "timeout";
-//   opts.problemDetails: on a non-2xx application/problem+json answer, attach error.problem.
+//   opts.problemDetails: on a non-2xx application/problem+json answer, attach error.problem —
+//            a boolean, or (internally) a function of the status, so a retried attempt skips it;
+//   opts.idempotencyKey: sent as the Idempotency-Key header — the only header a caller can cause,
+//            and never copied into an error, URL or body.
 // Responses are parsed the same way for every method.
 async function request(input, entries, signal, method = METHOD, payload, opts = NO_OPTS) {
   const target = resolveSameOrigin(input, entries, method);
@@ -152,7 +155,7 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
         method,
         mode: "same-origin",
         credentials: "same-origin",
-        headers: payload && payload.json !== undefined ? { Accept: ACCEPT, "Content-Type": "application/json" } : { Accept: ACCEPT },
+        headers: headersFor(payload, opts.idempotencyKey),
         body: payload ? (payload.json !== undefined ? payload.json : payload.form) : undefined,
         signal: ctl ? ctl.signal : signal,
       });
@@ -170,8 +173,14 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
       const statusText = typeof res.statusText === "string" ? res.statusText : "";
       // The body stays private unless the caller opted in AND it's problem+json; even then only
       // the known fields, never in the message, and a bad body never changes this HTTP error.
-      const problem = opts.problemDetails && mediaType === "application/problem+json" ? await readProblem(res) : (discard(res), null);
-      throw new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where, problem });
+      const want = typeof opts.problemDetails === "function" ? opts.problemDetails(res.status) : opts.problemDetails;
+      const problem = want && mediaType === "application/problem+json" ? await readProblem(res) : (discard(res), null);
+      const err = new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where, problem });
+      if (res.status === 429 || res.status === 503) {
+        const wait = retryAfterMs(res.headers.get("retry-after"));
+        if (wait !== null) RETRY_AFTER.set(err, wait); // private: never on the error object itself
+      }
+      throw err;
     }
     if (res.status === 204 || res.status === 205) {
       discard(res);
@@ -196,6 +205,23 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
   }
 }
 const NO_OPTS = {};
+
+function headersFor(payload, idempotencyKey) {
+  const headers = { Accept: ACCEPT };
+  if (payload && payload.json !== undefined) headers["Content-Type"] = "application/json";
+  if (idempotencyKey !== undefined) headers["Idempotency-Key"] = idempotencyKey;
+  return headers;
+}
+
+// Retry-After (RFC 9110) in milliseconds from now: delta-seconds ("5") or an HTTP-date. null when
+// absent or unparseable. Kept off the ApiError (in a WeakMap) — it only steers the retry wait.
+const RETRY_AFTER = new WeakMap();
+function retryAfterMs(value) {
+  if (typeof value !== "string" || (value = value.trim()) === "") return null;
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
 
 // Problem details (RFC 9457) from an error response, or null. At most MAX_PROBLEM_BYTES are read —
 // a larger (declared or actual) body is dropped unread past the limit — and only the five standard
@@ -611,9 +637,40 @@ function serializeBody(body) {
   return text;
 }
 
+// ---- mutation retries ------------------------------------------------------------------------
+// Off by default; opt-in only together with idempotencyKey: true (any method). Only failures that
+// may pass on another attempt are retried; everything else ends the run at once.
+const RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const isRetryable = (e) => e.type === "network" || e.type === "timeout" || (e.type === "http" && RETRY_STATUS.has(e.status));
+const MAX_RETRIES = 5; // at most 6 attempts — no retry storms
+const MAX_RETRY_WAIT = 30_000; // a cap on every wait; a longer Retry-After ends the retries instead
+const DEFAULT_RETRY_DELAY = 250; // retry n waits retryDelay × 2^(n-1): 250, 500, 1000, …
+
+// A v4 UUID from the platform's CSPRNG — randomUUID, or getRandomValues where randomUUID isn't
+// available (insecure contexts). null when neither exists: never weaker randomness.
+function newIdempotencyKey() {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") {
+    try {
+      return c.randomUUID();
+    } catch {
+      /* fall through */
+    }
+  }
+  if (c && typeof c.getRandomValues === "function") {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+  return null;
+}
+
 function mutation(method, url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError(`api.${method.toLowerCase()}(url): url must be a non-empty string`);
   let query, invalidate = [], exclusive = false, timeout = 0, problemDetails = false;
+  let idempotent = false, retry = 0, retryDelay;
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
       if (key === "query") {
@@ -623,37 +680,87 @@ function mutation(method, url, options) {
       else if (key === "exclusive") exclusive = readFlag(value, "exclusive");
       else if (key === "timeout") timeout = value === undefined ? 0 : readMs(value, "timeout");
       else if (key === "problemDetails") problemDetails = readFlag(value, "problemDetails");
+      else if (key === "idempotencyKey") {
+        if (value !== undefined && typeof value !== "boolean") throw configError("idempotencyKey must be true or false — keys are generated per run(); custom keys aren't supported yet");
+        idempotent = !!value;
+      } else if (key === "retry") {
+        if (value === undefined) continue;
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_RETRIES) throw configError(`retry must be a whole number from 0 to ${MAX_RETRIES} (extra attempts after the first)`);
+        retry = value;
+      } else if (key === "retryDelay") retryDelay = value === undefined ? undefined : readMs(value, "retryDelay");
       else if (key === "initial") throw configError("initial is for api() resources — a mutation has no data until it runs");
-      else throw configError(`unsupported option "${key}" — a mutation accepts query, invalidate, exclusive, timeout and problemDetails`);
+      else throw configError(`unsupported option "${key}" — a mutation accepts query, invalidate, exclusive, timeout, problemDetails, idempotencyKey, retry and retryDelay`);
     }
   }
-  const transport = { timeout, problemDetails };
+  if (retry > 0 && !idempotent) throw configError("retry needs idempotencyKey: true — a mutation is only retried with an idempotency key, so the server can recognize the repeat");
+  if (retryDelay !== undefined && retry === 0) throw configError("retryDelay has no effect without retry");
+  if (retryDelay === undefined) retryDelay = DEFAULT_RETRY_DELAY;
   const tpl = parseTemplate(url);
   const entries = query === undefined ? [] : queryEntries(query);
 
-  // The action's fn: build, serialize, send. Anything wrong becomes error() — run() never rejects.
+  // Backoff waits, cancelled when the owning component goes away: an attempt already sent may
+  // finish, but no NEW attempt starts for a UI that's gone.
+  let torn = false;
+  const waits = new Set();
+  const sleep = (ms) =>
+    new Promise((resolve) => {
+      const w = { resolve, id: setTimeout(() => (waits.delete(w), resolve(true)), ms) };
+      waits.add(w);
+    });
+  onCleanup(() => {
+    torn = true;
+    for (const w of waits) {
+      clearTimeout(w.id);
+      w.resolve(false);
+    }
+    waits.clear();
+  });
+
+  // The action's fn: build, serialize and key ONCE per logical run, then send — replaying the same
+  // request on a retryable failure. Only the final outcome reaches the action (one pending → done
+  // or error, one onError report). Anything wrong before sending becomes a config error().
   let lastCall = null;
   const send = (...args) => {
     const call = { ok: false };
     lastCall = call;
+    let path, payload, key;
     try {
       const { params, body } = readRunInput(tpl, method, args);
-      const path = fillParams(tpl, params);
-      const payload = toPayload(body);
-      // Never retried — not even after a timeout: the server may already have acted on it.
-      return request(path, entries, undefined, method, payload, transport).then(
-        (value) => {
-          call.ok = true;
-          return value;
-        },
-        (err) => {
-          throw err instanceof ApiError ? err : new ApiError(`${method} request failed`, { type: "network", method });
-        },
-      );
+      path = fillParams(tpl, params);
+      payload = toPayload(body);
+      if (retry > 0 && payload && payload.form) throw configError("a FormData body can't be retried — use retry: 0 for uploads (the idempotency key is still sent)");
+      if (idempotent && (key = newIdempotencyKey()) === null) throw configError("idempotencyKey needs crypto.randomUUID or crypto.getRandomValues, and this environment has neither");
     } catch (err) {
       if (!(err instanceof ConfigError)) throw err;
       return Promise.reject(new ApiError(`${method} request not sent: ${err.message.slice("api(): ".length)}`, { type: "config", method }));
     }
+    const attemptOnce = (left) =>
+      request(path, entries, undefined, method, payload, {
+        timeout, // a fresh window per attempt
+        idempotencyKey: key,
+        // A retryable status that will be retried isn't the final error: don't read its body.
+        problemDetails: problemDetails && left > 0 ? (status) => !RETRY_STATUS.has(status) : problemDetails,
+      }).catch((err) => {
+        throw err instanceof ApiError ? err : new ApiError(`${method} request failed`, { type: "network", method });
+      });
+    return (async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const value = await attemptOnce(retry - attempt);
+          call.ok = true;
+          return value;
+        } catch (err) {
+          if (attempt >= retry || torn || !isRetryable(err)) throw err;
+          let wait = Math.min(retryDelay * 2 ** attempt, MAX_RETRY_WAIT);
+          const after = RETRY_AFTER.get(err);
+          if (after !== undefined) {
+            if (after > MAX_RETRY_WAIT) throw err; // the server asked for longer than we'd wait
+            wait = Math.max(wait, after);
+          }
+          if (!(await sleep(wait))) throw err; // torn down while waiting: stop, don't send again
+        }
+      }
+    })();
   };
   const act = action(send, { exclusive });
 
