@@ -1,0 +1,66 @@
+{
+  "name": "@zoijs/api",
+  "version": "0.1.0",
+  "description": "Same-origin data access for Zoijs: api(url, { params, query }) reads as a resource, api.post/put/patch/delete write as an action — safe URL building, JSON bodies, invalidation, HTTP errors and a same-origin policy built in. No JSX, no build step.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "api"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "api",
+    "fetch",
+    "http",
+    "json",
+    "resource",
+    "same-origin",
+    "no-build",
+    "no-jsx",
+    "mutation"
+  ],
+  "peerDependencies": {
+    "@zoijs/core": "^1.2.0",
+    "@zoijs/resource": "^0.3.0",
+    "@zoijs/action": "^0.2.0"
+  },
+  "scripts": {
+    "test": "node --test --import ./tests/setup-dom.js",
+    "test:types": "tsc --noEmit -p tsconfig.json",
+    "test:browser": "playwright test",
+    "dev": "node ../scripts/test-server.mjs .. 3900"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@zoijs/action": "file:../action",
+    "@zoijs/core": "file:../framework",
+    "@zoijs/resource": "file:../resource",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="../../../framework/examples/favicon.svg" type="image/svg+xml" />
+    <title>Zoijs Sanitize — rich text</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "../../../framework/src/index.js",
+          "@zoijs/core/server": "../../../framework/src/server.js",
+          "@zoijs/sanitize": "../../src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h1>@zoijs/sanitize</h1>
+    <p>Untrusted HTML rendered as safe nodes inside a Zoijs binding.</p>
+    <div id="app"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

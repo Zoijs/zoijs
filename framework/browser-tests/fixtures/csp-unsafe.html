@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      SEC-3 under ENFORCED Trusted Types: the page allows Zoijs's own `zoijs` policy (template
+      parsing) and the app's `app` policy. unsafeHTML() must accept the app's TrustedHTML and
+      refuse a plain string — it must never route raw markup through the `zoijs` policy.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs app;"
+    />
+    <title>Zoijs — unsafeHTML under Trusted Types</title>
+  </head>
+  <body>
+    <div id="trusted"></div>
+    <div id="string"></div>
+    <script type="module" src="./csp-unsafe-app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned GitHub Actions in .github/workflows current: Dependabot opens a
+# PR that moves each pin to the new release's commit SHA (keeping the `# vX.Y.Z`
+# comment in sync). Merging goes through normal review + CI.
+#
+# Not covered: the Playwright container digest in ci.yml (Dependabot doesn't update
+# workflow `container:` images) — bump its tag + digest together with @playwright/test.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

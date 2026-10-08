@@ -1,0 +1,117 @@
+// @zoijs/i18n — tiny, reactive internationalization for Zoijs.
+//
+// createI18n() gives you a reactive locale plus a message lookup and the
+// platform's own Intl formatters (plurals, numbers, dates, lists). Change the
+// locale and every binding that read a translation updates in place — no
+// re-render, no provider, no context.
+//
+//   import { createI18n } from "@zoijs/i18n";
+//
+//   const i18n = createI18n({
+//     locale: "en",
+//     messages: {
+//       en: { hello: "Hello, {name}!", items: { one: "{count} item", other: "{count} items" } },
+//       fr: { hello: "Bonjour, {name} !", items: { one: "{count} article", other: "{count} articles" } },
+//     },
+//   });
+//
+//   i18n.t("hello", { name: "Ada" });   // reactive read
+//   i18n.t("items", { count: 3 });       // plural via Intl.PluralRules
+//   i18n.n(1234.5);                       // 1,234.5  (Intl.NumberFormat)
+//   i18n.setLocale("fr");                 // every t()/n()/d() binding updates
+//
+// Reader-style API (t/locale/n/d/list are reactive readers; setLocale/add write),
+// the same design language as @zoijs/resource and @zoijs/forms. Returned strings
+// are plain text — Zoijs renders them inert, so interpolated values can't inject.
+// Zero runtime dependencies; built entirely on the core's createState.
+
+import { createState } from "@zoijs/core";
+
+// Own properties only (SEC-10): `key in obj` would also find inherited names, so "{constructor}"
+// or t("toString") resolved to Object.prototype's functions. Works on null-prototype objects too.
+// Objects only: a message string isn't walked into ("hi.length" is a missing key, not 14).
+const own = (obj, key) => typeof obj === "object" && obj !== null && Object.prototype.hasOwnProperty.call(obj, key);
+
+// Fill {placeholders} from `vars`. An unknown placeholder is left as-is (visible
+// in dev), never throws. Values are stringified; the result is inert text once
+// bound in a template.
+function interpolate(str, vars) {
+  return str.replace(/\{(\w+)\}/g, (whole, key) => (own(vars, key) ? String(vars[key]) : whole));
+}
+
+// Memoize Intl formatters by locale + options — constructing them is the costly
+// part, and bindings call n()/d() on every update.
+function formatterCache(Ctor) {
+  const cache = new Map();
+  return (locale, options) => {
+    const key = locale + "\u0000" + (options ? JSON.stringify(options) : "");
+    let f = cache.get(key);
+    if (!f) {
+      f = new Ctor(locale, options);
+      cache.set(key, f);
+    }
+    return f;
+  };
+}
+
+/**
+ * Create a reactive i18n instance.
+ * @param {{ locale: string, fallback?: string, messages?: Record<string, object> }} options
+ */
+export function createI18n({ locale, fallback = locale, messages = {} } = {}) {
+  const current = createState(locale);
+  const catalog = createState(messages); // { [locale]: { key: string | { plural-cat: string } } }
+
+  const number = formatterCache(Intl.NumberFormat);
+  const dateTime = formatterCache(Intl.DateTimeFormat);
+  const listFmt = typeof Intl.ListFormat === "function" ? formatterCache(Intl.ListFormat) : null;
+
+  // Walk a dotted key ("nav.home") into a locale's table. Reactive: reads catalog.
+  function lookup(loc, key) {
+    const table = catalog.get()[loc];
+    if (!table) return undefined;
+    return key.split(".").reduce((o, k) => (own(o, k) ? o[k] : undefined), table);
+  }
+
+  /** Translate `key` (reactive). Plurals select via Intl.PluralRules on `vars.count`. */
+  function t(key, vars = {}) {
+    const loc = current.get();
+    let msg = lookup(loc, key);
+    if (msg === undefined && fallback !== loc) msg = lookup(fallback, key);
+    if (msg === undefined) return key; // missing → show the key, so gaps are obvious
+    if (msg !== null && typeof msg === "object") {
+      // A plural object: { one, other, zero?, two?, few?, many? }.
+      const cat = new Intl.PluralRules(loc).select(Number(vars.count));
+      msg = msg[cat] ?? msg.other ?? key;
+    }
+    return interpolate(String(msg), vars);
+  }
+
+  /** Whether `key` exists for the current (or fallback) locale (reactive). */
+  function has(key) {
+    return lookup(current.get(), key) !== undefined || lookup(fallback, key) !== undefined;
+  }
+
+  return {
+    /** Translate a key with optional interpolation/plural vars (reactive). */
+    t,
+    /** Does this key resolve in the current or fallback locale? (reactive) */
+    has,
+    /** The current locale (reactive). */
+    locale: () => current.get(),
+    /** Switch locale; every t()/n()/d()/list() binding updates. */
+    setLocale: (loc) => current.set(loc),
+    /** Merge more messages into a locale (e.g. a lazily-loaded bundle). Reactive. */
+    add(loc, msgs) {
+      const all = catalog.get();
+      catalog.set({ ...all, [loc]: { ...(all[loc] || {}), ...msgs } });
+    },
+    /** Format a number in the current locale (reactive). */
+    n: (value, options) => number(current.get(), options).format(value),
+    /** Format a date in the current locale (reactive). */
+    d: (value, options) => dateTime(current.get(), options).format(value),
+    /** Format a list ("a, b, and c") in the current locale (reactive). Falls back to a comma join. */
+    list: (values, options) =>
+      listFmt ? listFmt(current.get(), options).format(values) : Array.from(values).join(", "),
+  };
+}

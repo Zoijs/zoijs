@@ -1,0 +1,13 @@
+{
+  "name": "contacts-example",
+  "private": true,
+  "type": "module",
+  "description": "Zoijs Contacts CRM demo (runs from source; this package.json is only for the smoke tests).",
+  "scripts": {
+    "dev": "node ../../scripts/test-server.mjs ../.. 3530",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}

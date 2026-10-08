@@ -1,0 +1,9 @@
+{
+  "name": "zoijs-bench",
+  "private": true,
+  "type": "module",
+  "description": "Benchmarks for @zoijs/core (not published). Run from the repo root via `npm run bench`.",
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

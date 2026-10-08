@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Help
+    url: https://github.com/Zoijs/zoijs/discussions
+    about: Ask usage questions in Discussions (not the issue tracker).
+  - name: Documentation
+    url: https://zoijs.dev
+    about: Start with the docs — most questions are answered there.
+  - name: Security vulnerability
+    url: https://github.com/Zoijs/zoijs/security/advisories/new
+    about: Report security issues privately (never in public issues).
