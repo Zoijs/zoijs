@@ -185,6 +185,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`, plus a server `{ initial }` hand-off. |
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). SSR-safe. |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
+| [`@zoijs/api`](api) | Same-origin HTTP on top of resource and action — `api("/api/users")` reads, `api.post("/api/users")` writes. Safe URL params/queries, JSON, HTTP errors, invalidation; cross-origin blocked by default. |
 | [`@zoijs/storage`](storage) | A localStorage-backed reactive value — a drop-in, persistent `createState` for themes, drafts, and preferences. |
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |
@@ -194,10 +195,12 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |
 
-Install only the ones you need — each runtime package peer-depends on `@zoijs/core`:
+Install only the ones you need — each runtime package peer-depends on `@zoijs/core` (and
+`@zoijs/api`, the one layered package, also on `@zoijs/resource` and `@zoijs/action`):
 
 ```bash
 npm install @zoijs/core @zoijs/router @zoijs/resource @zoijs/head   # e.g. a typical SPA
+npm install @zoijs/resource @zoijs/action @zoijs/api                 # same-origin HTTP: api("/api/users")
 npm install -D @zoijs/eslint-plugin                                  # dev-only tools
 ```
 
@@ -252,6 +255,7 @@ router/           @zoijs/router — optional tiny router (same layout)
 resource/         @zoijs/resource — optional async-data helper (same layout)
 head/             @zoijs/head — optional title/meta helper (same layout)
 action/           @zoijs/action — optional write/mutation helper (same layout)
+api/              @zoijs/api — optional same-origin HTTP layer over resource + action (same layout)
 storage/          @zoijs/storage — optional localStorage persistence helper (same layout)
 forms/            @zoijs/forms — optional native-forms helper (same layout)
 i18n/             @zoijs/i18n — optional reactive i18n (same layout)

@@ -19,7 +19,7 @@ const publish = read(".github/workflows/publish.yml");
 const rootPkg = JSON.parse(read("package.json"));
 
 // Every directory with a Playwright config is a browser suite.
-const SUITES = ["framework", "router", "resource", "head", "action", "storage", "forms", "sanitize", "examples/task-board", "examples/admin", "examples/contacts"];
+const SUITES = ["framework", "router", "resource", "head", "action", "storage", "forms", "sanitize", "api", "examples/task-board", "examples/admin", "examples/contacts"];
 const job = (yaml, name) => {
   const m = new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-z][\\w-]*:\\n|$)`).exec(yaml);
   return m ? m[1] : null;

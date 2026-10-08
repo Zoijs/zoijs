@@ -53,10 +53,10 @@ test("packages needing an unreleased core capability are release blockers, not s
 
 // Packages must never need a private core subpath: no-build apps would have to add an import-map
 // entry for it (the CORE-3 regression). resource/action report via the shared runtime instead.
-test("no package imports a core subpath beyond the public ones; resource/action import only the root", () => {
+test("no package imports a core subpath beyond the public ones; resource/action/api import only the root", () => {
   const PUBLIC = new Set(["@zoijs/core", "@zoijs/core/server", "@zoijs/core/devtools"]);
   for (const r of results) for (const i of coreImports(r.dir)) assert.ok(PUBLIC.has(i.subpath), `${r.prefix} imports ${i.subpath}`);
-  for (const dir of ["resource", "action"]) assert.deepEqual([...new Set(coreImports(dir).map((i) => i.subpath))], ["@zoijs/core"], dir);
+  for (const dir of ["resource", "action", "api"]) assert.deepEqual([...new Set(coreImports(dir).map((i) => i.subpath))], ["@zoijs/core"], dir);
   assert.equal(compat.capabilities["@zoijs/core/internal"], undefined, "the /internal subpath is gone");
 });
 

@@ -76,7 +76,7 @@ jobs:
       # (An explicit command — not an install script — so it is unaffected by --ignore-scripts.)
       - name: Ensure browser binaries (per browser-testing package)
         run: |
-          for pkg in framework router resource head action storage forms sanitize \
+          for pkg in framework router resource head action storage forms sanitize api \
                      examples/task-board examples/admin examples/contacts; do
             npm --prefix "$pkg" exec -- playwright install chromium firefox webkit
           done
