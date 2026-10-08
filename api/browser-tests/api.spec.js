@@ -148,7 +148,7 @@ test("query: encoded by URLSearchParams, merged with the template's query, no fr
   });
   const u = new URL(url);
   expect(u.pathname).toBe("/__echo/search");
-  expect([...u.searchParams]).toEqual([["page", "2"], ["keep", "yes"], ["q", "a b&c=d?#✓"], ["exact", "true"]]);
+  expect([...u.searchParams]).toEqual([["keep", "yes"], ["q", "a b&c=d?#✓"], ["page", "2"], ["exact", "true"]]); // option keys replace (delete + append)
   expect(url).not.toContain("#");
 });
 
@@ -214,4 +214,105 @@ test("reactive query: refetches on change, latest wins, nothing after unmount", 
   expect(out.sent).toEqual(["/__echo/search?q=a", "/__echo/search?q=ab", "/__echo/search?q=abc"]);
   expect(out.shown).toBe("http://127.0.0.1:3900/__echo/search?q=abc");
   expect(out.data).toBe("http://127.0.0.1:3900/__echo/search?q=abc");
+});
+
+// ---- Phase 3: reactive params, debounce, dispose, query arrays (real fetch) -----------------------
+
+// Runs `body(core, api, wait)` in the page; every fetch the page makes is recorded in `sent`.
+async function inPage(page, body) {
+  await echo(page);
+  await page.goto(EXAMPLE);
+  return page.evaluate(async (src) => {
+    const core = await import("/framework/src/index.js");
+    const { api } = await import("/api/src/index.js");
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => {
+      sent.push(String(url).replace(location.origin, ""));
+      return realFetch(url, init);
+    };
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    try {
+      const out = await new Function("core", "api", "wait", `return (async () => { ${src} })()`)(core, api, wait);
+      return { sent, out };
+    } finally {
+      window.fetch = realFetch;
+    }
+  }, body);
+}
+
+test("reactive params: changing the id refetches, encoded as one segment", async ({ page }) => {
+  const { sent, out } = await inPage(page, `
+    const id = core.createState("1");
+    const user = api("/__echo/users/:id", { params: () => ({ id: id.get() }) });
+    await wait(100);
+    id.set("a/b ../c");
+    await wait(150);
+    const last = user.data()?.url;
+    user.dispose();
+    return last;
+  `);
+  expect(sent).toEqual(["/__echo/users/1", "/__echo/users/a%2Fb%20..%2Fc"]);
+  expect(out).toBe("http://127.0.0.1:3900/__echo/users/a%2Fb%20..%2Fc");
+});
+
+test("debounce: rapid changes send one request with the latest value", async ({ page }) => {
+  const { sent, out } = await inPage(page, `
+    const q = core.createState("");
+    const r = api("/__echo/search", { query: () => ({ q: q.get() }), debounce: 150 });
+    await wait(50);
+    for (const v of ["a", "ab", "abc", "abcd"]) { q.set(v); await wait(30); }
+    await wait(400);
+    const last = r.data()?.url;
+    r.dispose();
+    return last;
+  `);
+  expect(sent).toEqual(["/__echo/search?q=", "/__echo/search?q=abcd"]);
+  expect(out).toBe("http://127.0.0.1:3900/__echo/search?q=abcd");
+});
+
+test("query arrays: repeated keys, each value encoded", async ({ page }) => {
+  const { sent } = await inPage(page, `
+    const r = api("/__echo/products?tag=old", { query: { tag: ["new", "a&b=c", null, "✓"], page: 1 } });
+    await wait(100);
+    r.dispose();
+  `);
+  expect(sent).toHaveLength(1);
+  const u = new URL(sent[0], "http://127.0.0.1:3900");
+  expect(u.searchParams.getAll("tag")).toEqual(["new", "a&b=c", "✓"]);
+  expect([...u.searchParams.keys()]).toEqual(["tag", "tag", "tag", "page"]);
+});
+
+test("no network request after dispose() or unmount — not even a pending debounce", async ({ page }) => {
+  const network = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/__echo/")) network.push(r.url());
+  });
+  const { sent, out } = await inPage(page, `
+    const q = core.createState("a");
+    const loose = api("/__echo/loose", { query: () => ({ q: q.get() }), debounce: 100 });
+    let owned;
+    const unmount = core.mount(() => {
+      owned = api("/__echo/owned/:q", { params: () => ({ q: q.get() }) });
+      return core.html\`<p></p>\`;
+    }, document.createElement("div"));
+    await wait(80);
+    q.set("b");             // loose now has a debounce pending
+    await wait(10);
+    loose.dispose();
+    unmount();
+    q.set("c");
+    await wait(300);
+    let threw = false;
+    try { loose.refresh(); } catch (e) { threw = e.name === "ApiError" && e.type === "config"; }
+    await wait(50);
+    return { threw };
+  `);
+  expect(out.threw).toBe(true);
+  // `owned` (no debounce) refetches "b" before it unmounts; after dispose/unmount nothing is sent
+  // for "c", and `loose` never sends the "b" its debounce was still waiting on.
+  expect(sent).toContain("/__echo/owned/b");
+  expect(sent.filter((u) => u.includes("q=b") && u.includes("loose"))).toEqual([]);
+  expect(sent.filter((u) => u.endsWith("q=c") || u.endsWith("/owned/c"))).toEqual([]);
+  expect(network.filter((u) => u.includes("loose?q=b") || u.endsWith("q=c") || u.endsWith("/owned/c"))).toEqual([]);
 });

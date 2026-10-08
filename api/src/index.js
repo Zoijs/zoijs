@@ -18,9 +18,11 @@
 //
 // Dynamic URLs (options, all optional — nothing else is accepted):
 //   - params: `:name` path placeholders, each filled with exactly one encoded path segment;
-//   - query: a plain object of primitives, or a function returning one. A function is evaluated in
-//     a core computed(), so reading state in it (`() => ({ q: search.get() })`) refetches when that
-//     state changes; an effect owned by the component drives refresh(), and dies with it.
+//   - query: scalars or shallow arrays of scalars (repeated keys);
+//   - either may be a function returning the object. Functions are evaluated in a core computed(),
+//     so reading state in them (`() => ({ q: search.get() })`) refetches when that state changes;
+//     a tracking effect drives refresh(), optionally `debounce`d. Both live in one scope effect, so
+//     component unmount or dispose() removes them from the reactive graph.
 // The URL is built (params → URL API → query) and THEN goes through the same origin/scheme/
 // credential checks as any other URL. Secret-looking query keys (token, password, …) are refused.
 //
@@ -80,8 +82,11 @@ function resolveSameOrigin(input, entries) {
     // Don't echo the raw input: it may be what the developer considers secret.
     throw new ApiError(`${METHOD} blocked: invalid URL`, { type: "security" });
   }
-  // URLSearchParams.set: replaces any value the template already had for that key.
-  for (const [key, value] of entries) target.searchParams.set(key, value);
+  // An option key replaces every value the template had for it: delete, then append each value.
+  for (const [key, values] of entries) {
+    target.searchParams.delete(key);
+    for (const value of values) target.searchParams.append(key, value);
+  }
   target.hash = ""; // never part of an HTTP request
   for (const key of target.searchParams.keys()) {
     if (isSensitiveKey(key)) throw new ApiError(sensitiveMessage(key), { type: "config", url: safeUrl(target) });
@@ -168,11 +173,12 @@ function discard(res) {
 // ---- dynamic URLs: options, params, query ---------------------------------------------------
 
 // A mistake in the code calling api() (bad option, placeholder, value or key). Thrown as a
-// TypeError when api() is called; a reactive query's mistakes become an ApiError of type "config".
+// TypeError when api() is called; reactive params/query mistakes become an ApiError of type "config".
 class ConfigError extends TypeError {}
 const configError = (detail) => new ConfigError(`api(): ${detail}`);
 
 const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const MAX_DEBOUNCE = 2147483647; // setTimeout's limit; longer delays would fire immediately
 // Query keys that name a credential. Matched EXACTLY after lowercasing and dropping everything but
 // letters and digits ("Access-Token", "access_token" and "accessToken" all become "accesstoken"),
 // so pagination keys like pageToken or a "tokenizer" filter are not caught.
@@ -194,14 +200,14 @@ function ownEntries(obj, what) {
   return Object.keys(obj).map((key) => [key, obj[key]]);
 }
 
-// The text form of a param/query value. Values themselves never appear in messages.
+// The text form of a scalar param/query value. Values themselves never appear in messages.
 function toText(value, label, nullable) {
   const t = typeof value;
   if (t === "string") return value;
   if (t === "bigint" || t === "boolean" || (t === "number" && Number.isFinite(value))) return String(value);
   if (nullable && value == null) return null;
-  const hint = t === "object" || t === "function" ? " (for a reactive value, pass query: () => ({ … }) and read the state inside it)" : "";
-  throw configError(`${label} must be a string, number, bigint${nullable ? ", boolean, null or undefined" : " or boolean"}, got ${t === "number" ? "a non-finite number" : describe(value)}${nullable ? hint : ""}`);
+  const hint = t === "object" || t === "function" ? " (for a reactive value, pass a function: () => ({ … }), and read the state inside it)" : "";
+  throw configError(`${label} must be a string, number, bigint${nullable ? ", boolean, null or undefined" : " or boolean"}, got ${t === "number" ? "a non-finite number" : describe(value)}${hint}`);
 }
 
 // One path segment, encoded once: "/", "?", "#", "%", ":" and "@" can't change the URL's shape.
@@ -217,120 +223,207 @@ function encodeSegment(name, value) {
   }
 }
 
-// Fill every `/:name` path segment of the template. Strict: each placeholder needs a param, each
-// param must be used, and anything that isn't exactly `:name` (`:id?`, `:id*`, `:{id}`) is refused.
-function applyParams(template, params) {
+// Split the template once: literal path pieces and `/:name` placeholders, then the rest (`?…#…`).
+// Anything that isn't exactly `:name` (`:id?`, `:id*`, `:{id}`) is refused, as is a secret-looking
+// key in the template's own query string.
+function parseTemplate(template) {
   const cut = template.search(/[?#]/);
   const path = cut < 0 ? template : template.slice(0, cut);
   const rest = cut < 0 ? "" : template.slice(cut);
-  const values = new Map(params === undefined ? [] : ownEntries(params, "params")); // a Map: "__proto__" is just a key
-  const used = new Set();
-  const built = path.replace(/(^|\/):([^/]*)/g, (_, slash, name) => {
+  const pieces = []; // strings, and { name } for a placeholder
+  const names = new Set();
+  let at = 0;
+  for (const m of path.matchAll(/(^|\/):([^/]*)/g)) {
+    const name = m[2];
     if (!PARAM_NAME.test(name)) throw configError("unsupported placeholder in the URL — use whole /:name segments (letters, digits, _)");
-    if (!values.has(name)) throw configError(`the URL has :${name} but params.${name} is missing`);
-    used.add(name);
-    return slash + encodeSegment(name, values.get(name));
-  });
-  if (/(^|\/):[^/]*$/.test(path) && /^\?(#|$)/.test(rest)) throw configError("unsupported placeholder in the URL — optional params (:name?) aren't supported");
-  for (const name of values.keys()) {
-    if (!used.has(name)) throw configError(`params.${name} isn't used by the URL — check for a typo`);
+    const start = m.index + m[1].length;
+    pieces.push(path.slice(at, start), { name });
+    names.add(name);
+    at = start + 1 + name.length;
   }
+  pieces.push(path.slice(at));
+  if (names.size && /(^|\/):[^/]*$/.test(path) && /^\?(#|$)/.test(rest)) throw configError("unsupported placeholder in the URL — optional params (:name?) aren't supported");
   for (const key of new URLSearchParams(rest.split("#")[0]).keys()) {
     if (isSensitiveKey(key)) throw configError(sensitiveMessage(key));
   }
-  return built + rest;
+  return { pieces, names, rest };
 }
 
-// Validated [key, text] pairs; null/undefined values are left out.
+// The template's path with every placeholder filled. Strict: each placeholder needs a param and
+// each param must be used — so `params: { userId }` for `:id` is caught.
+function fillParams(tpl, params) {
+  const values = new Map(params === undefined ? [] : ownEntries(params, "params")); // a Map: "__proto__" is just a key
+  for (const name of tpl.names) if (!values.has(name)) throw configError(`the URL has :${name} but params.${name} is missing`);
+  for (const name of values.keys()) if (!tpl.names.has(name)) throw configError(`params.${name} isn't used by the URL — check for a typo`);
+  let out = "";
+  for (const piece of tpl.pieces) out += typeof piece === "string" ? piece : encodeSegment(piece.name, values.get(piece.name));
+  return out + tpl.rest;
+}
+
+// Validated [key, texts[]] pairs. A scalar is one value; an array is repeated keys (null/undefined
+// elements left out, [] clears the key); a null/undefined value contributes nothing at all.
 function queryEntries(query) {
   const out = [];
   for (const [key, value] of ownEntries(query, "query")) {
     if (isSensitiveKey(key)) throw configError(sensitiveMessage(key));
-    const text = toText(value, `query.${key}`, true);
-    if (text !== null) out.push([key, text]);
+    if (Array.isArray(value)) {
+      const texts = [];
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (Array.isArray(item)) throw configError(`query.${key}[${i}] is an array — query arrays are one level deep`);
+        const text = toText(item, `query.${key}[${i}]`, true);
+        if (text !== null) texts.push(text);
+      }
+      out.push([key, texts]);
+    } else {
+      const text = toText(value, `query.${key}`, true);
+      if (text !== null) out.push([key, [text]]);
+    }
   }
   return out;
 }
 
-// A reactive query function's current result: { key, entries } or { key, error }. Never throws, so
-// the computed/effect around it can't fail (and report) on their own.
-function evaluateQuery(fn) {
-  let value;
+// Call a params/query function. A throw becomes a config ApiError carrying it as `cause`.
+function call(fn, what) {
   try {
-    value = fn();
+    return { value: fn() };
   } catch (err) {
-    return failed(new ApiError(`${METHOD} request not sent: the query function threw`, { type: "config", cause: err }));
+    return { error: new ApiError(`${METHOD} request not sent: the ${what} function threw`, { type: "config", cause: err }) };
   }
+}
+
+// The current request: { key, path, entries } or { key, error }. Never throws, so the computed and
+// effect around it can't fail (and report) on their own; the error reaches error() via the fetcher.
+function evaluate(tpl, staticPath, params, staticEntries, query) {
+  let path = staticPath;
+  let entries = staticEntries;
   try {
-    const entries = queryEntries(value);
-    return { key: JSON.stringify(entries), entries };
+    if (typeof params === "function") {
+      const got = call(params, "params");
+      if (got.error) return failed(got.error);
+      path = fillParams(tpl, got.value);
+    }
+    if (typeof query === "function") {
+      const got = call(query, "query");
+      if (got.error) return failed(got.error);
+      entries = queryEntries(got.value);
+    }
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     return failed(new ApiError(`${METHOD} request not sent: ${err.message.slice("api(): ".length)}`, { type: "config" }));
   }
+  return { key: JSON.stringify([path, entries]), path, entries };
 }
 const failed = (error) => ({ key: "!" + error.message, error });
 
 /**
- * GET a same-origin URL as a resource: reactive data() / loading() / error() / refresh().
+ * GET a same-origin URL as a resource: reactive data() / loading() / error() / refresh(), plus
+ * dispose() for one created outside a component.
  * @param {string} url  a same-origin URL; `/:name` segments are filled from `params`
- * @param {{ params?: object, query?: object | (() => object) }} [options]
+ * @param {{ params?: object | (() => object), query?: object | (() => object), debounce?: number }} [options]
  */
 export function api(url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError("api(url): url must be a non-empty string");
   if (arguments.length > 2) throw new TypeError("api(url, options): too many arguments — api() always performs a GET");
 
-  let params, query;
+  let params, query, debounce = 0;
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
       if (key === "params") params = value;
       else if (key === "query") query = value;
-      else throw configError(`unsupported option "${key}" — only params and query are accepted (api() always performs a GET)`);
+      else if (key === "debounce") {
+        if (value === undefined) continue;
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_DEBOUNCE) {
+          throw configError(`debounce must be a finite number of milliseconds from 0 to ${MAX_DEBOUNCE}`);
+        }
+        debounce = value;
+      } else throw configError(`unsupported option "${key}" — only params, query and debounce are accepted (api() always performs a GET)`);
     }
   }
-  const path = applyParams(url, params); // static: checked once, now
 
-  // Static query: validated once, now. A query function is read through a core computed(): it
-  // tracks the state the function reads, and an effect refreshes when the built query changes.
-  let read, current;
-  if (typeof query === "function") {
-    current = computed(() => evaluateQuery(query));
-    read = () => current.peek(); // current values, even before the batched effect runs
-  } else {
-    const fixed = { key: "", entries: query === undefined ? [] : queryEntries(query) };
-    read = () => fixed;
+  // Static parts are checked once, now, and throw a TypeError. Functions are checked on every run.
+  const tpl = parseTemplate(url);
+  const staticPath = typeof params === "function" ? null : fillParams(tpl, params);
+  const staticEntries = typeof query === "function" ? [] : query === undefined ? [] : queryEntries(query);
+
+  let disposed = false;
+  let controller = null; // the in-flight request's AbortController
+  let timer = null; // a pending debounced refetch
+  let lastKey; // the request the latest load was built from
+  let current = null; // computed() of evaluate(), when params or query is a function
+  let scope = null; // the effect that owns `current` and the tracker
+  let inner = null; // the resource
+
+  const clearTimer = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    clearTimer();
+    if (controller) controller.abort();
+    controller = null;
+    if (scope) scope.dispose(); // disposes the computed and the tracker with it
+    scope = current = null;
+    params = query = null; // release the caller's functions and objects
+  };
+  onCleanup(dispose); // owned by a component → disposed on unmount
+
+  const fixed = staticPath === null ? null : { key: JSON.stringify([staticPath, staticEntries]), path: staticPath, entries: staticEntries };
+  if (!fixed || typeof query === "function") {
+    // One effect, run once: it reads nothing itself, and owns the computed + tracker created in it,
+    // so disposing it takes both out of the reactive graph. Created only for reactive options.
+    scope = effect(() => {
+      const p = params, q = query;
+      current = computed(() => evaluate(tpl, staticPath, p, staticEntries, q));
+      const cur = current;
+      effect(() => {
+        const key = cur.get().key; // tracks exactly what params()/query() read
+        if (!inner) return; // the first run only subscribes; resource() does the initial load
+        clearTimer();
+        if (key === lastKey) return; // back to what was requested (or a refresh() already sent it)
+        if (debounce > 0) {
+          timer = setTimeout(() => {
+            timer = null;
+            if (!disposed) inner.refresh();
+          }, debounce);
+        } else inner.refresh();
+      });
+    });
   }
 
-  let controller = null;
-  let lastKey; // the query the latest request was built from
-  onCleanup(() => controller && controller.abort());
-
-  const result = resource(() => {
+  inner = resource(() => {
+    clearTimer(); // whatever triggered this load supersedes a pending debounced one
     // A newer load supersedes the old one: resource() already ignores its result; abort it too.
     if (controller) controller.abort();
     controller = null;
-    const q = read();
-    lastKey = q.key;
-    if (q.error) return Promise.reject(q.error);
+    const req = current ? current.peek() : fixed; // current values, even before the batched effect runs
+    lastKey = req.key;
+    if (req.error) return Promise.reject(req.error);
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     controller = ac;
-    return request(path, q.entries, ac ? ac.signal : undefined)
-      .catch((err) => {
+    return request(req.path, req.entries, ac ? ac.signal : undefined).then(
+      // Disposed mid-flight: settle with the data already held — nothing changes, loading ends.
+      (value) => (disposed ? inner.data() : value),
+      (err) => {
+        if (disposed) return inner.data();
         // error() is always an ApiError: anything unexpected becomes a generic one, without its message.
         throw err instanceof ApiError ? err : new ApiError(`${METHOD} request failed`, { type: "network" });
-      })
-      .finally(() => {
-        if (controller === ac) controller = null;
-      });
+      },
+    ).finally(() => {
+      if (controller === ac) controller = null;
+    });
   });
 
-  // Refetch when the query changes. Effects are microtask-batched, so several state changes in one
-  // synchronous block make one request; a refresh() that already used the new query is not repeated.
-  // Owned by the calling component: disposed with it, so later state changes request nothing.
-  if (current) {
-    effect(() => {
-      if (current.get().key !== lastKey) result.refresh();
-    });
-  }
-  return result;
+  return {
+    data: inner.data,
+    loading: inner.loading,
+    error: inner.error,
+    refresh() {
+      if (disposed) throw new ApiError(`${METHOD} request not sent: refresh() was called after dispose()`, { type: "config" });
+      inner.refresh();
+    },
+    dispose,
+  };
 }

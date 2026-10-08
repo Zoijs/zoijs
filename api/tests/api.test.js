@@ -407,7 +407,8 @@ test("unmounting aborts the in-flight request; nothing settles or is reported", 
     assert.equal(page.data(), undefined);
     assert.equal(page.error(), null);
     assert.deepEqual(reported, []);
-    page.refresh(); // a disposed resource doesn't load again
+    // Unmount disposes it: refresh() throws a config ApiError instead of loading again.
+    assert.throws(() => page.refresh(), (e) => e instanceof ApiError && e.type === "config" && /after dispose/.test(e.message));
     await settle();
     assert.equal(calls.length, 1);
   } finally {
