@@ -43,11 +43,11 @@ const METHOD = "GET";
 const JSON_TYPE = /^[^/\s;]+\/(?:[^/\s;]+\+)?json$/;
 const ACCEPT = "application/json, text/plain;q=0.9, */*;q=0.8";
 
-/** A failed api() request. `type`: "http" | "network" | "security" | "parse" | "config". */
+/** A failed api() request. `type`: "http" | "network" | "security" | "parse" | "config" | "timeout". */
 export class ApiError extends Error {
   /**
    * @param {string} message
-   * @param {{ type: string, status?: number | null, statusText?: string, method?: string, url?: string | null, cause?: unknown }} details
+   * @param {{ type: string, status?: number | null, statusText?: string, method?: string, url?: string | null, cause?: unknown, problem?: object | null }} details
    */
   constructor(message, details) {
     super(message, details.cause !== undefined ? { cause: details.cause } : undefined);
@@ -57,6 +57,8 @@ export class ApiError extends Error {
     this.statusText = details.statusText ?? "";
     this.method = details.method ?? METHOD;
     this.url = details.url ?? null;
+    // Normalized problem details — only with the problemDetails option, else always null.
+    this.problem = details.problem ?? null;
   }
 }
 
@@ -111,52 +113,130 @@ const isHttp = (u) => u.protocol === "https:" || u.protocol === "http:";
 // The `url` field of an error: origin + path. No credentials, query string or fragment.
 const safeUrl = (u) => (isHttp(u) ? u.origin + u.pathname : u.protocol);
 
-// The one transport for every method. `body` is an already-serialized JSON string, or undefined
-// for no body (and then no Content-Type). Responses are parsed the same way for every method.
-async function request(input, entries, signal, method = METHOD, body) {
+// The one transport for every method.
+//   payload: undefined (no body, no Content-Type) | { json: string } | { form: FormData } — FormData
+//            goes to fetch as-is with no Content-Type, so the browser writes the multipart boundary;
+//   signal:  aborts the request when api() replaces or disposes it — never reported as a timeout;
+//   opts.timeout: ms (0 = none) from the moment fetch starts, covering the response body too. It
+//            aborts the real request (no race left running) and fails with type "timeout";
+//   opts.problemDetails: on a non-2xx application/problem+json answer, attach error.problem.
+// Responses are parsed the same way for every method.
+async function request(input, entries, signal, method = METHOD, payload, opts = NO_OPTS) {
   const target = resolveSameOrigin(input, entries, method);
   const where = safeUrl(target);
-  let res;
+  const timeout = opts.timeout || 0;
+  let timedOut = false;
+  let timer = null;
+  let ctl = null; // our controller, when there's a timeout: aborted by the timer or by `signal`
+  const forward = () => ctl.abort();
+  if (timeout > 0) {
+    ctl = new AbortController();
+    if (signal) {
+      if (signal.aborted) ctl.abort();
+      else signal.addEventListener("abort", forward, { once: true });
+    }
+    timer = setTimeout(() => {
+      if (ctl.signal.aborted) return; // replaced/disposed first: that abort isn't a timeout
+      timedOut = true;
+      ctl.abort();
+    }, timeout);
+  }
+  const fail = (what, extra) =>
+    timedOut
+      ? new ApiError(`${method} request timed out`, { type: "timeout", method, url: where })
+      : new ApiError(`${method} request failed: ${what}`, { type: "network", method, url: where, ...extra });
   try {
-    res = await globalThis.fetch(target.href, {
-      method,
-      mode: "same-origin",
-      credentials: "same-origin",
-      headers: body === undefined ? { Accept: ACCEPT } : { Accept: ACCEPT, "Content-Type": "application/json" },
-      body,
-      signal,
-    });
-  } catch {
-    // The platform's message can include the full URL; ours carries none of it.
-    throw new ApiError(`${method} request failed: network error`, { type: "network", method, url: where });
+    let res;
+    try {
+      res = await globalThis.fetch(target.href, {
+        method,
+        mode: "same-origin",
+        credentials: "same-origin",
+        headers: payload && payload.json !== undefined ? { Accept: ACCEPT, "Content-Type": "application/json" } : { Accept: ACCEPT },
+        body: payload ? (payload.json !== undefined ? payload.json : payload.form) : undefined,
+        signal: ctl ? ctl.signal : signal,
+      });
+    } catch {
+      // The platform's message can include the full URL; ours carries none of it.
+      throw fail("network error");
+    }
+    // Defense in depth for fetch implementations that don't enforce mode "same-origin".
+    if (res.redirected && res.url && !sameOrigin(res.url, target.origin)) {
+      discard(res);
+      throw new ApiError(`${method} request blocked: redirected to another origin`, { type: "security", method, url: where });
+    }
+    const mediaType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!res.ok) {
+      const statusText = typeof res.statusText === "string" ? res.statusText : "";
+      // The body stays private unless the caller opted in AND it's problem+json; even then only
+      // the known fields, never in the message, and a bad body never changes this HTTP error.
+      const problem = opts.problemDetails && mediaType === "application/problem+json" ? await readProblem(res) : (discard(res), null);
+      throw new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where, problem });
+    }
+    if (res.status === 204 || res.status === 205) {
+      discard(res);
+      return null;
+    }
+    let text;
+    try {
+      text = await res.text();
+    } catch {
+      throw fail("network error while reading the response", { status: res.status });
+    }
+    if (!JSON_TYPE.test(mediaType)) return text;
+    if (text === "") return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new ApiError(`${method} request failed: the response is not valid JSON`, { type: "parse", method, status: res.status, url: where });
+    }
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+    if (ctl && signal) signal.removeEventListener("abort", forward);
   }
-  // Defense in depth for fetch implementations that don't enforce mode "same-origin".
-  if (res.redirected && res.url && !sameOrigin(res.url, target.origin)) {
-    discard(res);
-    throw new ApiError(`${method} request blocked: redirected to another origin`, { type: "security", method, url: where });
-  }
-  if (!res.ok) {
-    discard(res);
-    const statusText = typeof res.statusText === "string" ? res.statusText : "";
-    throw new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where });
-  }
-  if (res.status === 204 || res.status === 205) {
-    discard(res);
-    return null;
-  }
-  const mediaType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-  let text;
+}
+const NO_OPTS = {};
+
+// Problem details (RFC 9457) from an error response, or null. At most MAX_PROBLEM_BYTES are read —
+// a larger (declared or actual) body is dropped unread past the limit — and only the five standard
+// members with the expected primitive types are kept. Extension members are ignored.
+const MAX_PROBLEM_BYTES = 64 * 1024;
+async function readProblem(res) {
   try {
-    text = await res.text();
+    const declared = Number(res.headers.get("content-length"));
+    if (declared > MAX_PROBLEM_BYTES) return discard(res), null;
+    let text;
+    if (res.body && typeof res.body.getReader === "function") {
+      const reader = res.body.getReader();
+      const chunks = [];
+      let size = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_PROBLEM_BYTES) {
+          reader.cancel().catch(() => {});
+          return null;
+        }
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let at = 0;
+      for (const c of chunks) bytes.set(c, (at += c.byteLength) - c.byteLength);
+      text = new TextDecoder().decode(bytes);
+    } else {
+      text = await res.text();
+      if (text.length > MAX_PROBLEM_BYTES) return null;
+    }
+    const raw = JSON.parse(text);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const own = (k) => Object.prototype.hasOwnProperty.call(raw, k);
+    const problem = {};
+    for (const k of ["type", "title", "detail", "instance"]) if (own(k) && typeof raw[k] === "string") problem[k] = raw[k];
+    if (own("status") && Number.isInteger(raw.status)) problem.status = raw.status;
+    return Object.freeze(problem);
   } catch {
-    throw new ApiError(`${method} request failed: network error while reading the response`, { type: "network", method, status: res.status, url: where });
-  }
-  if (!JSON_TYPE.test(mediaType)) return text;
-  if (text === "") return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new ApiError(`${method} request failed: the response is not valid JSON`, { type: "parse", method, status: res.status, url: where });
+    return null; // unreadable, aborted (e.g. timed out) or not JSON: the HTTP error stands alone
   }
 }
 
@@ -187,7 +267,32 @@ class ConfigError extends TypeError {}
 const configError = (detail) => new ConfigError(`api(): ${detail}`);
 
 const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const MAX_DEBOUNCE = 2147483647; // setTimeout's limit; longer delays would fire immediately
+const MAX_MS = 2147483647; // setTimeout's limit; longer delays would fire immediately
+
+// debounce / timeout: a finite number of milliseconds within the timer range (never a function).
+function readMs(value, name) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_MS) {
+    throw configError(`${name} must be a finite number of milliseconds from 0 to ${MAX_MS}`);
+  }
+  return value;
+}
+function readFlag(value, name) {
+  if (value !== undefined && typeof value !== "boolean") throw configError(`${name} must be true or false`);
+  return !!value;
+}
+
+// FormData, checked by the platform's own brand check (not instanceof): a FormData from another
+// realm (an iframe) passes, while Object.create(FormData.prototype) or an object that merely has
+// append()/entries() doesn't — calling a FormData method on those throws.
+function isFormData(value) {
+  if (typeof FormData !== "function" || value === null || typeof value !== "object") return false;
+  try {
+    FormData.prototype.has.call(value, "");
+    return true;
+  } catch {
+    return false;
+  }
+}
 // Query keys that name a credential. Matched EXACTLY after lowercasing and dropping everything but
 // letters and digits ("Access-Token", "access_token" and "accessToken" all become "accesstoken"),
 // so pagination keys like pageToken or a "tokenizer" filter are not caught.
@@ -335,20 +440,22 @@ export function api(url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError("api(url): url must be a non-empty string");
   if (arguments.length > 2) throw new TypeError("api(url, options): too many arguments — api() always performs a GET");
 
-  let params, query, debounce = 0;
+  let params, query, debounce = 0, timeout = 0, problemDetails = false;
+  let seeded = false, initial; // `initial` counts when the key is PRESENT, even as undefined
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
       if (key === "params") params = value;
       else if (key === "query") query = value;
-      else if (key === "debounce") {
-        if (value === undefined) continue;
-        if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_DEBOUNCE) {
-          throw configError(`debounce must be a finite number of milliseconds from 0 to ${MAX_DEBOUNCE}`);
-        }
-        debounce = value;
-      } else throw configError(`unsupported option "${key}" — only params, query and debounce are accepted (api() always performs a GET)`);
+      else if (key === "debounce") debounce = value === undefined ? 0 : readMs(value, "debounce");
+      else if (key === "timeout") timeout = value === undefined ? 0 : readMs(value, "timeout");
+      else if (key === "problemDetails") problemDetails = readFlag(value, "problemDetails");
+      else if (key === "initial") {
+        seeded = true;
+        initial = value; // kept as given: not cloned, sanitized or merged
+      } else throw configError(`unsupported option "${key}" — api() accepts params, query, debounce, timeout, initial and problemDetails (it always performs a GET)`);
     }
   }
+  const transport = { timeout, problemDetails };
 
   // Static parts are checked once, now, and throw a TypeError. Functions are checked on every run.
   const tpl = parseTemplate(url);
@@ -402,6 +509,10 @@ export function api(url, options) {
     });
   }
 
+  // Seeded: the first request is skipped (resource() starts settled with `initial`); later reactive
+  // changes still fetch. The seed stands for the URL as it is now, so record it as requested.
+  if (seeded) lastKey = (current ? current.peek() : fixed).key;
+
   inner = resource(() => {
     clearTimer(); // whatever triggered this load supersedes a pending debounced one
     // A newer load supersedes the old one: resource() already ignores its result; abort it too.
@@ -412,7 +523,7 @@ export function api(url, options) {
     if (req.error) return Promise.reject(req.error);
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     controller = ac;
-    return request(req.path, req.entries, ac ? ac.signal : undefined).then(
+    return request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, transport).then(
       // Disposed mid-flight: settle with the data already held — nothing changes, loading ends.
       (value) => (disposed ? inner.data() : value),
       (err) => {
@@ -423,7 +534,7 @@ export function api(url, options) {
     ).finally(() => {
       if (controller === ac) controller = null;
     });
-  });
+  }, seeded ? { initial } : undefined);
 
   const handle = {
     data: inner.data,
@@ -469,8 +580,16 @@ function readRunInput(tpl, method, args) {
 // non-finite numbers (become null), non-plain objects such as Map/Set/class instances (become {}),
 // and bigint (not JSON). Cycles throw on their own. Values with toJSON (e.g. Date) are sent as their toJSON.
 // `undefined` means no body; inside an object an undefined property is left out, as JSON does.
-function serializeBody(body) {
+// The request payload: undefined (no body), { form } for a FormData (sent as-is, multipart), or
+// { json } for anything else JSON can send faithfully. Other body types (Blob, ArrayBuffer,
+// URLSearchParams, streams, a FormData nested inside an object) are refused like any non-plain object.
+function toPayload(body) {
   if (body === undefined) return undefined;
+  if (isFormData(body)) return { form: body };
+  return { json: serializeBody(body) };
+}
+
+function serializeBody(body) {
   let text;
   try {
     text = JSON.stringify(body, (_key, value) => {
@@ -494,19 +613,21 @@ function serializeBody(body) {
 
 function mutation(method, url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError(`api.${method.toLowerCase()}(url): url must be a non-empty string`);
-  let query, invalidate = [], exclusive = false;
+  let query, invalidate = [], exclusive = false, timeout = 0, problemDetails = false;
   if (options !== undefined) {
     for (const [key, value] of ownEntries(options, "options")) {
       if (key === "query") {
         if (typeof value === "function") throw configError("a mutation's query is static — pass an object (per-call values go in the URL's params)");
         query = value;
       } else if (key === "invalidate") invalidate = readTargets(value);
-      else if (key === "exclusive") {
-        if (value !== undefined && typeof value !== "boolean") throw configError("exclusive must be true or false");
-        exclusive = !!value;
-      } else throw configError(`unsupported option "${key}" — a mutation accepts only query, invalidate and exclusive`);
+      else if (key === "exclusive") exclusive = readFlag(value, "exclusive");
+      else if (key === "timeout") timeout = value === undefined ? 0 : readMs(value, "timeout");
+      else if (key === "problemDetails") problemDetails = readFlag(value, "problemDetails");
+      else if (key === "initial") throw configError("initial is for api() resources — a mutation has no data until it runs");
+      else throw configError(`unsupported option "${key}" — a mutation accepts query, invalidate, exclusive, timeout and problemDetails`);
     }
   }
+  const transport = { timeout, problemDetails };
   const tpl = parseTemplate(url);
   const entries = query === undefined ? [] : queryEntries(query);
 
@@ -518,8 +639,9 @@ function mutation(method, url, options) {
     try {
       const { params, body } = readRunInput(tpl, method, args);
       const path = fillParams(tpl, params);
-      const text = serializeBody(body);
-      return request(path, entries, undefined, method, text).then(
+      const payload = toPayload(body);
+      // Never retried — not even after a timeout: the server may already have acted on it.
+      return request(path, entries, undefined, method, payload, transport).then(
         (value) => {
           call.ok = true;
           return value;

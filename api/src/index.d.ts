@@ -13,9 +13,23 @@ export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  * What went wrong: an HTTP status outside 2xx, a network failure, a blocked URL, invalid JSON, or
  * (`"config"`) a mistake in the calling code — a reactive params/query function that produced an
  * unsupported value or a secret-looking key, `refresh()` after `dispose()`, or a mutation `run()`
- * whose input or JSON body can't be sent.
+ * whose input or JSON body can't be sent; `"timeout"` the `timeout` option elapsed (for a
+ * mutation, the server may still have acted on it).
  */
-export type ApiErrorType = "http" | "network" | "security" | "parse" | "config";
+export type ApiErrorType = "http" | "network" | "security" | "parse" | "config" | "timeout";
+
+/**
+ * RFC 9457 problem details from an `application/problem+json` error response — only with the
+ * `problemDetails` option. Only these members, only with these types; extensions are ignored.
+ * Server-supplied and untrusted: render as text, never as HTML or a URL you follow automatically.
+ */
+export interface ApiProblem {
+  readonly type?: string;
+  readonly title?: string;
+  readonly status?: number;
+  readonly detail?: string;
+  readonly instance?: string;
+}
 
 /**
  * A failed {@link api} request. Its message carries only the method, the status and (for a blocked
@@ -23,7 +37,7 @@ export type ApiErrorType = "http" | "network" | "security" | "parse" | "config";
  * headers or response body — so it is safe to log. `url` keeps origin + path for debugging.
  */
 export class ApiError extends Error {
-  constructor(message: string, details: { type: ApiErrorType; status?: number | null; statusText?: string; method?: ApiMethod; url?: string | null; cause?: unknown });
+  constructor(message: string, details: { type: ApiErrorType; status?: number | null; statusText?: string; method?: ApiMethod; url?: string | null; cause?: unknown; problem?: ApiProblem | null });
   readonly name: "ApiError";
   readonly type: ApiErrorType;
   /** The HTTP status for `"http"` (and `"parse"`) errors, otherwise `null`. */
@@ -34,6 +48,8 @@ export class ApiError extends Error {
   readonly method: ApiMethod;
   /** The request's origin + path (no query string or fragment), or `null` when it couldn't be parsed. */
   readonly url: string | null;
+  /** Normalized problem details (`"http"` errors with `problemDetails: true` only), otherwise `null`. Never in `message`. */
+  readonly problem: ApiProblem | null;
 }
 
 /** The resource returned by {@link api}: `error()` is always an {@link ApiError} or `null`. */
@@ -73,7 +89,7 @@ export type ApiQueryValue = ApiQueryScalar | readonly ApiQueryScalar[];
 export type ApiQuery = { readonly [key: string]: ApiQueryValue };
 
 /** The only options {@link api} accepts. Anything else is refused. */
-export interface ApiOptions {
+export interface ApiOptions<T = unknown> {
   /**
    * Values for the URL's `/:name` segments — an object (read once), or a function returning one
    * (reactive: read state inside it and the request is sent again when it changes). Every
@@ -90,6 +106,19 @@ export interface ApiOptions {
    * and no timers, when neither `params` nor `query` is a function.
    */
   readonly debounce?: number;
+  /**
+   * Milliseconds (0 to 2147483647) from the moment a request starts — after any debounce — until
+   * it is aborted and fails with type `"timeout"`. `0` (the default) means no timeout.
+   */
+  readonly timeout?: number;
+  /**
+   * Seed data (e.g. from server rendering): `data()` starts as this value, `loading()` false, and
+   * the first request is skipped. Later reactive changes and `refresh()` fetch normally. The key's
+   * presence counts — `initial: undefined` seeds too. Kept as given, never cloned.
+   */
+  readonly initial?: T;
+  /** Attach normalized `application/problem+json` details to HTTP errors as `error.problem`. Default `false`. */
+  readonly problemDetails?: boolean;
 }
 
 /** A JSON value a mutation can send. Objects are plain objects; `undefined` properties are left out. */
@@ -98,7 +127,7 @@ export type ApiJson = string | number | boolean | null | readonly ApiJson[] | { 
 /** `run()`'s argument when the mutation URL has `/:name` placeholders. */
 export interface ApiRouteInput<TBody> {
   readonly params: ApiParams;
-  readonly body?: TBody;
+  readonly body?: TBody | FormData;
 }
 
 /** `run()`'s argument for `api.delete()` with `/:name` placeholders (DELETE sends no body). */
@@ -117,6 +146,14 @@ export interface ApiMutationOptions {
   readonly invalidate?: ApiResource<unknown> | readonly ApiResource<unknown>[];
   /** While a run is pending, `run()` returns that run's promise instead of sending again. Default `false`, like `@zoijs/action`. */
   readonly exclusive?: boolean;
+  /**
+   * Milliseconds (0 to 2147483647; 0 = none) before the request is aborted and fails with type
+   * `"timeout"`. It only stops the browser waiting: the server may still complete the mutation,
+   * and it is never retried.
+   */
+  readonly timeout?: number;
+  /** Attach normalized `application/problem+json` details to HTTP errors as `error.problem`. Default `false`. */
+  readonly problemDetails?: boolean;
 }
 
 /**
@@ -147,20 +184,20 @@ export interface Api {
    * placeholder, a static param or query value it can't send, a missing or unused static param, or
    * a secret-looking query key. Reactive functions report the same mistakes as a `"config"` error().
    */
-  <T = unknown>(url: string, options?: ApiOptions): ApiResource<T>;
+  <T = unknown>(url: string, options?: ApiOptions<T>): ApiResource<T>;
   /**
-   * POST JSON. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders.
+   * POST JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders.
    *
    * ```ts
    * const addTask = api.post<Task, NewTask>("/api/tasks", { invalidate: tasks, exclusive: true });
    * await addTask.run({ title: "Learn Zoijs" });
    * ```
    */
-  post<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | ApiRouteInput<TBody>>;
-  /** PUT JSON. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
-  put<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | ApiRouteInput<TBody>>;
-  /** PATCH JSON. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
-  patch<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | ApiRouteInput<TBody>>;
+  post<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
+  /** PUT JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
+  put<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
+  /** PATCH JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
+  patch<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
   /** DELETE, with no body. `run()`, or `run({ params })` when the URL has `/:name` placeholders. */
   delete<TResponse = unknown>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, ApiDeleteInput>;
 }

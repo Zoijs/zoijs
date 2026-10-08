@@ -442,3 +442,126 @@ test("a mutation HTTP error renders without leaking the body or the response", a
   expect(text).not.toContain("hunter2");
   expect(text).not.toContain("server-side-detail");
 });
+
+// ---- Phase 5: timeout, problem details, initial, FormData (real fetch) ---------------------------------
+
+test("timeout aborts the real request and reports type timeout", async ({ page }) => {
+  await page.route(/\/__slow\//, async (r) => {
+    await new Promise((res) => setTimeout(res, 1500));
+    await r.fulfill({ status: 200, contentType: "application/json", body: "[]" }).catch(() => {});
+  });
+  const failed = [];
+  page.on("requestfailed", (r) => failed.push(r.url()));
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const r = api("/__slow/list", { timeout: 200 });
+    const m = api.post("/__slow/orders", { timeout: 200 });
+    const res = await m.run({ item: 1 });
+    for (let i = 0; i < 100 && r.loading(); i++) await new Promise((x) => setTimeout(x, 10));
+    const e = r.error();
+    r.dispose();
+    return { get: e && { type: e.type, message: e.message }, post: { type: m.error()?.type, message: m.error()?.message, res } };
+  });
+  expect(out.get).toEqual({ type: "timeout", message: "GET request timed out" });
+  expect(out.post).toEqual({ type: "timeout", message: "POST request timed out", res: undefined }); // run() resolves undefined on failure
+  await expect.poll(() => failed.length).toBeGreaterThanOrEqual(2); // the browser really cancelled both
+});
+
+test("problem details: private by default, normalized with problemDetails: true", async ({ page }) => {
+  await page.route(/\/__problem\//, (r) =>
+    r.fulfill({ status: 422, contentType: "application/problem+json; charset=utf-8", body: JSON.stringify({ type: "about:blank", title: "Invalid", status: 422, detail: "<b>email</b> is required", ext: { secret: 1 } }) }),
+  );
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const plain = api.post("/__problem/users");
+    const opted = api.post("/__problem/users", { problemDetails: true });
+    await plain.run({ email: "" });
+    await opted.run({ email: "" });
+    return { plain: plain.error().problem, opted: opted.error().problem, message: opted.error().message };
+  });
+  expect(out.plain).toBeNull();
+  expect(out.opted).toEqual({ type: "about:blank", title: "Invalid", status: 422, detail: "<b>email</b> is required" });
+  expect(out.message).toMatch(/^POST request failed: 422/);
+  expect(out.message).not.toContain("email");
+});
+
+test("initial: no request on creation; refresh() fetches", async ({ page }) => {
+  await echo(page);
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => (sent.push(String(url)), realFetch(url, init));
+    const r = api("/__echo/users", { initial: [{ id: 1 }] });
+    await new Promise((x) => setTimeout(x, 100));
+    const before = { sent: sent.length, loading: r.loading(), data: r.data() };
+    r.refresh();
+    for (let i = 0; i < 100 && r.loading(); i++) await new Promise((x) => setTimeout(x, 10));
+    window.fetch = realFetch;
+    const after = r.data()?.url;
+    r.dispose();
+    return { before, after, sent: sent.length };
+  });
+  expect(out.before).toEqual({ sent: 0, loading: false, data: [{ id: 1 }] });
+  expect(out.after).toBe("http://127.0.0.1:3900/__echo/users");
+  expect(out.sent).toBe(1);
+});
+
+test("FormData is sent as multipart with a browser-generated boundary; JSON and none differ", async ({ page }) => {
+  const seen = [];
+  await page.route(/\/__upload/, async (r) => {
+    const req = r.request();
+    seen.push({ type: req.headers()["content-type"] ?? null, body: req.postData() ?? "" });
+    await r.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+  });
+  await page.goto(EXAMPLE);
+  await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const form = new FormData();
+    form.append("description", "Profile photo");
+    form.append("file", new Blob(["PNGDATA"], { type: "image/png" }), "me.png");
+    const up = api.post("/__upload/:id", { exclusive: true });
+    await Promise.all([up.run({ params: { id: 7 }, body: form }), up.run({ params: { id: 7 }, body: form })]);
+    const plain = api.post("/__upload");
+    await plain.run({ a: 1 });
+    await plain.run();
+  });
+  expect(seen).toHaveLength(3); // exclusive: the double submit sent once
+  expect(seen[0].type).toMatch(/^multipart\/form-data; boundary=/);
+  expect(seen[0].body).toContain('name="description"');
+  expect(seen[0].body).toContain("PNGDATA");
+  expect(seen[1]).toEqual({ type: "application/json", body: '{"a":1}' });
+  expect(seen[2].type).toBeNull();
+});
+
+test("a FormData from another realm (iframe) is accepted; spoofs are refused", async ({ page }) => {
+  const seen = [];
+  await page.route(/\/__upload/, async (r) => {
+    seen.push(r.request().headers()["content-type"] ?? null);
+    await r.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+  });
+  await page.goto(EXAMPLE);
+  const out = await page.evaluate(async () => {
+    const { api } = await import("/api/src/index.js");
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    const foreign = new frame.contentWindow.FormData();
+    foreign.append("x", "1");
+    const up = api.post("/__upload");
+    await up.run(foreign);
+    const crossRealm = up.error();
+    const results = [];
+    for (const spoof of [Object.create(FormData.prototype), { append() {}, entries() {} }]) {
+      await up.run(spoof);
+      results.push(up.error()?.type);
+    }
+    return { crossRealm, results };
+  });
+  expect(out.crossRealm).toBeNull();
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).toMatch(/^multipart\/form-data; boundary=/);
+  expect(out.results).toEqual(["config", "config"]);
+});

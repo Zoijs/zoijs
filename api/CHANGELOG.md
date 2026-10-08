@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON bodies and explicit invalidation.
+Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON and FormData bodies, explicit invalidation, timeouts, opt-in problem details and `initial` seeding.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -70,3 +70,20 @@ Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/pa
 - Mutations are never retried and never aborted by `api()`.
 - `ApiError.method` is now the request's method.
 - Requires `@zoijs/action` 0.2.0 or newer (`exclusive`) as a peer dependency.
+- **`timeout: ms`** on `api()` and mutations (0 to 2147483647; 0 = none). It starts when the
+  request starts (after any debounce), covers the response, really aborts the request, and fails
+  with the new `ApiError` type **`"timeout"`** (`"GET request timed out"`). Replacement, dispose and
+  unmount aborts are never reported as timeouts; timers never outlive their request. A mutation
+  timeout doesn't mean the server didn't act, and it is never retried.
+- **`problemDetails: true`** on `api()` and mutations: a non-2xx `application/problem+json` body
+  (at most 64 KB) is normalized into a frozen `error.problem` with only `type`, `title`, `status`,
+  `detail`, `instance` (typed). Never in `message`; a malformed or oversized body leaves the plain
+  `"http"` error. Without the option (the default), `error.problem` is `null` and bodies stay
+  private.
+- **`initial`** on `api()` (resource-only; mutations refuse it): seeds `data()` and skips the
+  first request — also outside the browser, so SSR can render with server data. The key's
+  presence counts (`initial: undefined` seeds). Later reactive changes and `refresh()` fetch.
+- **FormData mutation bodies** — sent as-is with no `Content-Type` (the browser sets the
+  multipart boundary), recognized by the platform's brand check (cross-realm ok, look-alikes and
+  `Object.create(FormData.prototype)` refused). Blob, ArrayBuffer, URLSearchParams and streams
+  are still refused.

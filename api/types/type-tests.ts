@@ -40,7 +40,7 @@ api(new URL("https://app.example.com/api"));
 api("/api/tasks", { method: "POST" });
 
 // @ts-expect-error — not a known error type
-new ApiError("x", { type: "timeout" });
+new ApiError("x", { type: "teapot" });
 
 void [asResource, loading, data, first, err, status, type, method, rawData, isError];
 
@@ -161,3 +161,41 @@ addTask.run({ nope: 1 });
 api.get("/x");
 
 void [added, pendingNow, doneNow, lastTask, mErr, mMethod, jsonBody];
+
+// ---- Phase 5: timeout, problem details, initial, FormData -----------------------------------------
+import type { ApiProblem } from "../src/index.js";
+
+const timed = api<Task[]>("/api/tasks", { timeout: 10_000, problemDetails: true, initial: [] });
+const seededData: Task[] | undefined = timed.data();
+const prob: ApiProblem | null | undefined = timed.error()?.problem;
+const detail: string | undefined = timed.error()?.problem?.detail;
+const timeoutType: ApiErrorType = "timeout";
+api<Task>("/api/tasks/:id", { initial: undefined, params: () => ({ id: "1" }) });
+const upload = api.post("/upload", { timeout: 15_000, problemDetails: true, exclusive: true });
+upload.run(new FormData());
+api.post("/users/:id/photo").run({ params: { id: 1 }, body: new FormData() });
+addTask.run(new FormData()); // typed JSON body, or a FormData
+const typedUpdate = api.patch<Task, Partial<Task>>("/api/tasks/:id");
+typedUpdate.run({ params: { id: 1 }, body: { title: "x" } });
+typedUpdate.run({ params: { id: 1 }, body: new FormData() });
+
+// @ts-expect-error — the seed must match the resource's type
+api<Task[]>("/api/tasks", { initial: "nope" });
+// @ts-expect-error — mutations have no initial
+api.post("/x", { initial: {} });
+// @ts-expect-error — timeout is milliseconds
+api("/x", { timeout: "10s" });
+// @ts-expect-error — problemDetails is a boolean
+api.post("/x", { problemDetails: 1 });
+// @ts-expect-error — no reactive timeout
+api("/x", { timeout: () => 1000 });
+// @ts-expect-error — Blob bodies aren't supported
+api.post("/x").run(new Blob(["x"]));
+// @ts-expect-error — URLSearchParams bodies aren't supported
+api.post("/x").run(new URLSearchParams());
+// @ts-expect-error — DELETE still sends no body
+api.delete("/x/:id").run({ params: { id: 1 }, body: new FormData() });
+// @ts-expect-error — problem members are read-only
+timed.error()!.problem!.detail = "x";
+
+void [seededData, prob, detail, timeoutType];
