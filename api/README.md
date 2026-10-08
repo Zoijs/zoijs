@@ -2,38 +2,39 @@
 
 # @zoijs/api
 
-**Same-origin GET requests for [Zoijs](https://zoijs.dev), as a resource.** Safe URL building, reactive queries, HTTP errors, JSON parsing and a same-origin policy built in.
+**Same-origin data access for [Zoijs](https://zoijs.dev).** Reads as a resource, writes as an action — safe URL building, reactive queries, JSON bodies, invalidation, HTTP errors and a same-origin policy built in.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/api.svg)](https://www.npmjs.com/package/@zoijs/api)
 [![license](https://img.shields.io/npm/l/@zoijs/api.svg)](LICENSE)
 
-[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core) · [@zoijs/resource](../resource/README.md)
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core) · [@zoijs/resource](../resource/README.md) · [@zoijs/action](../action/README.md)
 
 </div>
 
 ---
 
 `@zoijs/api` is an **optional** package. It is a thin layer over
-[`@zoijs/resource`](../resource/README.md):
+[`@zoijs/resource`](../resource/README.md) for reads and [`@zoijs/action`](../action/README.md)
+for writes:
 
 ```js
-const tasks = api("/api/tasks");
+const tasks = api("/api/tasks");                                   // a resource
+const addTask = api.post("/api/tasks", { invalidate: tasks });     // an action
+await addTask.run({ title: "Learn Zoijs" });                       // POST JSON, then tasks refreshes
 ```
 
-does what this does, without the helper you'd otherwise write yourself:
-
-```js
-const tasks = resource(() => getJSON("/api/tasks")); // getJSON: fetch + res.ok check + res.json()
-```
+with no `fetch`, `res.ok` check, `JSON.stringify`, `Content-Type` header or `refresh()` call
+of your own.
 
 ## Install
 
 ```bash
-npm install @zoijs/core @zoijs/resource @zoijs/api
+npm install @zoijs/core @zoijs/resource @zoijs/action @zoijs/api
 ```
 
-`@zoijs/core` and `@zoijs/resource` are peer dependencies. With no install, from a CDN: in an
-import map, point "@zoijs/core", "@zoijs/resource" and "@zoijs/api" at **exact-version**
+`@zoijs/core`, `@zoijs/resource` and `@zoijs/action` are peer dependencies. With no install, from
+a CDN: in an import map, point "@zoijs/core", "@zoijs/resource", "@zoijs/action" and "@zoijs/api"
+at **exact-version**
 jsDelivr file URLs with integrity hashes, then import by name (so every package shares one
 core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 
@@ -256,6 +257,143 @@ one of: `token`, `accesstoken`, `refreshtoken`, `idtoken`, `authtoken`, `session
 are refused, while `pageToken`, `next_page_token`, `tokenizer` and `author` are not. Send
 credentials in a header or a request body — and authorize on the server.
 
+## Mutations: `api.post`, `api.put`, `api.patch`, `api.delete`
+
+```js
+import { html, each } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function Tasks() {
+  const tasks = api("/api/tasks");
+  const addTask = api.post("/api/tasks", { invalidate: tasks, exclusive: true });
+  const removeTask = api.delete("/api/tasks/:id", { invalidate: tasks });
+
+  async function submit(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    await addTask.run({ title: new FormData(form).get("title") });
+    if (addTask.done()) form.reset();
+  }
+
+  return html`
+    <form onsubmit=${submit}>
+      <input name="title" required />
+      <button disabled=${() => addTask.pending()}>${() => (addTask.pending() ? "Adding..." : "Add")}</button>
+      ${() => (addTask.error() ? html`<p role="alert">${addTask.error().message}</p>` : null)}
+    </form>
+    <ul>
+      ${each(() => tasks.data() ?? [], (task) => task.id, (task) => html`
+        <li>${task.title}
+          <button onclick=${() => removeTask.run({ params: { id: task.id } })}>Delete</button></li>`)}
+    </ul>
+  `;
+}
+```
+
+Each factory returns an [`@zoijs/action`](../action/README.md): `run()`, and reactive
+`pending()`, `error()`, `done()`, `result()`, plus `reset()`. Nothing is sent until `run()`.
+`run()` **never rejects** — it resolves with the parsed response, or `undefined` on failure, and
+the failure is in `error()` (an `ApiError`, reported to `configure({ onError })` as
+`kind: "action"`). No `try`/`catch` needed for normal error handling.
+
+### What `run()` takes
+
+The URL decides — never the shape of the argument:
+
+| Method | URL without `/:name` | URL with `/:name` placeholders |
+|---|---|---|
+| `api.post` / `api.put` / `api.patch` | `run(body)` — the argument **is** the JSON body; `run()` sends none | `run({ params, body })` — `body` optional; any other key throws |
+| `api.delete` | `run()` — any argument is refused | `run({ params })` — a `body` is refused |
+
+```js
+const updateTask = api.put("/api/tasks/:id");
+await updateTask.run({ params: { id: task.id }, body: { title: "Updated" } });
+
+const patchTask = api.patch("/api/tasks/:id");
+await patchTask.run({ params: { id: task.id }, body: { completed: true } });
+
+const removeTask = api.delete("/api/tasks/:id", { query: { hard: true } });
+await removeTask.run({ params: { id: task.id } }); // DELETE /api/tasks/42?hard=true
+```
+
+So with `api.post("/api/raw")`, `run({ params: …, body: … })` sends that whole object as the
+body; with `/:name` in the URL, params and body are always separate, so form data can't leak into
+the path or vice versa. `params` follow every `api()` path rule (one encoded segment each, strict
+missing/unused checks, `"."`/`".."` refused). Mistakes in `run()`'s input don't throw: no request
+is sent and `error()` is a `"config"` `ApiError`.
+
+### JSON bodies
+
+The body is sent with `JSON.stringify` and `Content-Type: application/json` (plus the same
+`Accept` header as GETs). You can't set or override headers.
+
+- Sent: `null`, strings, finite numbers, booleans, arrays and plain objects (also
+  `Object.create(null)` ones), nested freely. Objects with `toJSON` (e.g. `Date`) send their
+  `toJSON()`. An `undefined` property is left out, as in JSON.
+- **Refused** — no request is sent, `error()` is a `"config"` `ApiError`: `bigint` (never
+  coerced), functions and symbols (JSON would silently drop them), `NaN`/`Infinity` (JSON would
+  send `null`), `Map`, `Set` and class instances (JSON would send `{}`), cycles, and getters or
+  `toJSON` that throw.
+- Getters run once, as plain `JSON.stringify` would run them; the body is never cloned, merged
+  or mutated. `__proto__`, `constructor` and `prototype` are ordinary JSON keys.
+- Error messages never contain the body — not a value, not a key, not the platform's own
+  serialization message.
+- No body (`run()`) means no body **and** no `Content-Type` — never the text `"undefined"`.
+- JSON only for now: `FormData`, files and other body types will come in a later version.
+
+Responses are parsed exactly like GETs (JSON, `204`/`205` → `null`, text as a string,
+non-2xx → `"http"`, invalid JSON → `"parse"`), and every URL gets the same same-origin checks.
+
+### Options
+
+`api.post/put/patch/delete(url, options)` accepts only:
+
+- **`query`** — a static object, with the same rules and secret-key refusal as `api()`. Per-call
+  values go in `params`.
+- **`invalidate`** — an `api()` resource, or an array of them, to refresh after success.
+- **`exclusive`** — `true` makes a double submit send once: while a run is pending, `run()` returns
+  that run's promise instead of sending again. Default `false`, exactly as in `@zoijs/action`.
+
+Anything else — `headers`, `method`, `credentials`, `mode`, `redirect`, `cache`, … — throws.
+
+### Invalidation
+
+```js
+const tasks = api("/api/tasks");
+const dashboard = api("/api/dashboard");
+const save = api.post("/api/tasks", { invalidate: [tasks, dashboard] });
+```
+
+- Only after the server **succeeds**: never after an HTTP, network, parse or config failure.
+- After the mutation's success state is set. **`run()` doesn't wait** for the refreshes — they
+  continue on their own, so a slow list doesn't make the save slow.
+- A refresh that then fails is **the resource's** failure: it shows in that resource's `error()`
+  (and `onError` as `kind: "resource"`) and never marks the mutation as failed.
+- Each resource refreshes once per successful run (listed twice → once; a call that joined an
+  `exclusive` run doesn't refresh again). It refreshes with its current params/query and skips a
+  pending debounce.
+- A disposed or unmounted resource is skipped quietly — a stale view can't turn a successful
+  save into an error. If the mutation's own component unmounted while the request was in
+  flight, the action ignores the late result (as `@zoijs/action` does) but live resources are
+  still refreshed: the server did change.
+- Only real `api()` resources are accepted. An object with a `refresh()` method, a copy of a
+  resource or a mutation throws a `TypeError`: resources are tracked privately, so they can't
+  be spoofed. Nothing is invalidated by guessing from URLs.
+
+### No retries, no cancellation, no optimism
+
+- **Mutations are never retried** — not on network errors, not on 5xx. Repeating a POST can
+  create a second order, payment or email; retries need idempotency on the server first.
+- **Nothing aborts a mutation.** An in-flight request runs to completion even if its component
+  unmounts — aborting would only stop the browser *waiting*, never undo the server operation.
+- Updates aren't optimistic: the UI changes when the server answers and the invalidated
+  resources reload.
+
+Cookies are sent same-origin, as for any `fetch`. Protect state-changing endpoints against
+[CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) on the
+server, and authorize and validate every request there — client-side checks are not access
+control.
+
 ## Responses
 
 | Response | `data()` | `error()` |
@@ -275,7 +413,7 @@ script. To render trusted HTML you must opt in yourself (see
 
 ## `ApiError`
 
-Every failure is an `ApiError` (it extends `Error`):
+Every failure — from `api()` and from mutations — is an `ApiError` (it extends `Error`):
 
 ```js
 import { api, ApiError } from "@zoijs/api";
@@ -292,12 +430,13 @@ users.error()?.status; // 404 — the HTTP status ("http"/"parse"), otherwise nu
 | `type` | `"http"`, `"network"`, `"security"`, `"parse"` or `"config"` |
 | `status` | the HTTP status, or `null` |
 | `statusText` | the HTTP status text, or `""` (HTTP/2 has none) |
-| `method` | `"GET"` |
+| `method` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"` |
 | `url` | origin + path, e.g. `"https://app.example.com/api/users"` — no query string or fragment; `null` for an unparseable URL |
-| `message` | e.g. `"GET request failed: 404 Not Found"` — no URL path |
+| `message` | e.g. `"GET request failed: 404 Not Found"`, `"POST request not sent: …"` — no URL path |
 
 The message is built to be **safe to log**: it never contains the URL path, query string or
-fragment, URL credentials, request or response headers, cookies, or the response body — paths
+fragment, URL credentials, request or response headers, cookies, the request body, or the
+response body — paths
 can carry identifiers or tokens (`/reset/<token>`). Only a blocked cross-origin request names
 the target origin. If you need the endpoint, read `error.url` (origin + path, never the query
 string or fragment) and decide yourself whether to log it — with `params`, the path includes
@@ -332,8 +471,9 @@ see the [production security checklist](https://zoijs.dev/production-security).
 
 ## In this version
 
-- **GET only.** `api()` accepts only `params`, `query` and `debounce`, and always performs a GET.
-  For writes, use [`@zoijs/action`](../action/README.md).
+- **JSON only.** Mutation bodies are JSON; `FormData` and file uploads aren't supported yet.
+- **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
+- **No retries, timeouts or optimistic updates.**
 - **Browser only.** It needs a page origin; on the server every request is refused.
 
 ## License

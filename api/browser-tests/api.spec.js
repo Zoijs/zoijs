@@ -316,3 +316,129 @@ test("no network request after dispose() or unmount — not even a pending debou
   expect(sent.filter((u) => u.endsWith("q=c") || u.endsWith("/owned/c"))).toEqual([]);
   expect(network.filter((u) => u.includes("loose?q=b") || u.endsWith("q=c") || u.endsWith("/owned/c"))).toEqual([]);
 });
+
+// ---- Phase 4: mutations (real fetch) ------------------------------------------------------------------
+
+// /__crud/ answers every method with what the browser actually sent; /__crud/fail answers 422.
+async function crud(page, { delay = 0 } = {}) {
+  await page.route(/\/__crud\//, async (r) => {
+    const req = r.request();
+    if (delay && req.method() !== "GET") await new Promise((res) => setTimeout(res, delay));
+    if (req.url().includes("/__crud/fail")) {
+      return r.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: "server-side-detail" }) });
+    }
+    const headers = req.headers();
+    await r.fulfill({
+      status: req.method() === "DELETE" ? 204 : req.method() === "POST" ? 201 : 200,
+      contentType: "application/json",
+      body: req.method() === "DELETE" ? "" : JSON.stringify({ method: req.method(), url: req.url(), contentType: headers["content-type"] ?? null, body: req.postData() ?? null }),
+    });
+  });
+}
+
+async function inCrud(page, body, opts) {
+  await crud(page, opts);
+  await page.goto(EXAMPLE);
+  return page.evaluate(async (src) => {
+    const core = await import("/framework/src/index.js");
+    const { api } = await import("/api/src/index.js");
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = (url, init) => {
+      sent.push(`${init.method} ${String(url).replace(location.origin, "")}`);
+      return realFetch(url, init);
+    };
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    try {
+      const out = await new Function("core", "api", "wait", `return (async () => { ${src} })()`)(core, api, wait);
+      return { sent, out };
+    } finally {
+      window.fetch = realFetch;
+    }
+  }, body);
+}
+
+test("POST sends a JSON body with Content-Type; the response is parsed", async ({ page }) => {
+  const { out } = await inCrud(page, `
+    const add = api.post("/__crud/tasks");
+    const res = await add.run({ title: "Learn Zoijs", tags: ["a"], n: 1 });
+    return { res, done: add.done() };
+  `);
+  expect(out.done).toBe(true);
+  expect(out.res).toMatchObject({ method: "POST", contentType: "application/json", body: '{"title":"Learn Zoijs","tags":["a"],"n":1}' });
+});
+
+test("PATCH and PUT with route params; DELETE with params sends no body", async ({ page }) => {
+  const { sent, out } = await inCrud(page, `
+    const patch = await api.patch("/__crud/tasks/:id").run({ params: { id: "a/b" }, body: { completed: true } });
+    const put = await api.put("/__crud/tasks/:id").run({ params: { id: 7 }, body: { title: "Updated" } });
+    const remove = api.delete("/__crud/tasks/:id", { query: { hard: true } });
+    const del = await remove.run({ params: { id: 42 } });
+    return { patch, put, del, delDone: remove.done() };
+  `);
+  expect(out.patch).toMatchObject({ method: "PATCH", url: "http://127.0.0.1:3900/__crud/tasks/a%2Fb", body: '{"completed":true}' });
+  expect(out.put).toMatchObject({ method: "PUT", url: "http://127.0.0.1:3900/__crud/tasks/7", body: '{"title":"Updated"}' });
+  expect(out.del).toBeNull();
+  expect(out.delDone).toBe(true);
+  expect(sent).toEqual(["PATCH /__crud/tasks/a%2Fb", "PUT /__crud/tasks/7", "DELETE /__crud/tasks/42?hard=true"]);
+});
+
+test("invalidation refreshes the GET after success; exclusive double submit sends once", async ({ page }) => {
+  const { sent, out } = await inCrud(page, `
+    const tasks = api("/__crud/tasks");
+    await wait(80);
+    const add = api.post("/__crud/tasks", { invalidate: tasks, exclusive: true });
+    const [a, b] = await Promise.all([add.run({ title: "x" }), add.run({ title: "y" })]);
+    await wait(150);
+    tasks.dispose();
+    return { same: JSON.stringify(a) === JSON.stringify(b), last: tasks.data()?.method };
+  `, { delay: 100 });
+  expect(sent).toEqual(["GET /__crud/tasks", "POST /__crud/tasks", "GET /__crud/tasks"]);
+  expect(out.same).toBe(true);
+  expect(out.last).toBe("GET");
+});
+
+test("mutations are same-origin only — no request leaves the page", async ({ page }) => {
+  const external = [];
+  page.on("request", (r) => {
+    if (!r.url().startsWith("http://127.0.0.1:3900/")) external.push(r.url());
+  });
+  const { sent, out } = await inCrud(page, `
+    const out = [];
+    for (const url of ["http://localhost:3900/__crud/x", "//localhost:3900/x", "/\\\\localhost:3900/x"]) {
+      const m = api.post(url);
+      await m.run({ secret: "body" });
+      out.push(m.error()?.type);
+    }
+    const p = api.patch("/__crud/:a");
+    await p.run({ params: { a: "//localhost:3900" }, body: {} });
+    out.push(p.result()?.url);
+    return out;
+  `);
+  expect(out.slice(0, 3)).toEqual(["security", "security", "security"]);
+  expect(out[3]).toBe("http://127.0.0.1:3900/__crud/%2F%2Flocalhost%3A3900");
+  expect(sent).toEqual(["PATCH /__crud/%2F%2Flocalhost%3A3900"]);
+  expect(external).toEqual([]);
+});
+
+test("a mutation HTTP error renders without leaking the body or the response", async ({ page }) => {
+  await crud(page);
+  await page.goto(EXAMPLE);
+  const text = await page.evaluate(async () => {
+    const core = await import("/framework/src/index.js");
+    const { api } = await import("/api/src/index.js");
+    const host = document.createElement("div");
+    document.body.append(host);
+    let save;
+    core.mount(() => {
+      save = api.post("/__crud/fail");
+      return core.html`${() => (save.error() ? core.html`<p role="alert">${save.error().message}</p>` : null)}`;
+    }, host);
+    await save.run({ password: "hunter2-body-secret", card: "4111" });
+    await new Promise((r) => setTimeout(r, 20));
+    return host.textContent;
+  });
+  expect(text).toMatch(/^POST request failed: 422( [A-Za-z ]+)?$/); // status text varies by engine
+  expect(text).not.toContain("hunter2");
+  expect(text).not.toContain("server-side-detail");
+});

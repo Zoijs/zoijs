@@ -1,7 +1,7 @@
 {
   "name": "@zoijs/api",
   "version": "0.1.0",
-  "description": "Same-origin GET requests as a Zoijs resource: api(url, { params, query }) with safe URL building, reactive queries, HTTP errors, JSON parsing and a same-origin policy built in. No JSX, no build step.",
+  "description": "Same-origin data access for Zoijs: api(url, { params, query }) reads as a resource, api.post/put/patch/delete write as an action — safe URL building, JSON bodies, invalidation, HTTP errors and a same-origin policy built in. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -41,11 +41,13 @@
     "resource",
     "same-origin",
     "no-build",
-    "no-jsx"
+    "no-jsx",
+    "mutation"
   ],
   "peerDependencies": {
     "@zoijs/core": "^1.2.0",
-    "@zoijs/resource": "^0.3.0"
+    "@zoijs/resource": "^0.3.0",
+    "@zoijs/action": "^0.2.0"
   },
   "scripts": {
     "test": "node --test --import ./tests/setup-dom.js",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@zoijs/action": "file:../action",
     "@zoijs/core": "file:../framework",
     "@zoijs/resource": "file:../resource",
     "jsdom": "^29.1.1",

@@ -22,7 +22,7 @@ tasks.refresh();
 const err: ApiError | null = tasks.error();
 const status: number | null | undefined = tasks.error()?.status;
 const type: ApiErrorType | undefined = tasks.error()?.type;
-const method: "GET" | undefined = tasks.error()?.method;
+const method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | undefined = tasks.error()?.method;
 
 // the default data type is unknown — narrow it before use
 const raw = api("/api/raw");
@@ -112,3 +112,52 @@ api("/u/:id", { params: () => ({ id: ["1"] }) });
 api("/u/:id", { params: () => ({ id: null }) });
 
 void [disposeFn, p3, s3];
+
+// ---- Phase 4: mutations ---------------------------------------------------------------------------
+import type { ApiMutation, ApiJson, ApiMethod } from "../src/index.js";
+
+interface NewTask { title: string }
+const taskList = api<Task[]>("/api/tasks");
+const addTask = api.post<Task, NewTask>("/api/tasks", { invalidate: taskList, exclusive: true });
+addTask.run({ title: "Learn Zoijs" });
+const added: Promise<Task | undefined> = addTask.run({ title: "x" });
+const pendingNow: boolean = addTask.pending();
+const doneNow: boolean = addTask.done();
+const lastTask: Task | undefined = addTask.result();
+const mErr: ApiError | null = addTask.error();
+const mMethod: ApiMethod | undefined = addTask.error()?.method;
+addTask.reset();
+
+const updateTask = api.put<Task, Partial<Task>>("/api/tasks/:id");
+updateTask.run({ params: { id: 1 }, body: { title: "Updated" } });
+api.patch("/api/tasks/:id").run({ params: { id: "a" }, body: { completed: true } });
+api.patch("/api/tasks/:id").run({ params: { id: "a" } });
+const removeTask: ApiMutation<unknown, { readonly params: { readonly [n: string]: string | number | bigint | boolean } }> = api.delete("/api/tasks/:id", { invalidate: [taskList], query: { hard: true } });
+removeTask.run({ params: { id: 42 } });
+api.delete("/api/tasks").run();
+api.post("/api/x").run();
+api.post("/api/x").run([1, "a", null, { nested: true }]);
+const jsonBody: ApiJson = { a: [1, { b: null }], c: undefined };
+
+// @ts-expect-error — mutation factories don't take headers
+api.post("/x", { headers: {} });
+// @ts-expect-error — nor a method
+api.post("/x", { method: "PUT" });
+// @ts-expect-error — mutation queries are static
+api.delete("/x", { query: () => ({}) });
+// @ts-expect-error — invalidate takes api() resources
+api.post("/x", { invalidate: { refresh() {} } });
+// @ts-expect-error — exclusive is a boolean
+api.post("/x", { exclusive: "yes" });
+// @ts-expect-error — DELETE sends no body
+api.delete("/tasks/:id").run({ params: { id: 1 }, body: {} });
+// @ts-expect-error — bigint isn't JSON
+api.post("/x").run({ amount: 10n });
+// @ts-expect-error — functions aren't JSON
+api.post("/x").run({ fn: () => 1 });
+// @ts-expect-error — the typed body is enforced
+addTask.run({ nope: 1 });
+// @ts-expect-error — api.get doesn't exist: api(url) is the GET
+api.get("/x");
+
+void [added, pendingNow, doneNow, lastTask, mErr, mMethod, jsonBody];

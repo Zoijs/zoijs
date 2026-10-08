@@ -6,7 +6,7 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## 0.1.0 — unreleased
 
-Initial release: the secure GET foundation, safe dynamic URLs, reactive params and queries, debounce and explicit disposal.
+Initial release: secure same-origin reads (`api()`) and writes (`api.post/put/patch/delete`) — safe dynamic URLs, reactive params and queries, debounce, disposal, JSON bodies and explicit invalidation.
 
 ### Added
 - **`api(url)`** — GET a same-origin URL as a `resource()`: the same `data()` / `loading()` /
@@ -53,3 +53,20 @@ Initial release: the secure GET foundation, safe dynamic URLs, reactive params a
   nothing is reported), cancels a pending debounce and removes the reactive computed/effect from
   the graph. Idempotent; runs automatically on component unmount. `refresh()` afterwards throws an
   `ApiError` of type `"config"`.
+- **Mutations: `api.post` / `api.put` / `api.patch` / `api.delete`** — each returns an
+  `@zoijs/action` (`run`, `pending`, `error`, `done`, `result`, `reset`; `run()` never rejects;
+  failures report as `kind: "action"`). The URL decides `run()`'s argument: without `/:name`
+  it is the JSON body (`run(body)`), with placeholders it is `{ params, body? }`; DELETE sends no
+  body. Same transport, response parser, same-origin checks and path/query rules as `api()`.
+- **JSON bodies** — `JSON.stringify` with `Content-Type: application/json`; no body means no
+  `Content-Type`. Refused before sending (as a `"config"` error, never echoing the body): bigint,
+  functions, symbols, non-finite numbers, Map/Set/class instances, cycles, throwing getters.
+- **Options** — only `query` (static), `invalidate` and `exclusive` (default `false`, as in
+  `@zoijs/action`); headers, method, credentials and other transport options throw.
+- **Invalidation** — `invalidate: resource | resource[]` refreshes those `api()` resources after a
+  successful request, after the action's success state is set; `run()` doesn't wait for them, and
+  their failures stay theirs. Deduplicated; disposed targets skipped; only real `api()` resources
+  accepted (tracked privately, not by shape).
+- Mutations are never retried and never aborted by `api()`.
+- `ApiError.method` is now the request's method.
+- Requires `@zoijs/action` 0.2.0 or newer (`exclusive`) as a peer dependency.

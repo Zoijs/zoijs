@@ -22,7 +22,7 @@ const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "t
 // Reviewed layering edges (framework/docs/scope.md §4): package dir → the sibling package names it
 // may import and must peer-depend on, in addition to @zoijs/core. Keep this list short — each entry
 // is a deliberate design decision, never a convenience. A layered package can't itself be a base.
-const LAYERED = { api: ["resource"] }; // @zoijs/api = resource() + a secure GET request layer
+const LAYERED = { api: ["resource", "action"] }; // @zoijs/api: resource() for reads, action() for writes, over one secure request layer
 const TOOLING = ["create", "eslint-plugin"]; // create-zoijs, @zoijs/eslint-plugin — zero deps, no peers
 const ALL = [CORE, ...OPTIONAL, ...TOOLING];
 
