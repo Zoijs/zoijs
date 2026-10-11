@@ -97,10 +97,10 @@ test("baseURL: query strings, fragments and dot segments are refused", () => {
   for (const baseURL of ["https://api.example.com/v1/../admin", "https://api.example.com/./v1", "https://api.example.com/%2e%2e/", "https://api.example.com/v1/%2E"]) throwsCreate({ baseURL }, /segments/);
 });
 
-test("options: only { baseURL } — headers, credentials and anything else are refused", () => {
+test("options: only { baseURL, auth } — headers, credentials and anything else are refused", () => {
   throwsCreate({ baseURL: "https://api.example.com", headers: {} }, /unsupported option "headers"/);
   throwsCreate({ baseURL: "https://api.example.com", credentials: "include" }, /unsupported option "credentials"/);
-  for (const key of ["mode", "redirect", "fetch", "auth", "token", "trustedOrigins", "baseUrl"]) throwsCreate({ baseURL: "https://api.example.com", [key]: 1 }, /unsupported option/);
+  for (const key of ["mode", "redirect", "fetch", "token", "authorization", "trustedOrigins", "baseUrl"]) throwsCreate({ baseURL: "https://api.example.com", [key]: 1 }, /unsupported option/);
   throwsCreate({}, /baseURL must be/);
   throwsCreate(null, /plain object/);
   throwsCreate("https://api.example.com", /plain object/);
