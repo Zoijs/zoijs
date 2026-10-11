@@ -14,6 +14,8 @@
 //      online by reading that version's published tarball. A package needing a capability that
 //      only ships in the next, still-unversioned core release is a release BLOCKER;
 //   5. no tarball file (READMEs, templates) points at a floating Zoijs CDN URL or a build service;
+//   5c. (online) current docs pin no stale version of the package: an exact `<name>@x.y.z` must be
+//      this release or npm's `latest` (see check-doc-pins.mjs, which re-checks after publishing);
 //   6. create-zoijs: generated apps target one exact, published core version (create/core-cdn.json)
 //      at or above the security floor and every capability the templates need, whose integrity
 //      map matches the published files; templates take versions only from that file.
@@ -40,6 +42,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { docPins, currentDocs, npmLatest } from "./check-doc-pins.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const root = ROOT;
@@ -156,13 +159,14 @@ function fetchPublishedCore(version, work) {
 export const verdict = (r) => (r.problems.length ? "ERROR" : r.blockers?.length ? "BLOCKED" : "READY");
 
 /**
- * Check one package at one version. Options (tests inject the last three):
+ * Check one package at one version. Options (tests inject the last four):
  *   offline   — skip registry reads;
  *   compat    — the compatibility table (default scripts/zoijs-compat.json);
  *   root      — the repository root to read packages from;
- *   fetchCore — (version, workDir) => unpacked published core dir.
+ *   fetchCore — (version, workDir) => unpacked published core dir;
+ *   latestOf  — (name) => npm's `latest` version, or null when unpublished.
  */
-export function check(prefix, version, { offline = false, compat = COMPAT, root = ROOT, fetchCore = fetchPublishedCore } = {}) {
+export function check(prefix, version, { offline = false, compat = COMPAT, root = ROOT, fetchCore = fetchPublishedCore, latestOf = npmLatest } = {}) {
   const problems = [];
   const dir = PACKAGES[prefix];
   if (!dir) return { problems: [`unknown package "${prefix}" (known: ${Object.keys(PACKAGES).join(", ")})`] };
@@ -256,6 +260,32 @@ export function check(prefix, version, { offline = false, compat = COMPAT, root 
       try { map = JSON.parse(body); } catch { problems.push("README.md has an import map that isn't valid JSON"); continue; }
       for (const s of subpaths) if (!map.imports?.[s]) problems.push(`README.md's import map doesn't map "${s}", which this package imports`);
       for (const url of Object.values(map.imports || {})) if (!map.integrity?.[url]) problems.push(`README.md's import map has no integrity for ${url}`);
+    }
+  }
+
+  // 5c. current docs pin no stale version of this package. Before this publish, a doc may still pin
+  // the release being superseded (npm's `latest`): an import map's integrity can only be regenerated
+  // from published files. Anything older is stale; anything newer than this release is a typo.
+  // Online only — offline there's no way to tell the superseded release from an older one.
+  if (!offline) {
+    const pins = docPins(currentDocs(root)).filter((p) => p.name === name);
+    if (pins.length) {
+      let latest;
+      try {
+        latest = latestOf(name);
+      } catch (err) {
+        problems.push(`couldn't read npm's latest ${name} to check doc pins (${String(err.message).split("\n")[0]})`);
+      }
+      if (latest !== undefined) {
+        const ok = new Set([version, ...(latest ? [latest] : [])]);
+        for (const p of pins) {
+          if (ok.has(p.version)) continue;
+          const at = `${p.file.slice(root.length + 1)}:${p.line}`;
+          problems.push(cmp(p.version, version) > 0
+            ? `${at} pins ${name}@${p.version}, newer than this release (${version})`
+            : `${at} pins ${name}@${p.version} — stale: docs may pin only this release or npm's latest (${latest ?? "none published"})`);
+        }
+      }
     }
   }
 

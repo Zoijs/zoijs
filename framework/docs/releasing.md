@@ -143,12 +143,18 @@ Every Playwright suite starts the repository's own static server,
 [`scripts/test-server.mjs`](../../scripts/test-server.mjs) (Node built-ins, 127.0.0.1 only,
 `no-store`), each on its own port — never `npx serve`, which would resolve a mutable package at
 test time. The port table lives in that file's header and is enforced by the consistency test.
+A suite can give it a second port — another origin — for real cross-origin tests (`@zoijs/api`
+uses 3901 for `createApi()` and CORS).
 
 ## Before tagging
 
 - The package's `version`, `CHANGELOG.md`, and README are updated and merged to `main`.
 - Its `@zoijs/core` peer range starts at a core version that really has what it imports.
-- `npm run release:check -- <package>-v<version>` passes locally (**READY**).
+- `npm run release:check -- <package>-v<version>` passes locally (**READY**). Online, it also
+  fails when current docs (READMEs, `docs/*.md`) pin a **stale** version of the package — an exact
+  `@zoijs/<name>@x.y.z` older than npm's `latest` or newer than the release. Pinning the release
+  being superseded is fine until it's published (its import maps can't be regenerated earlier).
+  CHANGELOGs, RFCs and migration guides are never checked; a line containing `pin-ok` is skipped.
 
 ## Versions a release must line up
 
@@ -205,5 +211,7 @@ site's import map with it.
 2. Regenerate the whole map whenever any loaded package changes version: URLs and
    integrity hashes must move together.
 3. Re-run the site build (`npm run build`, which re-prerenders) and deploy.
-4. Packages the site doesn't load at runtime — `@zoijs/ssr`, `@zoijs/testing`,
+4. Check that no pin was missed, in this repo's docs and the site's:
+   `npm run docs:pins -- ../zoijs-site/content/md` — every exact pin must now name npm's `latest`.
+5. Packages the site doesn't load at runtime — `@zoijs/ssr`, `@zoijs/testing`,
    `@zoijs/devtools`, `@zoijs/eslint-plugin`, `create-zoijs` — need no entry.
