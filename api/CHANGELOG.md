@@ -4,7 +4,9 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
-Proposed as **0.2.0** (additive). `api()` is unchanged.
+## 0.2.0 — 2026-10-11
+
+Additive: `api()` is unchanged.
 
 ### Added — `createApi({ baseURL })`: explicit clients for external APIs
 - A client is the same request surface as `api` — `client(url)` reads, `client.post/put/patch/delete(url)`
