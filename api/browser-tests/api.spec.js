@@ -843,7 +843,7 @@ test("a FormData upload that fails once (503) is retried with the same key and i
     const form = new FormData();
     form.append("description", "Profile photo ✓");
     form.append("file", new File([bytes], "photo.png", { type: "image/png" }));
-    const id = "upload-" + Math.random().toString(36).slice(2); // a fresh fail-once path per run
+    const id = "upload-" + crypto.randomUUID(); // a fresh fail-once path per run
     const up = api.post("/__echo/flaky/:id", { idempotencyKey: true, retry: 2, retryDelay: 20 });
     const echoed = await up.run({ params: { id }, body: form });
     window.fetch = realFetch;
@@ -889,7 +889,7 @@ async function inExternal(page, src) {
       const hitInfo = async (path) => (await realFetch("/__hits" + path)).json();
       const hits = async (path) => (await hitInfo(path)).count;
       const err = (e) => e && { type: e.type, status: e.status, message: e.message, url: e.url, problem: e.problem && { ...e.problem } };
-      const uid = Math.random().toString(36).slice(2);
+      const uid = crypto.randomUUID(); // 127.0.0.1 is a secure context
       try {
         const out = await new Function("core", "api", "createApi", "X", "wait", "settled", "hits", "err", "uid", "realFetch", "hitInfo", `return (async () => { ${src} })()`)(core, api, createApi, X, wait, settled, hits, err, uid, realFetch, hitInfo);
         return { sent, out };
