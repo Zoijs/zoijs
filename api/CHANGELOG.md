@@ -4,7 +4,9 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
-Proposed as **0.3.0** (additive). `api()` and unauthenticated clients are unchanged.
+## 0.3.0 — 2026-10-11
+
+Additive: `api()` and unauthenticated clients are unchanged.
 
 ### Added — Bearer authentication for `createApi()` clients
 - `createApi({ baseURL, auth })`: an optional provider (sync or async) returning the access
