@@ -4,6 +4,24 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
+Proposed as **0.3.0** (additive). `api()` and unauthenticated clients are unchanged.
+
+### Added — Bearer authentication for `createApi()` clients
+- `createApi({ baseURL, auth })`: an optional provider (sync or async) returning the access
+  token; Zoijs sends `Authorization: Bearer <token>` — only to the client's own origin, still
+  with cookies omitted and redirects never followed. `null`/`undefined` → anonymous request.
+- Called once per logical request (each load, `refresh()`, reactive change or `run()`), never at
+  creation and never per retry: retries reuse that token, as they reuse the idempotency key.
+  An exclusive mutation's joined calls don't ask again. Tokens aren't stored or refreshed.
+- Tokens are validated against the RFC 6750 character set (1–8192 characters; no spaces, CR/LF,
+  control or non-ASCII characters, no `Bearer ` prefix) before anything is sent.
+- New `ApiError` type `"auth"`: the provider threw, rejected or returned an invalid token. No
+  request is sent, nothing is retried, and the error carries neither the token nor the thrown
+  error. 401/403 stay ordinary, non-retried `"http"` errors.
+- A request superseded, disposed, unmounted or reset while its provider is pending is never sent.
+  A request that can't be sent (refused URL, no browser page) fails before the provider runs, so
+  SSR never invokes it.
+
 ## 0.2.0 — 2026-10-11
 
 Additive: `api()` is unchanged.

@@ -706,7 +706,7 @@ users.error()?.status; // 404 — the HTTP status ("http"/"parse"), otherwise nu
 | Field | Value |
 |---|---|
 | `name` | `"ApiError"` |
-| `type` | `"http"`, `"network"`, `"security"`, `"parse"`, `"config"` or `"timeout"` |
+| `type` | `"http"`, `"network"`, `"security"`, `"parse"`, `"config"`, `"timeout"` or `"auth"` (a client's `auth` provider failed — see [Authenticated API clients](#authenticated-api-clients)) |
 | `status` | the HTTP status, or `null` |
 | `statusText` | the HTTP status text, or `""` (HTTP/2 has none) |
 | `method` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"` |
@@ -770,8 +770,8 @@ A client has exactly the same surface and behavior as `api` — `client(url, opt
 differ. Nothing global changes: `api()` and every other client are unaffected, and no module can
 make `api()` cross-origin-capable.
 
-**`baseURL`** — the only option (anything else, such as `headers` or `credentials`, is a
-`TypeError`):
+**`baseURL`** — required; with the optional [`auth`](#authenticated-api-clients), the only two
+options (anything else, such as `headers` or `credentials`, is a `TypeError`):
 
 - an absolute `https:` URL — plain `http:` only for a loopback host (`localhost`, `*.localhost`,
   `127.x.x.x`, `[::1]`), for local development;
@@ -830,8 +830,9 @@ it.
 - **`referrerPolicy: "strict-origin-when-cross-origin"`** — the external API learns at most your
   page's origin (which the `Origin` header already tells it), never the page's path or query
   string, even if the page's own referrer policy is looser.
-- **No authentication is added.** There is no `Authorization` header, API key, token or cookie
-  option (yet), and no arbitrary headers. The API decides what an anonymous request may do.
+- **No credentials unless you add a Bearer token.** Without `auth` the request is anonymous;
+  with it, see [Authenticated API clients](#authenticated-api-clients). There are no arbitrary
+  headers, API-key or cookie options.
 
 Everything else is unchanged for clients: secret-looking query keys are still refused, error
 messages stay log-safe, `problemDetails` has the same media-type, 64 KB and field rules (an
@@ -860,6 +861,84 @@ rendering.
 the wrong place. Authorization remains the external API's responsibility; validate what it
 returns before you trust it.
 
+## Authenticated API clients
+
+Give a client an `auth` provider and its requests carry a Bearer access token:
+
+```js
+import { createApi } from "@zoijs/api";
+
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: () => session.accessToken,          // or: async () => await getAccessToken()
+});
+
+const profile = backend("/profile");          // Authorization: Bearer <token>
+const save = backend.post("/orders", { idempotencyKey: true, retry: 2 });
+```
+
+**The provider returns the token itself** — Zoijs builds `Authorization: Bearer <token>`; never
+write the header yourself. It may be synchronous or `async`. Return `null` or `undefined` to send
+that request **anonymously** (for endpoints that work either way) — that's not an error.
+
+**It runs once per logical request:** each load of a resource (the first one, a `refresh()`, a
+reactive params/query change) and each mutation `run()`. Never when the client, resource or
+mutation is created, and never per retry: **every retry of a request reuses the token it started
+with** (and, for a mutation, the same idempotency key, URL, method and body). The next request
+asks again, so it gets whatever your session currently holds — Zoijs never stores, caches or
+refreshes tokens, and keeps none on the client, in resource or mutation state, or in errors.
+An exclusive mutation's joined `run()` calls don't ask again.
+
+**Tokens are validated before anything is sent.** A token is 1–8192 characters from the RFC 6750
+Bearer set: `A–Z a–z 0–9 - . _ ~ + /`, optionally ending in `=` padding. So an empty string, a
+`"Bearer …"` prefix, spaces, CR/LF, control or non-ASCII characters — anything that could alter
+the header — are refused, never trimmed or "fixed". That, a provider that throws or rejects, or
+one that returns anything other than a string, `null` or `undefined`, fails the request with an
+`ApiError` of type **`"auth"`** — no request is sent, it isn't retried, and the error never
+contains the token, the returned value or the thrown error (no `cause`).
+
+| What happened | Result |
+|---|---|
+| `auth` isn't a function (e.g. the token string itself) | `TypeError` from `createApi()` |
+| provider returns `null` / `undefined` | anonymous request |
+| provider throws/rejects, or returns an invalid token | `ApiError` type `"auth"`, nothing sent |
+| server answers 401 or 403 | `ApiError` type `"http"` — **not retried, no new token requested** |
+| network failure, CORS refusal | `"network"` (retried only within `retry`) |
+| `timeout` elapsed | `"timeout"` |
+| origin escape, redirect, no page | `"security"` |
+
+**While the provider is pending**, the resource is `loading()` and the mutation `pending()`. A
+request that is superseded (reactive change, `refresh()`), disposed, unmounted or `reset()` in
+the meantime is never sent when the old provider finally answers; a newer resource load asks
+for its own token. (A newer non-exclusive `run()` doesn't cancel an older one's first request —
+exactly as without `auth`.) **`timeout` doesn't cover the provider:** it times each network
+attempt, not how long your token takes to arrive.
+
+**The token only goes where the client goes.** It's sent only to the client's exact origin and
+under its base path, checked on the final URL of every attempt; requests are still
+`credentials: "omit"` (no cookies, no browser HTTP authentication) and never follow redirects,
+so no redirect can carry it elsewhere. A request that can't be sent — a refused URL or secret
+query key, or no browser page (SSR) — fails **before** the provider is asked. Clients never
+share providers, and `api()` never sends an `Authorization` header.
+
+**CORS:** a request with `Authorization` needs a preflight, so the external API must allow it —
+for example `Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key`. If it
+doesn't, the browser refuses the request and you get a `"network"` error; with `retry`, that's
+retried within the bound like any network error (the browser doesn't say why it refused).
+
+**Security guidance**
+
+- Never hardcode production tokens in source code, and never put a token in a URL (the
+  secret-key check refuses `?access_token=…` for exactly that reason).
+- Never log access tokens, and don't put server-only secrets (client secrets, private API keys)
+  in a browser application at all.
+- Use short-lived, narrowly scoped access tokens, and avoid persisting them — keep them in
+  memory where you can; `localStorage` is readable by any script on your origin.
+- JavaScript can't protect a token from a malicious script running on the same origin: XSS
+  defenses (CSP, escaping, [`@zoijs/sanitize`](../sanitize/README.md)) are what protect it.
+- The external API must authorize every request. CORS controls which pages a browser lets read
+  responses; it's not authentication or authorization.
+
 ## Security at a glance
 
 `@zoijs/api` makes the short code the safe code in the browser. It is **not** access control:
@@ -886,8 +965,9 @@ returns before you trust it.
   retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
   or optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
-- **`createApi()` takes only `baseURL`** — no authentication, headers, credentials or cookie
-  options, and one origin per client.
+- **`createApi()` takes only `baseURL` and `auth`** — Bearer tokens only: no OAuth flows, token
+  refresh or storage, per-request auth, custom headers or cookie-based cross-origin auth, and one
+  origin per client.
 
 ## License
 

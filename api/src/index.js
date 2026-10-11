@@ -47,7 +47,7 @@ const METHOD = "GET";
 const JSON_TYPE = /^[^/\s;]+\/(?:[^/\s;]+\+)?json$/;
 const ACCEPT = "application/json, text/plain;q=0.9, */*;q=0.8";
 
-/** A failed api() request. `type`: "http" | "network" | "security" | "parse" | "config" | "timeout". */
+/** A failed api() request. `type`: "http" | "network" | "security" | "parse" | "config" | "timeout" | "auth". */
 export class ApiError extends Error {
   /**
    * @param {string} message
@@ -141,8 +141,10 @@ const safeUrl = (u) => (isHttp(u) ? u.origin + u.pathname : u.protocol);
 //            aborts the real request (no race left running) and fails with type "timeout";
 //   opts.problemDetails: on a non-2xx application/problem+json answer, attach error.problem —
 //            a boolean, or (internally) a function of the status, so a retried attempt skips it;
-//   opts.idempotencyKey: sent as the Idempotency-Key header — the only header a caller can cause,
-//            and never copied into an error, URL or body;
+//   opts.idempotencyKey: sent as the Idempotency-Key header, never copied into an error, URL or body;
+//   opts.token: a createApi() client's Bearer token for this logical request (see bearerToken()),
+//            sent as Authorization — only ever to the client's own origin, since the URL was
+//            just checked against it and redirects aren't followed;
 //   opts.client: a createApi() client's trust boundary, or absent for same-origin api(). A client
 //            request is mode "cors" (the server must still allow the page's origin), credentials
 //            "omit" (no cookies or HTTP auth go to another origin), redirect "manual" (a redirect
@@ -181,7 +183,7 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
       res = await globalThis.fetch(target.href, {
         method,
         ...(client ? CLIENT_FETCH : SAME_ORIGIN_FETCH),
-        headers: headersFor(payload, opts.idempotencyKey),
+        headers: headersFor(payload, opts.idempotencyKey, opts.token),
         body: payload ? (payload.json !== undefined ? payload.json : payload.form) : undefined,
         signal: ctl ? ctl.signal : signal,
       });
@@ -242,10 +244,13 @@ const SAME_ORIGIN_FETCH = { mode: "same-origin", credentials: "same-origin" };
 const CLIENT_FETCH = { mode: "cors", credentials: "omit", redirect: "manual", referrerPolicy: "strict-origin-when-cross-origin" };
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
-function headersFor(payload, idempotencyKey) {
+function headersFor(payload, idempotencyKey, token) {
   const headers = { Accept: ACCEPT };
   if (payload && payload.json !== undefined) headers["Content-Type"] = "application/json";
   if (idempotencyKey !== undefined) headers["Idempotency-Key"] = idempotencyKey;
+  // Only a token bearerToken() validated (RFC 6750 characters: no spaces, CR/LF or other
+  // separators), so it can't add or alter headers. Never copied into an error, URL or body.
+  if (token !== undefined) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
@@ -589,16 +594,26 @@ function get(client, url, options) {
     if (req.error) return Promise.reject(req.error);
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     controller = ac;
-    // One logical load: every retry replays THIS url; a reactive change or refresh() starts a new one.
+    // One logical load: every retry replays THIS url — and, for an authenticated client, THIS
+    // token; a reactive change or refresh() starts a new load, which asks the provider again.
+    const alive = () => !disposed && load === mine;
+    let token;
     const attemptOnce = (left) =>
-      request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, { client, timeout, problemDetails: problemFor(problemDetails, left) }).catch((err) => {
+      request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, { client, timeout, token, problemDetails: problemFor(problemDetails, left) }).catch((err) => {
         throw err instanceof ApiError ? err : new ApiError(`${METHOD} request failed`, { type: "network" });
       });
-    return withRetries(attemptOnce, retry, retryDelay, () => !disposed && load === mine, waits.sleep).then(
+    const send = () => withRetries(attemptOnce, retry, retryDelay, alive, waits.sleep);
+    const sent = client && client.auth
+      ? authorize(client, req.path, req.entries, METHOD, alive).then((t) => {
+          token = t;
+          return send();
+        })
+      : send();
+    return sent.then(
       // Disposed mid-flight: settle with the data already held — nothing changes, loading ends.
       (value) => (disposed ? inner.data() : value),
       (err) => {
-        if (disposed) return inner.data();
+        if (disposed || err === CANCELLED) return inner.data(); // a superseded load's result is ignored anyway
         // error() is always an ApiError: anything unexpected becomes a generic one, without its message.
         throw err instanceof ApiError ? err : new ApiError(`${METHOD} request failed`, { type: "network" });
       },
@@ -836,6 +851,7 @@ function mutation(client, method, url, options) {
   // request on a retryable failure. Only the final outcome reaches the action (one pending → done
   // or error, one onError report). Anything wrong before sending becomes a config error().
   let lastCall = null;
+  let resets = 0;
   const send = (...args) => {
     const call = { ok: false };
     lastCall = call;
@@ -858,10 +874,12 @@ function mutation(client, method, url, options) {
       if (!(err instanceof ConfigError)) throw err;
       return Promise.reject(new ApiError(`${method} request not sent: ${err.message.slice("api(): ".length)}`, { type: "config", method }));
     }
+    let token;
     const attemptOnce = (left) =>
       request(path, entries, undefined, method, payload, {
         client,
         timeout, // a fresh window per attempt
+        token, // one snapshot per logical run, like the key
         idempotencyKey: key,
         problemDetails: problemFor(problemDetails, left),
       }).catch((err) => {
@@ -869,9 +887,19 @@ function mutation(client, method, url, options) {
       });
     // While waiting, attempt() stays at the attempt that just failed. A torn-down, reset or
     // superseded run stops: nobody is waiting for it, so it sends nothing more.
-    return withRetries(attemptOnce, retry, retryDelay, () => !torn && owner === call, waits.sleep, show).then((value) => {
-      call.ok = true;
-      return value;
+    const sendAll = () =>
+      withRetries(attemptOnce, retry, retryDelay, () => !torn && owner === call, waits.sleep, show).then((value) => {
+        call.ok = true;
+        return value;
+      });
+    if (!(client && client.auth)) return sendAll();
+    // Waiting for the token: only unmount and reset() cancel it (as they cancel a backoff wait). A
+    // newer non-exclusive run doesn't — without auth, this run's first request would already be
+    // on its way — it only stops this run's retries, as before.
+    const epoch = resets;
+    return authorize(client, path, entries, method, () => !torn && epoch === resets).then((t) => {
+      token = t;
+      return sendAll();
     });
   };
   const act = action(send, { exclusive });
@@ -900,6 +928,7 @@ function mutation(client, method, url, options) {
     // status clears, and a retry still waiting to be sent is cancelled — nobody is waiting for it.
     reset() {
       owner = null;
+      resets++; // a run still waiting for its token never sends
       waits.cancel();
       act.reset();
       attempt.set(0);
@@ -964,6 +993,39 @@ function surface(client) {
 /** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). Never configurable. */
 export const api = surface(null);
 
+// ---- authentication: a client's Bearer token, once per logical request -----------------------------
+
+// RFC 6750 §2.1 b64token: ALPHA / DIGIT / "-" "." "_" "~" "+" "/", then optional "=" padding. So no
+// spaces (a "Bearer …" prefix is refused), CR/LF, NUL, control or non-ASCII characters — nothing
+// that could end the header or add another. Never trimmed or normalized.
+const BEARER = /^[A-Za-z0-9\-._~+/]+=*$/;
+const MAX_TOKEN = 8192; // generous for JWTs, still far below common server header limits
+// A logical request cancelled while its provider was pending: never sent, never surfaced.
+const CANCELLED = new ApiError("request not sent: cancelled", { type: "config" });
+
+// The token for one logical request, or undefined for an anonymous one. The URL is checked FIRST
+// (page origin, client boundary, secret query keys): a request that can't be sent never asks for
+// a credential — so during SSR the provider isn't called. Then the provider runs once; alive()
+// is checked after it settles, so a superseded, disposed, unmounted or reset request never
+// reaches fetch(). A provider failure is type "auth", carries neither the thrown value nor its
+// message, and isn't retried. The provider's wait isn't covered by `timeout` (that's per attempt).
+async function authorize(client, path, entries, method, alive) {
+  const url = safeUrl(resolveTarget(client, path, entries, method));
+  let value;
+  try {
+    value = await client.auth();
+  } catch {
+    if (!alive()) throw CANCELLED;
+    throw new ApiError(`${method} request not sent: the auth provider failed`, { type: "auth", method, url });
+  }
+  if (!alive()) throw CANCELLED;
+  if (value === null || value === undefined) return undefined; // anonymous, by design
+  if (typeof value !== "string" || value.length > MAX_TOKEN || !BEARER.test(value)) {
+    throw new ApiError(`${method} request not sent: the auth provider returned an invalid token — a Bearer token (RFC 6750 characters, at most ${MAX_TOKEN}), null or undefined`, { type: "auth", method, url });
+  }
+  return value;
+}
+
 // ---- createApi(): one explicitly trusted origin ---------------------------------------------------
 //
 //   const billing = createApi({ baseURL: "https://billing.example.com/v1/" });
@@ -972,7 +1034,8 @@ export const api = surface(null);
 // A client is the same engine with a different, fixed trust boundary: ONE origin and a base path.
 // Nothing global changes — api() stays same-origin-only, and clients don't affect each other. The
 // boundary lives in this closure (frozen strings, no setters), so it can't be changed afterwards.
-// A client doesn't bypass CORS, sends no cookies, follows no redirects and adds no authentication.
+// A client doesn't bypass CORS, sends no cookies and follows no redirects. Its only credential is an
+// optional Bearer token from its own `auth` provider, sent only to its own origin.
 
 const clientError = (detail) => new TypeError(`createApi(): ${detail}`);
 
@@ -1035,19 +1098,23 @@ function readBaseURL(value) {
 
 /**
  * A request surface — `client(url)`, `client.post/put/patch/delete(url)` — locked to ONE explicitly
- * trusted origin. Paths resolve under `baseURL`'s path; requests are CORS, without credentials, and
- * never follow redirects. `client.baseURL` is the normalized base (read-only).
- * @param {{ baseURL: string }} options
+ * trusted origin. Paths resolve under `baseURL`'s path; requests are CORS, without cookies, and
+ * never follow redirects. With `auth`, each logical request asks it once for a Bearer token.
+ * `client.baseURL` is the normalized base (read-only).
+ * @param {{ baseURL: string, auth?: () => string | null | undefined | Promise<string | null | undefined> }} options
  */
 export function createApi(options) {
   if (arguments.length !== 1) throw clientError("takes one options object: createApi({ baseURL })");
   if (options === null || typeof options !== "object" || Array.isArray(options)) throw clientError(`options must be a plain object, got ${describe(options)}`);
-  let baseURL;
+  let baseURL, auth;
   for (const key of Object.keys(options)) {
     if (key === "baseURL") baseURL = options.baseURL;
-    else throw clientError(`unsupported option "${key}" — createApi() accepts only baseURL (no headers, credentials or authentication yet)`);
+    else if (key === "auth") auth = options.auth;
+    else throw clientError(`unsupported option "${key}" — createApi() accepts baseURL and auth (no headers or credentials)`);
   }
-  const boundary = readBaseURL(baseURL);
+  // The provider is captured here, privately, and never called now: it runs per logical request.
+  if (auth !== undefined && typeof auth !== "function") throw clientError("auth must be a function returning the access token (or null/undefined for none) — never the token itself");
+  const boundary = Object.freeze({ ...readBaseURL(baseURL), auth });
   const client = surface(boundary);
   Object.defineProperty(client, "baseURL", { value: boundary.href, enumerable: true });
   return Object.freeze(client);
