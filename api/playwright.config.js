@@ -15,7 +15,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:3900",
   },
   webServer: {
-    command: "node ../scripts/test-server.mjs .. 3900",
+    command: "node ../scripts/test-server.mjs .. 3900 3901",
     url: "http://127.0.0.1:3900/__ready",
     reuseExistingServer: !process.env.CI,
     timeout: 180000,

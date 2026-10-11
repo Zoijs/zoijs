@@ -63,15 +63,18 @@ test("browser suites use the in-repo test server — no npx, no mutable download
   for (const s of SUITES) {
     const cfg = read(`${s}/playwright.config.js`);
     assert.doesNotMatch(cfg, /\bnpx\b/, `${s}: no npx`);
-    const m = /command: "node (?:\.\.\/)+scripts\/test-server\.mjs (\S+) (\d+)"/.exec(cfg);
+    // An optional second port is the suite's cross-origin server (api: CORS tests).
+    const m = /command: "node (?:\.\.\/)+scripts\/test-server\.mjs (\S+) (\d+)(?: (\d+))?"/.exec(cfg);
     assert.ok(m, `${s}: webServer runs scripts/test-server.mjs`);
     const port = Number(m[2]);
     assert.match(cfg, new RegExp(`baseURL: "http://127\\.0\\.0\\.1:${port}"`), `${s}: baseURL is 127.0.0.1:${port}`);
     assert.match(cfg, new RegExp(`url: "http://127\\.0\\.0\\.1:${port}/__ready"`), `${s}: webServer waits on the server's /__ready`);
-    assert.ok(!ports.has(port), `${s} and ${ports.get(port)} both use port ${port}`);
-    ports.set(port, s);
+    for (const p of m[3] ? [port, Number(m[3])] : [port]) {
+      assert.ok(!ports.has(p), `${s} and ${ports.get(p)} both use port ${p}`);
+      ports.set(p, s);
+    }
   }
-  assert.equal(ports.size, SUITES.length);
+  assert.equal(new Set(ports.values()).size, SUITES.length);
   for (const s of SUITES) {
     const scripts = JSON.parse(read(`${s}/package.json`)).scripts || {};
     for (const [k, v] of Object.entries(scripts)) assert.doesNotMatch(v, /\bnpx\b/, `${s} script ${k}`);

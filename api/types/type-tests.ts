@@ -275,3 +275,38 @@ api("/api/tasks", { exclusive: true });
 api<Task[]>("/api/tasks", { retry: 1, initial: 1 });
 
 void [retriedData];
+
+// ---- Phase 10: createApi() ------------------------------------------------------------------------
+import { createApi } from "../src/index.js";
+import type { Api, ApiClient, CreateApiOptions } from "../src/index.js";
+
+const billingOptions: CreateApiOptions = { baseURL: "https://billing.example.com/v1/" };
+const billing: ApiClient = createApi(billingOptions);
+const sameSurface: Api = billing; // a client is the same request surface as api
+const base: string = billing.baseURL;
+const invoices: ApiResource<{ id: string }[]> = billing<{ id: string }[]>("/invoices", { query: { page: 1 }, retry: 2, timeout: 5000 });
+const invoice = billing<{ id: string }>("/invoices/:id", { params: () => ({ id }), debounce: 100, problemDetails: true });
+const pay = billing.post<{ ok: boolean }, { amount: number }>("/payments", { idempotencyKey: true, retry: 3, invalidate: [invoices, tasks] });
+pay.run({ amount: 5 });
+billing.put("/invoices/:id").run({ params: { id }, body: { paid: true } });
+billing.patch("/invoices/:id", { exclusive: true }).run({ params: { id }, body: new FormData() });
+billing.delete("/invoices/:id").run({ params: { id } });
+// a mutation from api() can invalidate a client resource, and vice versa
+api.post("/api/sync", { invalidate: invoice });
+
+// @ts-expect-error — baseURL is required
+createApi({});
+// @ts-expect-error — no headers (authentication is not part of createApi yet)
+createApi({ baseURL: "https://api.example.com", headers: { Authorization: "Bearer x" } });
+// @ts-expect-error — credentials can't be configured
+createApi({ baseURL: "https://api.example.com", credentials: "include" });
+// @ts-expect-error — baseURL is a string, not a URL object
+createApi({ baseURL: new URL("https://api.example.com") });
+// @ts-expect-error — the boundary is read-only
+billing.baseURL = "https://evil.example";
+// @ts-expect-error — retry still needs an idempotency key on a client
+billing.post("/payments", { retry: 1 });
+// @ts-expect-error — the default api has no client configuration
+api.baseURL;
+
+void [sameSurface, base];
