@@ -29,6 +29,10 @@
 // Error messages carry only the method, the status and (for a blocked cross-origin URL) the
 // target origin — never the URL path, query string, fragment, credentials, request headers or the
 // response body — so they are safe to log. The `url` field keeps origin + path for debugging. Client-side checks never replace server-side authentication and authorization.
+//
+// External APIs need an explicit client — createApi({ baseURL }) — locked to that one origin (see
+// "createApi()" below). api() itself is never configurable: importing a module can't make it
+// cross-origin-capable.
 
 import { onCleanup, computed, effect, createState } from "@zoijs/core";
 import { resource } from "@zoijs/resource";
@@ -78,14 +82,22 @@ function pageLocation() {
 // Relative URLs resolve the way fetch() resolves them: against the document's base URL.
 const baseHref = (page) => (globalThis.document && typeof globalThis.document.baseURI === "string" ? globalThis.document.baseURI : page.href);
 
-// Resolve `input` against the page, apply the query entries, then check the FINAL URL against the
-// page origin. Returns the URL, or throws a security/config ApiError.
-function resolveSameOrigin(input, entries, method) {
+// Resolve `input`, apply the query entries, then check the FINAL URL. Returns the URL, or throws a
+// security/config ApiError. Same-origin api(): `input` resolves against the page and must stay on
+// the page's origin. A createApi() client: `input` is a path already checked by clientPath(), and
+// resolves under the client's base path — "./" + path, so a leading "/" can't drop the base path —
+// and the result must stay on the client's ONE origin and under its base path.
+function resolveTarget(client, input, entries, method) {
   const page = pageLocation();
-  if (!page) throw new ApiError(`${method} blocked: api() needs an http(s) page origin to check the URL against`, { type: "security", method });
+  if (!page) {
+    // Clients too: CORS, credentials "omit" and the browser's mixed-content rules are what bound a
+    // client, and a server-side fetch has none of them — so no server networking (SSR uses `initial`).
+    const why = client ? "a createApi() client sends requests only from an http(s) page" : "api() needs an http(s) page origin to check the URL against";
+    throw new ApiError(`${method} blocked: ${why}`, { type: "security", method });
+  }
   let target;
   try {
-    target = new URL(input, baseHref(page));
+    target = client ? new URL("." + input, client.href) : new URL(input, baseHref(page));
   } catch {
     // Don't echo the raw input: it may be what the developer considers secret.
     throw new ApiError(`${method} blocked: invalid URL`, { type: "security", method });
@@ -103,8 +115,16 @@ function resolveSameOrigin(input, entries, method) {
     throw new ApiError(`${method} blocked: credentials in the URL are not allowed`, { type: "security", method, url: safeUrl(target) });
   }
   // Same origin AND an http(s) URL: a blob: URL inherits the page's origin but isn't an API request.
-  if (!isHttp(target) || target.origin !== page.origin) {
-    throw new ApiError(`${method} blocked: ${isHttp(target) ? target.origin : target.protocol} is not the page's origin (api() allows same-origin URLs only)`, { type: "security", method, url: safeUrl(target) });
+  const origin = client ? client.origin : page.origin;
+  if (!isHttp(target) || target.origin !== origin) {
+    const what = isHttp(target) ? target.origin : target.protocol;
+    const why = client ? `is not this client's origin (it allows ${client.origin} only)` : "is not the page's origin (api() allows same-origin URLs only)";
+    throw new ApiError(`${method} blocked: ${what} ${why}`, { type: "security", method, url: safeUrl(target) });
+  }
+  // Segment-aware: client.path always ends in "/", so "/v1-evil/…" is not under "/v1/". Checked on
+  // the canonical pathname that will actually be sent.
+  if (client && !target.pathname.startsWith(client.path)) {
+    throw new ApiError(`${method} blocked: the URL leaves this client's base path`, { type: "security", method, url: safeUrl(target) });
   }
   return target;
 }
@@ -122,10 +142,17 @@ const safeUrl = (u) => (isHttp(u) ? u.origin + u.pathname : u.protocol);
 //   opts.problemDetails: on a non-2xx application/problem+json answer, attach error.problem —
 //            a boolean, or (internally) a function of the status, so a retried attempt skips it;
 //   opts.idempotencyKey: sent as the Idempotency-Key header — the only header a caller can cause,
-//            and never copied into an error, URL or body.
+//            and never copied into an error, URL or body;
+//   opts.client: a createApi() client's trust boundary, or absent for same-origin api(). A client
+//            request is mode "cors" (the server must still allow the page's origin), credentials
+//            "omit" (no cookies or HTTP auth go to another origin), redirect "manual" (a redirect
+//            is never followed — not even within the origin — so neither the request nor its body
+//            can be steered to another origin) and a referrer policy that never sends the page's
+//            path or query string.
 // Responses are parsed the same way for every method.
 async function request(input, entries, signal, method = METHOD, payload, opts = NO_OPTS) {
-  const target = resolveSameOrigin(input, entries, method);
+  const client = opts.client || null;
+  const target = resolveTarget(client, input, entries, method);
   const where = safeUrl(target);
   const timeout = opts.timeout || 0;
   let timedOut = false;
@@ -153,8 +180,7 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
     try {
       res = await globalThis.fetch(target.href, {
         method,
-        mode: "same-origin",
-        credentials: "same-origin",
+        ...(client ? CLIENT_FETCH : SAME_ORIGIN_FETCH),
         headers: headersFor(payload, opts.idempotencyKey),
         body: payload ? (payload.json !== undefined ? payload.json : payload.form) : undefined,
         signal: ctl ? ctl.signal : signal,
@@ -163,7 +189,12 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
       // The platform's message can include the full URL; ours carries none of it.
       throw fail("network error");
     }
-    // Defense in depth for fetch implementations that don't enforce mode "same-origin".
+    // A client's redirect arrives unfollowed: an opaque redirect in browsers, the 3xx itself elsewhere.
+    if (client && (res.type === "opaqueredirect" || REDIRECT_STATUS.has(res.status))) {
+      discard(res);
+      throw new ApiError(`${method} request blocked: a createApi() client doesn't follow redirects`, { type: "security", method, url: where });
+    }
+    // Defense in depth for fetch implementations that don't enforce mode "same-origin" / "manual".
     if (res.redirected && res.url && !sameOrigin(res.url, target.origin)) {
       discard(res);
       throw new ApiError(`${method} request blocked: redirected to another origin`, { type: "security", method, url: where });
@@ -205,6 +236,11 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
   }
 }
 const NO_OPTS = {};
+const SAME_ORIGIN_FETCH = { mode: "same-origin", credentials: "same-origin" };
+// referrerPolicy: an external API learns at most the page's origin (which `Origin` already tells
+// it), never its path or query — even on a page whose own policy is looser (e.g. "unsafe-url").
+const CLIENT_FETCH = { mode: "cors", credentials: "omit", redirect: "manual", referrerPolicy: "strict-origin-when-cross-origin" };
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
 function headersFor(payload, idempotencyKey) {
   const headers = { Accept: ACCEPT };
@@ -456,15 +492,11 @@ function evaluate(tpl, staticPath, params, staticEntries, query) {
 }
 const failed = (error) => ({ key: "!" + error.message, error });
 
-/**
- * GET a same-origin URL as a resource: reactive data() / loading() / error() / refresh(), plus
- * dispose() for one created outside a component.
- * @param {string} url  a same-origin URL; `/:name` segments are filled from `params`
- * @param {{ params?: object | (() => object), query?: object | (() => object), debounce?: number }} [options]
- */
-export function api(url, options) {
+// GET `url` as a resource: reactive data() / loading() / error() / refresh(), plus dispose() for one
+// created outside a component. `client`: null for same-origin api(), or a createApi() client.
+function get(client, url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError("api(url): url must be a non-empty string");
-  if (arguments.length > 2) throw new TypeError("api(url, options): too many arguments — api() always performs a GET");
+  if (client) clientPath(url);
 
   let params, query, debounce = 0, timeout = 0, problemDetails = false, retry = 0, retryDelay;
   let seeded = false, initial; // `initial` counts when the key is PRESENT, even as undefined
@@ -559,7 +591,7 @@ export function api(url, options) {
     controller = ac;
     // One logical load: every retry replays THIS url; a reactive change or refresh() starts a new one.
     const attemptOnce = (left) =>
-      request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, { timeout, problemDetails: problemFor(problemDetails, left) }).catch((err) => {
+      request(req.path, req.entries, ac ? ac.signal : undefined, METHOD, undefined, { client, timeout, problemDetails: problemFor(problemDetails, left) }).catch((err) => {
         throw err instanceof ApiError ? err : new ApiError(`${METHOD} request failed`, { type: "network" });
       });
     return withRetries(attemptOnce, retry, retryDelay, () => !disposed && load === mine, waits.sleep).then(
@@ -749,8 +781,9 @@ function newIdempotencyKey() {
   return null;
 }
 
-function mutation(method, url, options) {
+function mutation(client, method, url, options) {
   if (typeof url !== "string" || url.trim() === "") throw new TypeError(`api.${method.toLowerCase()}(url): url must be a non-empty string`);
+  if (client) clientPath(url);
   let query, invalidate = [], exclusive = false, timeout = 0, problemDetails = false;
   let idempotent = false, keyFn = null, retry = 0, retryDelay;
   if (options !== undefined) {
@@ -827,6 +860,7 @@ function mutation(method, url, options) {
     }
     const attemptOnce = (left) =>
       request(path, entries, undefined, method, payload, {
+        client,
         timeout, // a fresh window per attempt
         idempotencyKey: key,
         problemDetails: problemFor(problemDetails, left),
@@ -902,11 +936,119 @@ function readTargets(value) {
   return [...out];
 }
 
-/** POST a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
-api.post = (url, options) => mutation("POST", url, options);
-/** PUT a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
-api.put = (url, options) => mutation("PUT", url, options);
-/** PATCH a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
-api.patch = (url, options) => mutation("PATCH", url, options);
-/** DELETE, with no body. `run()`, or `run({ params })` when the URL has `/:name` segments. */
-api.delete = (url, options) => mutation("DELETE", url, options);
+// ---- the request surface: api, and createApi() clients ---------------------------------------------
+
+// The callable GET + post/put/patch/delete, bound to one transport policy. api() and every client
+// are this same function over the same engine — only `client` differs.
+function surface(client) {
+  /**
+   * GET a URL as a resource. `/:name` segments are filled from `params`.
+   * @param {string} url
+   * @param {object} [options]
+   */
+  function api(url, options) {
+    if (arguments.length > 2) throw new TypeError("api(url, options): too many arguments — api() always performs a GET");
+    return get(client, url, options);
+  }
+  /** POST a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+  api.post = (url, options) => mutation(client, "POST", url, options);
+  /** PUT a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+  api.put = (url, options) => mutation(client, "PUT", url, options);
+  /** PATCH a JSON body. `run(body)`, or `run({ params, body })` when the URL has `/:name` segments. */
+  api.patch = (url, options) => mutation(client, "PATCH", url, options);
+  /** DELETE, with no body. `run()`, or `run({ params })` when the URL has `/:name` segments. */
+  api.delete = (url, options) => mutation(client, "DELETE", url, options);
+  return api;
+}
+
+/** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). Never configurable. */
+export const api = surface(null);
+
+// ---- createApi(): one explicitly trusted origin ---------------------------------------------------
+//
+//   const billing = createApi({ baseURL: "https://billing.example.com/v1/" });
+//   const invoices = billing("/invoices");        // GET https://billing.example.com/v1/invoices
+//
+// A client is the same engine with a different, fixed trust boundary: ONE origin and a base path.
+// Nothing global changes — api() stays same-origin-only, and clients don't affect each other. The
+// boundary lives in this closure (frozen strings, no setters), so it can't be changed afterwards.
+// A client doesn't bypass CORS, sends no cookies, follows no redirects and adds no authentication.
+
+const clientError = (detail) => new TypeError(`createApi(): ${detail}`);
+
+// Characters the URL parser strips, drops or reads as "/" — refused rather than normalized.
+const UNSAFE_URL_CHAR = /[\x00-\x20\x7f\\]/;
+
+// "." and ".." segments, also percent-encoded (the URL standard treats "%2e" as a dot).
+const hasDotSegment = (path) =>
+  path.split("/").some((s) => {
+    const d = s.replace(/%2e/gi, ".");
+    return d === "." || d === "..";
+  });
+
+// Hosts where plain http: stays on this machine (and browsers treat as potentially trustworthy).
+const isLoopback = (host) => host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(host);
+
+// A client's request template: a path relative to its baseURL. Checked once, when the resource or
+// mutation is created (a TypeError). Param values can't add anything here: each fills exactly one
+// encoded segment and "." / ".." are refused. resolveTarget() re-checks the final URL anyway.
+function clientPath(template) {
+  const path = template.split(/[?#]/)[0];
+  if (path[0] !== "/" || path[1] === "/") throw configError(`a createApi() client takes a path starting with "/" (resolved under its baseURL) — not a full, relative or protocol-relative URL`);
+  if (UNSAFE_URL_CHAR.test(path)) throw configError("a client path can't contain whitespace, control characters or backslashes");
+  if (hasDotSegment(path)) throw configError(`a client path can't contain "." or ".." segments (encoded or not) — requests stay under the client's baseURL`);
+}
+
+// The base URL → the client's boundary { origin, path, href }, or a TypeError. Strict on purpose:
+// the raw text is checked before parsing, so the URL parser's leniency (backslashes as slashes,
+// "https:host" without "//", stripped whitespace, collapsed dot segments) can't change its meaning.
+function readBaseURL(value) {
+  const shape = 'baseURL must be an absolute https: URL such as "https://api.example.com/v1/"';
+  if (typeof value !== "string" || value === "") throw clientError(shape);
+  if (UNSAFE_URL_CHAR.test(value)) throw clientError("baseURL can't contain whitespace, control characters or backslashes");
+  if (/[?#]/.test(value)) throw clientError("baseURL can't have a query string or fragment — it names an endpoint, not request state");
+  if (!/^https?:\/\/[^/]/i.test(value)) throw clientError(shape);
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw clientError(shape);
+  }
+  if (url.username || url.password) throw clientError("baseURL can't contain credentials — never put them in a URL");
+  // The host as written must already be canonical: the parser would otherwise silently turn
+  // "api%2eexample.com", full-width letters, "。" dots, "127.1", "0x7f.0.0.1" or "2130706433" into
+  // a different-looking host. Lowercase ASCII is the only difference allowed (IDN hosts: write the
+  // xn-- form); a port must be written as the parser keeps it, or be the scheme's default.
+  const raw = value.slice(value.indexOf("//") + 2);
+  const authority = raw.split("/")[0];
+  const at = authority.lastIndexOf(":");
+  const [host, port] = at > authority.lastIndexOf("]") ? [authority.slice(0, at), authority.slice(at + 1)] : [authority, ""];
+  const defaultPort = url.protocol === "https:" ? "443" : "80";
+  if (host.toLowerCase() !== url.hostname || authority.endsWith(":") || (port !== url.port && !(url.port === "" && (port === "" || port === defaultPort)))) {
+    throw clientError(`baseURL's host must be written in canonical form (it would be read as ${url.host}) — no percent-encoding, non-ASCII characters (use the xn-- form) or alternative IP spellings`);
+  }
+  if (url.protocol === "http:" && !isLoopback(url.hostname)) throw clientError("baseURL must use https: — plain http: is allowed only for a loopback host (localhost, *.localhost, 127.x.x.x, [::1])");
+  if (hasDotSegment(raw.slice(authority.length))) throw clientError(`baseURL can't contain "." or ".." segments`);
+  const path = url.pathname.endsWith("/") ? url.pathname : url.pathname + "/";
+  return Object.freeze({ origin: url.origin, path, href: url.origin + path });
+}
+
+/**
+ * A request surface — `client(url)`, `client.post/put/patch/delete(url)` — locked to ONE explicitly
+ * trusted origin. Paths resolve under `baseURL`'s path; requests are CORS, without credentials, and
+ * never follow redirects. `client.baseURL` is the normalized base (read-only).
+ * @param {{ baseURL: string }} options
+ */
+export function createApi(options) {
+  if (arguments.length !== 1) throw clientError("takes one options object: createApi({ baseURL })");
+  if (options === null || typeof options !== "object" || Array.isArray(options)) throw clientError(`options must be a plain object, got ${describe(options)}`);
+  let baseURL;
+  for (const key of Object.keys(options)) {
+    if (key === "baseURL") baseURL = options.baseURL;
+    else throw clientError(`unsupported option "${key}" — createApi() accepts only baseURL (no headers, credentials or authentication yet)`);
+  }
+  const boundary = readBaseURL(baseURL);
+  const client = surface(boundary);
+  Object.defineProperty(client, "baseURL", { value: boundary.href, enumerable: true });
+  return Object.freeze(client);
+}
