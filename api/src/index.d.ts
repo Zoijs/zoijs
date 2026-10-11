@@ -236,10 +236,14 @@ export interface ApiMutation<TResponse, TInput> extends Omit<Action<[TInput?], T
   retrying(): boolean;
 }
 
-/** `api()` and its mutation factories. */
+/**
+ * The request surface — a callable GET plus mutation factories — shared by {@link api} (same-origin)
+ * and every {@link createApi} client (one trusted origin). Same options, same behavior; only the
+ * URLs it accepts differ.
+ */
 export interface Api {
   /**
-   * GET a same-origin URL as a resource. Loads once immediately; `refresh()` loads again.
+   * GET a URL as a resource — for `api`, a same-origin URL; for a client, a path under its `baseURL`. Loads once immediately; `refresh()` loads again.
    * Non-2xx statuses become an {@link ApiError}; JSON is parsed; 204 is `null`; other bodies are strings.
    * Cross-origin URLs are refused with an `ApiError` of type `"security"`.
    *
@@ -271,5 +275,42 @@ export interface Api {
   delete<TResponse = unknown>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, ApiDeleteInput>;
 }
 
-/** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). */
+/** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). Not configurable. */
 export declare const api: Api;
+
+/**
+ * The only option {@link createApi} accepts. Headers, credentials and authentication are refused.
+ */
+export interface CreateApiOptions {
+  /**
+   * The trusted API's absolute `https:` URL (plain `http:` only for loopback hosts), optionally with
+   * a base path: `"https://api.example.com/v1/"`. No credentials, query string, fragment,
+   * backslashes or `.`/`..` segments. Requests resolve under its path: `"/users"` →
+   * `https://api.example.com/v1/users`.
+   */
+  readonly baseURL: string;
+}
+
+/**
+ * A request surface locked to one explicitly trusted origin. Its URLs are paths starting with `/`,
+ * resolved under `baseURL`'s path; full URLs, `//host`, backslashes and `.`/`..` segments are
+ * refused. Requests use CORS (the server must allow the page's origin), send no credentials or
+ * cookies, and never follow redirects. Frozen: the boundary can't be changed after creation.
+ */
+export interface ApiClient extends Api {
+  /** The normalized base URL (always ending in `/`), read-only. */
+  readonly baseURL: string;
+}
+
+/**
+ * Create a client for ONE external origin. `api()` stays same-origin-only; nothing global changes.
+ *
+ * ```ts
+ * const github = createApi({ baseURL: "https://api.github.com" });
+ * const repos = github<Repo[]>("/users/:user/repos", { params: { user } });
+ * ```
+ *
+ * Throws a `TypeError` for a missing, relative, non-https (non-loopback), credentialed or
+ * otherwise unsafe `baseURL`, and for any other option.
+ */
+export declare function createApi(options: CreateApiOptions): ApiClient;

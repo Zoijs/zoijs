@@ -2,7 +2,7 @@
 
 # @zoijs/api
 
-**Same-origin data access for [Zoijs](https://zoijs.dev).** Reads as a resource, writes as an action — safe URL building, reactive queries, JSON bodies, invalidation, HTTP errors and a same-origin policy built in.
+**Same-origin data access for [Zoijs](https://zoijs.dev).** Reads as a resource, writes as an action — safe URL building, reactive queries, JSON bodies, invalidation, HTTP errors and a same-origin policy built in — plus explicit, single-origin clients for external APIs.
 
 [![npm](https://img.shields.io/npm/v/@zoijs/api.svg)](https://www.npmjs.com/package/@zoijs/api)
 [![license](https://img.shields.io/npm/l/@zoijs/api.svg)](LICENSE)
@@ -25,6 +25,14 @@ await addTask.run({ title: "Learn Zoijs" });                       // POST JSON,
 
 with no `fetch`, `res.ok` check, `JSON.stringify`, `Content-Type` header or `refresh()` call
 of your own.
+
+`api()` only talks to the page's own origin. For an external API you create an explicit client,
+locked to that one origin — see [External APIs](#external-apis-createapi):
+
+```js
+const github = createApi({ baseURL: "https://api.github.com" });
+const repos = github("/users/:user/repos", { params: { user: "zoijs" } });
+```
 
 ## Install
 
@@ -741,6 +749,117 @@ This is a client-side guard against requesting the wrong place, not access contr
 server must still authenticate and authorize every request. For cookies, credentials and CSP,
 see the [production security checklist](https://zoijs.dev/production-security).
 
+## External APIs: `createApi()`
+
+`api()` stays same-origin-only. To call an API on another origin, create a **client** for it —
+an explicit, visible trust decision in your code:
+
+```js
+import { createApi } from "@zoijs/api";
+
+const github = createApi({ baseURL: "https://api.github.com" });
+
+const repos = github("/users/:user/repos", { params: { user: "example" } });
+const issue = github.post("/repos/:owner/:repo/issues", { idempotencyKey: true, retry: 2 });
+```
+
+A client has exactly the same surface and behavior as `api` — `client(url, options)` for reads,
+`client.post/put/patch/delete(url, options)` for writes, with the same options (`params`,
+`query`, `debounce`, `timeout`, `initial`, `problemDetails`, `retry`, `invalidate`, `exclusive`,
+`idempotencyKey`, …) and the same engine. Only the URLs it accepts and the way it sends them
+differ. Nothing global changes: `api()` and every other client are unaffected, and no module can
+make `api()` cross-origin-capable.
+
+**`baseURL`** — the only option (anything else, such as `headers` or `credentials`, is a
+`TypeError`):
+
+- an absolute `https:` URL — plain `http:` only for a loopback host (`localhost`, `*.localhost`,
+  `127.x.x.x`, `[::1]`), for local development;
+- no credentials (`https://user:pass@…`), query string, fragment, backslashes, whitespace or
+  `.`/`..` segments; relative (`/api`), protocol-relative (`//host`) and non-HTTP URLs
+  (`javascript:`, `data:`, `blob:`, `file:`) are refused;
+- the host written in **canonical form** — what the URL parser would keep. Anything it would
+  silently rewrite is refused: percent-encoding (`api%2eexample.com`), full-width or other
+  non-ASCII characters (write an internationalized name in its `xn--` form), and alternative IP
+  spellings (`127.1`, `0x7f.0.0.1`, `2130706433`, `[::ffff:127.0.0.1]`). Letter case and the
+  scheme's default port (`:443`) are the only differences allowed. For loopback, write
+  `localhost`, `127.0.0.1` or `[::1]`;
+- an optional base path. It is always a directory: `https://api.example.com/v1` and
+  `https://api.example.com/v1/` are the same client (`client.baseURL` shows the normalized,
+  read-only value).
+
+**Paths resolve under the base path.** A client's URLs are paths starting with `/`, and the
+leading `/` means "the client's base", not the origin's root:
+
+```js
+const billing = createApi({ baseURL: "https://billing.example.com/v1/" });
+
+billing("/customers");                                // → https://billing.example.com/v1/customers
+billing("/customers/:id", { params: { id: "a/b" } }); // → …/v1/customers/a%2Fb
+billing("/search", { query: { q: "late fees" } });    // → …/v1/search?q=late+fees
+billing("/");                                         // → https://billing.example.com/v1/
+```
+
+**One client = one origin, and requests stay under its base path.** A full URL (even to the same
+origin), `//host`, a relative path (`users`), a backslash, whitespace or a `.`/`..` segment —
+also percent-encoded, like `%2e%2e` — is refused with a `TypeError` when the resource or mutation
+is created, before any request. Param values can't get around it: each fills exactly one encoded
+segment. The final URL — after params and query — is checked again before every request: it must
+have exactly the client's scheme, host and port (so `https://api.example.com.evil.example`,
+another port or `http://` are refused) and stay under the base path — checked by whole path
+segments, so a sibling such as `/v1-evil/` is never inside `/v1/`.
+
+Encoded separators are left alone: `%2F`, `%5C` and `%252e` stay encoded in the URL that is
+sent, exactly as with `api()`, so they can't move the request on the client side. How the
+external server decodes and routes such a path is up to that server — the client can't enforce
+it.
+
+**How requests are sent:**
+
+- **`mode: "cors"`** — a client doesn't bypass CORS. The API must allow your page's origin
+  (`Access-Control-Allow-Origin`), and for JSON bodies or `Idempotency-Key` it must answer the
+  preflight (`Access-Control-Allow-Headers: Content-Type, Idempotency-Key`). If it doesn't, the
+  browser refuses the request and you get an `ApiError` of type `"network"` — the browser hides
+  the reason, and nothing is retried in a weaker mode (no `no-cors`, no proxy). To honor
+  `Retry-After` across origins, the API must also send `Access-Control-Expose-Headers: Retry-After`.
+- **`credentials: "omit"`** — no cookies or HTTP authentication are sent to the external origin,
+  even when the browser has some for it. (`api()` keeps sending same-origin cookies.)
+- **`redirect: "manual"`** — redirects are never followed, not even within the same origin. A 3xx
+  answer is an `ApiError` of type `"security"` and isn't retried, so a redirect can't steer a
+  request — or its body — to another origin. Point `baseURL` at the final location.
+- **`referrerPolicy: "strict-origin-when-cross-origin"`** — the external API learns at most your
+  page's origin (which the `Origin` header already tells it), never the page's path or query
+  string, even if the page's own referrer policy is looser.
+- **No authentication is added.** There is no `Authorization` header, API key, token or cookie
+  option (yet), and no arbitrary headers. The API decides what an anonymous request may do.
+
+Everything else is unchanged for clients: secret-looking query keys are still refused, error
+messages stay log-safe, `problemDetails` has the same media-type, 64 KB and field rules (an
+external server's text is no more trusted than your own), and every retry replays the same
+method, URL, query, body and idempotency key — the base URL is never re-read. `error.url` is the
+external origin + path (never the query string or fragment); with `params`, the path includes
+their values, so decide yourself whether to log it.
+
+**Invalidation works across clients.** `invalidate` takes any resource created by `api()` or a
+client — a reference you hold, never a URL match:
+
+```js
+const summary = api("/api/summary");                                  // same-origin
+const save = billing.post("/payments", { invalidate: summary });     // external write → local refresh
+```
+
+**A same-origin client works too** (`createApi({ baseURL: "https://app.example.com/api/" })`),
+but it uses CORS mode and sends no cookies — for your own backend, prefer `api("/api/…")`.
+
+**Browser only.** Like `api()`, a client sends requests only from an http(s) page. On the server
+(no `location`) its configuration is still validated, but every request fails with an `ApiError`
+of type `"security"` — `createApi()` doesn't add server-side networking. Use `initial` for server
+rendering.
+
+**Your server, and the external API's, still decide.** A client is a guard against requesting
+the wrong place. Authorization remains the external API's responsibility; validate what it
+returns before you trust it.
+
 ## Security at a glance
 
 `@zoijs/api` makes the short code the safe code in the browser. It is **not** access control:
@@ -748,7 +867,9 @@ see the [production security checklist](https://zoijs.dev/production-security).
 - **Your server must authenticate, authorize and validate every request.** Nothing here replaces
   that, and cookies are sent same-origin as with any `fetch` — protect writes against
   [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf).
-- **Cross-origin requests are blocked** — no trusted-origin list exists yet.
+- **`api()` blocks cross-origin requests.** An external API needs an explicit
+  [`createApi()`](#external-apis-createapi) client, locked to one origin — no global
+  trusted-origin list. Clients use CORS, send no cookies and follow no redirects.
 - **Secret-looking query keys are refused**; credentials belong in headers or bodies, not URLs.
 - **Retries are opt-in and bounded** (≤ 5 extra attempts, ≤ 30 s waits); mutation retries
   require an idempotency key.
@@ -765,6 +886,8 @@ see the [production security checklist](https://zoijs.dev/production-security).
   retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
   or optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
+- **`createApi()` takes only `baseURL`** — no authentication, headers, credentials or cookie
+  options, and one origin per client.
 
 ## License
 
