@@ -26,6 +26,9 @@
 //   /__cors/problem           422 application/problem+json
 //   /__cors/redirect/<code>?to=<url>   a <code> redirect to <url>
 //   /__cors/basic/…           401 + WWW-Authenticate: Basic unless the request carries Authorization
+//   /__cors/auth/…            any of the above, with Authorization also allowed by the preflight
+//                             (elsewhere a request carrying Authorization fails its preflight); the
+//                             echo reports the Authorization header it received
 // GET /__hits/<path> answers { count, authorized }: how many non-preflight requests /<path>
 // received (on any port), and how many carried an Authorization header — so a test can prove a
 // request, or a credential, never reached a server.
@@ -94,12 +97,15 @@ const authorized = new Map(); // raw pathname → requests that carried Authoriz
 const once = new Set();
 function cors(req, res, url) {
   const path = url.pathname;
+  // /__cors/auth/<route> behaves as /__cors/<route>, but its preflight allows Authorization.
+  const allowAuth = path.startsWith("/__cors/auth/");
+  const route = allowAuth ? "/__cors/" + path.slice("/__cors/auth/".length) : path;
   const headers = { "Cache-Control": "no-store", Vary: "Origin" };
   if (req.headers.origin === ALLOWED_ORIGIN && !path.startsWith("/__cors/deny/")) {
     Object.assign(headers, { "Access-Control-Allow-Origin": ALLOWED_ORIGIN, "Access-Control-Allow-Credentials": "true", "Access-Control-Expose-Headers": "Retry-After" });
   }
   if (req.method === "OPTIONS") {
-    if (headers["Access-Control-Allow-Origin"]) Object.assign(headers, { "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE", "Access-Control-Allow-Headers": "Content-Type, Idempotency-Key" });
+    if (headers["Access-Control-Allow-Origin"]) Object.assign(headers, { "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE", "Access-Control-Allow-Headers": allowAuth ? "Authorization, Content-Type, Idempotency-Key" : "Content-Type, Idempotency-Key" });
     res.writeHead(204, headers);
     return res.end();
   }
@@ -110,10 +116,10 @@ function cors(req, res, url) {
     res.writeHead(status, { ...headers, "Content-Type": type, ...extra });
     res.end(body);
   };
-  const first = (prefix) => path.startsWith(prefix) && !once.has(path) && once.add(path);
-  if (path.startsWith("/__cors/basic/") && !req.headers.authorization) return reply(401, "", "text/plain", { "WWW-Authenticate": 'Basic realm="zoijs-test"' });
-  if (path === "/__cors/problem") return reply(422, JSON.stringify({ type: "https://errors.example/invalid", title: "Invalid order", status: 422, detail: "quantity must be positive", secretInternal: "dropped" }), "application/problem+json");
-  const redirect = /^\/__cors\/redirect\/(30[12378])$/.exec(path);
+  const first = (prefix) => route.startsWith(prefix) && !once.has(path) && once.add(path);
+  if (route.startsWith("/__cors/basic/") && !req.headers.authorization) return reply(401, "", "text/plain", { "WWW-Authenticate": 'Basic realm="zoijs-test"' });
+  if (route === "/__cors/problem") return reply(422, JSON.stringify({ type: "https://errors.example/invalid", title: "Invalid order", status: 422, detail: "quantity must be positive", secretInternal: "dropped" }), "application/problem+json");
+  const redirect = /^\/__cors\/redirect\/(30[12378])$/.exec(route);
   if (redirect) return reply(Number(redirect[1]), "", "text/plain", { Location: url.searchParams.get("to") || "/" });
   const chunks = [];
   let size = 0;
@@ -127,7 +133,7 @@ function cors(req, res, url) {
     const echoed = () =>
       reply(200, JSON.stringify({
         method: req.method, path, search: url.search, origin: req.headers.origin ?? null, referer: req.headers.referer ?? null, cookie: req.headers.cookie ?? null,
-        contentType: req.headers["content-type"] ?? null, idempotencyKey: req.headers["idempotency-key"] ?? null, body: Buffer.concat(chunks).toString("base64"),
+        contentType: req.headers["content-type"] ?? null, idempotencyKey: req.headers["idempotency-key"] ?? null, authorization: req.headers.authorization ?? null, body: Buffer.concat(chunks).toString("base64"),
       }));
     if (first("/__cors/hang-once/")) setTimeout(echoed, 3000);
     else echoed();

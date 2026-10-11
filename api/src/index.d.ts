@@ -14,9 +14,10 @@ export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  * (`"config"`) a mistake in the calling code — a reactive params/query function that produced an
  * unsupported value or a secret-looking key, `refresh()` after `dispose()`, or a mutation `run()`
  * whose input or JSON body can't be sent; `"timeout"` the `timeout` option elapsed (for a
- * mutation, the server may still have acted on it).
+ * mutation, the server may still have acted on it); `"auth"` a {@link createApi} client's `auth`
+ * provider threw, rejected or returned an invalid token — the request was not sent.
  */
-export type ApiErrorType = "http" | "network" | "security" | "parse" | "config" | "timeout";
+export type ApiErrorType = "http" | "network" | "security" | "parse" | "config" | "timeout" | "auth";
 
 /**
  * RFC 9457 problem details from an `application/problem+json` error response — only with the
@@ -279,7 +280,18 @@ export interface Api {
 export declare const api: Api;
 
 /**
- * The only option {@link createApi} accepts. Headers, credentials and authentication are refused.
+ * Supplies a {@link createApi} client's Bearer access token: called once per logical request
+ * (each load, `refresh()` or `run()` — never per retry, never at creation), so it can return the
+ * current token from your own session state. Return the token itself — Zoijs sends
+ * `Authorization: Bearer <token>` — or `null`/`undefined` to send the request without one.
+ * A token must use RFC 6750 characters (`A–Z a–z 0–9 - . _ ~ + /`, then optional `=`), at most
+ * 8192 of them; anything else (including a `"Bearer …"` prefix or an empty string), a throw or a
+ * rejection fails the request as type `"auth"` without sending it.
+ */
+export type ApiAuthProvider = () => string | null | undefined | PromiseLike<string | null | undefined>;
+
+/**
+ * The only options {@link createApi} accepts. Headers and credentials are refused.
  */
 export interface CreateApiOptions {
   /**
@@ -289,13 +301,19 @@ export interface CreateApiOptions {
    * `https://api.example.com/v1/users`.
    */
   readonly baseURL: string;
+  /**
+   * Optional Bearer authentication: a function returning the access token (never the token
+   * itself). Sent only to this client's origin; cookies stay omitted. See {@link ApiAuthProvider}.
+   */
+  readonly auth?: ApiAuthProvider;
 }
 
 /**
  * A request surface locked to one explicitly trusted origin. Its URLs are paths starting with `/`,
  * resolved under `baseURL`'s path; full URLs, `//host`, backslashes and `.`/`..` segments are
- * refused. Requests use CORS (the server must allow the page's origin), send no credentials or
- * cookies, and never follow redirects. Frozen: the boundary can't be changed after creation.
+ * refused. Requests use CORS (the server must allow the page's origin), send no cookies, and never
+ * follow redirects; with `auth`, they carry a Bearer token. Frozen: neither the boundary nor the
+ * provider can be changed after creation, and neither is exposed.
  */
 export interface ApiClient extends Api {
   /** The normalized base URL (always ending in `/`), read-only. */

@@ -878,7 +878,7 @@ async function inExternal(page, src) {
       const sent = [];
       const realFetch = window.fetch;
       window.fetch = (url, init) => {
-        sent.push({ url: String(url), method: init.method, mode: init.mode, credentials: init.credentials, redirect: init.redirect ?? null, referrerPolicy: init.referrerPolicy ?? null, key: init.headers?.["Idempotency-Key"] ?? null });
+        sent.push({ url: String(url), method: init.method, mode: init.mode, credentials: init.credentials, redirect: init.redirect ?? null, referrerPolicy: init.referrerPolicy ?? null, key: init.headers?.["Idempotency-Key"] ?? null, ...(init.headers?.Authorization ? { authorization: init.headers.Authorization } : {}) });
         return realFetch(url, init);
       };
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1093,4 +1093,133 @@ test("createApi: POST/PUT/PATCH/DELETE, FormData, idempotent retries and invalid
   expect(parts[0].body.toString("utf8")).toBe("über ✓");
   expect([...parts[1].body]).toEqual([0, 1, 254, 255]);
   expect(sent.filter((s) => s.url.startsWith(X)).every((s) => s.mode === "cors" && s.credentials === "omit" && s.redirect === "manual" && s.referrerPolicy === "strict-origin-when-cross-origin")).toBe(true);
+});
+
+// ---- Phase 11: Bearer authentication through createApi({ auth }) — real CORS preflights -----------
+// /__cors/auth/… allows Authorization in its preflight; plain /__cors/… doesn't.
+
+test("auth: the Bearer token reaches the configured origin through a real preflight (sync and async providers)", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    document.cookie = "zoijs_p11=cookie-SECRET; path=/; SameSite=Lax";
+    let calls = 0;
+    const ext = createApi({ baseURL: X + "/__cors/auth/", auth: () => (calls++, "tok-" + uid) });
+    const later = createApi({ baseURL: X + "/__cors/auth/", auth: async () => { await wait(30); return "async-" + uid; } });
+    const r = await settled(ext("/me/:id", { params: { id: 7 } }));
+    const posted = await later.post("/orders", { idempotencyKey: true }).run({ total: 5 });
+    document.cookie = "zoijs_p11=; path=/; max-age=0";
+    return { get: r.data(), posted, calls, error: err(r.error()) };
+  `);
+  expect(out.error).toBeNull();
+  expect(out.get).toMatchObject({ path: "/__cors/auth/me/7", authorization: expect.stringMatching(/^Bearer tok-/), cookie: null });
+  expect(out.posted).toMatchObject({ method: "POST", authorization: expect.stringMatching(/^Bearer async-/), cookie: null, contentType: "application/json" });
+  expect(out.posted.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+  expect(out.calls).toBe(1);
+  expect(sent.every((s) => s.credentials === "omit" && s.mode === "cors" && s.redirect === "manual")).toBe(true);
+});
+
+test("auth: a server whose preflight refuses Authorization fails normally — the request itself is never sent", async ({ page }) => {
+  const { out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/", auth: () => "tok-SECRET-" + uid });
+    const r = await settled(ext("/no-auth-" + uid));
+    const anon = await settled(createApi({ baseURL: X + "/__cors/" })("/anon-" + uid)); // unauthenticated: no preflight needed
+    return { error: err(r.error()), hits: await hitInfo("/__cors/no-auth-" + uid), anon: anon.data()?.authorization, anonError: err(anon.error()) };
+  `);
+  expect(out.error).toMatchObject({ type: "network", message: "GET request failed: network error" });
+  expect(JSON.stringify(out.error)).not.toContain("SECRET");
+  expect(out.hits).toEqual({ count: 0, authorized: 0 }); // only the refused preflight reached the server
+  expect(out.anonError).toBeNull();
+  expect(out.anon).toBeNull();
+});
+
+test("auth: no redirect forwards the token — 301/302/303/307/308, GET and POST, other origin, same origin, with retries", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/auth/", auth: () => "tok-SECRET-" + uid });
+    const targets = {
+      otherOrigin: "http://127.0.0.1:3900/__echo/stolen-" + uid,
+      otherPort: "http://127.0.0.1:3900/__cors/auth/stolen-p-" + uid,
+      sameOrigin: X + "/__cors/auth/stolen-same-" + uid,
+    };
+    const results = [];
+    for (const code of [301, 302, 303, 307, 308]) {
+      for (const [name, to] of Object.entries(targets)) {
+        const r = await settled(ext("/redirect/" + code, { query: { to }, retry: 2, retryDelay: 10 }));
+        const m = ext.post("/redirect/" + code, { query: { to }, idempotencyKey: true, retry: 2, retryDelay: 10 });
+        await m.run({ secret: "body" });
+        results.push({ code, name, get: err(r.error()), post: err(m.error()) });
+      }
+    }
+    const reached = {};
+    for (const p of ["/__echo/stolen-", "/__cors/auth/stolen-p-", "/__cors/auth/stolen-same-"]) reached[p] = await hitInfo(p + uid);
+    return { results, reached };
+  `);
+  for (const { code, name, get, post } of out.results) {
+    expect(get, `${code} ${name}`).toMatchObject({ type: "security" });
+    expect(post, `${code} ${name}`).toMatchObject({ type: "security" });
+  }
+  for (const [p, h] of Object.entries(out.reached)) expect(h, p).toEqual({ count: 0, authorized: 0 });
+  expect(sent.filter((s) => s.url.includes("/redirect/"))).toHaveLength(30); // one request each, never retried
+  expect(JSON.stringify(out.results)).not.toContain("SECRET");
+});
+
+test("auth: retries reuse one token snapshot; a superseded async provider never sends", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    let n = 0;
+    const retried = createApi({ baseURL: X + "/__cors/auth/", auth: () => "snap-" + (++n) });
+    const r = await settled(retried("/flaky/:id", { params: { id: "r-" + uid }, retry: 2, retryDelay: 10 }));
+    const gates = [];
+    const slow = createApi({ baseURL: X + "/__cors/auth/", auth: () => new Promise((res) => gates.push(res)) });
+    const id = core.createState("old");
+    const res = slow("/users/:id", { params: () => ({ id: id.get() + "-" + uid }) });
+    await wait(20);
+    id.set("new");
+    await wait(20);
+    gates[1]("new-token");
+    await wait(50);
+    gates[0]("old-token"); // resolves after its load was superseded
+    await settled(res);
+    await wait(100);
+    res.dispose();
+    return { retried: r.data()?.authorization, n, latest: res.data(), oldHits: await hits("/__cors/auth/users/old-" + uid), newHits: await hits("/__cors/auth/users/new-" + uid) };
+  `);
+  const flaky = sent.filter((s) => s.url.includes("/flaky/"));
+  expect(flaky).toHaveLength(2);
+  expect(flaky[0].authorization).toBe("Bearer snap-1");
+  expect(flaky[1].authorization).toBe("Bearer snap-1");
+  expect(out.n).toBe(1);
+  expect(out.retried).toBe("Bearer snap-1");
+  expect(out.latest).toMatchObject({ authorization: "Bearer new-token" });
+  expect(out.oldHits).toBe(0);
+  expect(out.newHits).toBe(1);
+});
+
+test("auth: a FormData upload with Authorization is retried with the same token, key and contents", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/auth/", auth: async () => "up-" + uid });
+    const form = new FormData();
+    form.append("note", "über ✓");
+    form.append("file", new File([new Uint8Array([0, 1, 254, 255])], "a.bin", { type: "application/octet-stream" }));
+    const up = ext.post("/flaky/:id", { idempotencyKey: true, retry: 1, retryDelay: 10 });
+    const echoed = await up.run({ params: { id: "f-" + uid }, body: form });
+    return { echoed, attempt: up.attempt() };
+  `);
+  const ups = sent.filter((s) => s.url.includes("/flaky/f-"));
+  expect(ups).toHaveLength(2);
+  expect(new Set(ups.map((s) => s.authorization + s.key)).size).toBe(1);
+  expect(out.attempt).toBe(2);
+  expect(out.echoed.authorization).toMatch(/^Bearer up-/);
+  const parts = parseMultipart(out.echoed.contentType, out.echoed.body);
+  expect(parts[0].body.toString("utf8")).toBe("über ✓");
+  expect([...parts[1].body]).toEqual([0, 1, 254, 255]);
+});
+
+test("auth: unauthenticated clients and api() are unchanged — no Authorization anywhere", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const anon = await settled(createApi({ baseURL: X + "/__cors/" })("/plain-" + uid));
+    const local = await settled(api("./data/tasks.json"));
+    return { anon: anon.data()?.authorization, local: local.data()?.length };
+  `);
+  expect(out.anon).toBeNull();
+  expect(out.local).toBe(3);
+  expect(sent.every((s) => !s.authorization)).toBe(true);
+  expect(sent.find((s) => s.url.endsWith("/data/tasks.json"))).toMatchObject({ mode: "same-origin", credentials: "same-origin", redirect: null, referrerPolicy: null });
 });
