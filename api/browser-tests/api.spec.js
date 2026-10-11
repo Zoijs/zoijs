@@ -861,3 +861,236 @@ test("a FormData upload that fails once (503) is retried with the same key and i
   expect(parts[1].head).toContain("content-type: image/png");
   expect([...parts[1].body]).toEqual([...Array(256).keys()]);
 });
+
+// ---- Phase 10: createApi() — a second, real origin (no interception) --------------------------------
+// The test server also listens on 127.0.0.1:3901, a different origin. Its /__cors/ endpoints allow
+// exactly one origin (this page's), and /__hits/ counts what each path actually received.
+
+const X = "http://127.0.0.1:3901";
+
+// Runs `src` in the page with createApi; every fetch the page makes is recorded with its init.
+async function inExternal(page, src) {
+  await page.goto(EXAMPLE);
+  return page.evaluate(
+    async ({ src, X }) => {
+      const core = await import("/framework/src/index.js");
+      const { api, createApi } = await import("/api/src/index.js");
+      const sent = [];
+      const realFetch = window.fetch;
+      window.fetch = (url, init) => {
+        sent.push({ url: String(url), method: init.method, mode: init.mode, credentials: init.credentials, redirect: init.redirect ?? null, referrerPolicy: init.referrerPolicy ?? null, key: init.headers?.["Idempotency-Key"] ?? null });
+        return realFetch(url, init);
+      };
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const settled = async (r) => {
+        for (let i = 0; i < 500 && r.loading(); i++) await wait(10);
+        return r;
+      };
+      const hitInfo = async (path) => (await realFetch("/__hits" + path)).json();
+      const hits = async (path) => (await hitInfo(path)).count;
+      const err = (e) => e && { type: e.type, status: e.status, message: e.message, url: e.url, problem: e.problem && { ...e.problem } };
+      const uid = Math.random().toString(36).slice(2);
+      try {
+        const out = await new Function("core", "api", "createApi", "X", "wait", "settled", "hits", "err", "uid", "realFetch", "hitInfo", `return (async () => { ${src} })()`)(core, api, createApi, X, wait, settled, hits, err, uid, realFetch, hitInfo);
+        return { sent, out };
+      } finally {
+        window.fetch = realFetch;
+      }
+    },
+    { src, X },
+  );
+}
+
+test("createApi: GET JSON with route params and query reaches the configured origin through real CORS", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/v1/" });
+    const r = await settled(ext("/users/:id", { params: { id: "a/b ../c" }, query: { q: "x y", tag: ["1", "2"] } }));
+    return { data: r.data(), error: err(r.error()), baseURL: ext.baseURL };
+  `);
+  expect(out.error).toBeNull();
+  expect(out.baseURL).toBe(`${X}/__cors/v1/`);
+  expect(out.data).toMatchObject({ method: "GET", path: "/__cors/v1/users/a%2Fb%20..%2Fc", search: "?q=x+y&tag=1&tag=2", origin: "http://127.0.0.1:3900" });
+  expect(sent).toEqual([{ url: `${X}/__cors/v1/users/a%2Fb%20..%2Fc?q=x+y&tag=1&tag=2`, method: "GET", mode: "cors", credentials: "omit", redirect: "manual", referrerPolicy: "strict-origin-when-cross-origin", key: null }]);
+});
+
+test("createApi: the external API never sees the page's path or query in Referer, even under an unsafe-url page policy", async ({ page, browserName }) => {
+  const { out } = await inExternal(page, `
+    history.replaceState(null, "", "/api/examples/tasks/?reset=page-SECRET");
+    const meta = document.createElement("meta");
+    meta.name = "referrer";
+    meta.content = "unsafe-url";
+    document.head.append(meta);
+    const control = await (await realFetch(X + "/__cors/ref-control-" + uid)).json(); // what the page policy alone sends
+    const r = await settled(createApi({ baseURL: X + "/__cors/" })("/ref-" + uid));
+    return { control: control.referer, client: r.data()?.referer };
+  `);
+  // Proof the test can see a leak: the page's own policy alone sends the full URL. Asserted in
+  // Chromium only — engines differ in how far they honor a relaxed page policy.
+  if (browserName === "chromium") expect(out.control).toContain("page-SECRET");
+  expect(out.client).toBe("http://127.0.0.1:3900/");
+});
+
+test("createApi: cookies are not sent cross-origin (a credentialed control fetch proves the cookie exists)", async ({ page }) => {
+  const { out } = await inExternal(page, `
+    document.cookie = "zoijs_phase10=cookie-SECRET; path=/; SameSite=Lax";
+    const ext = createApi({ baseURL: X + "/__cors/" });
+    const r = await settled(ext("/cookies-" + uid));
+    const m = ext.post("/cookies-post-" + uid);
+    const posted = await m.run({ a: 1 });
+    const control = await (await realFetch(X + "/__cors/control-" + uid, { credentials: "include" })).json();
+    const same = await settled(api("/__cors/same-" + uid)); // api() is same-origin: its cookies still go
+    document.cookie = "zoijs_phase10=; path=/; max-age=0";
+    return { get: r.data()?.cookie, post: posted?.cookie, control: control.cookie, same: same.data()?.cookie };
+  `);
+  expect(out.control).toContain("zoijs_phase10=cookie-SECRET");
+  expect(out.same).toContain("zoijs_phase10=cookie-SECRET");
+  expect(out.get).toBeNull();
+  expect(out.post).toBeNull();
+});
+
+test("createApi doesn't bypass CORS: a server that doesn't allow the page fails normally, with no no-cors retry", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/" });
+    const r = await settled(ext("/deny/x-" + uid));
+    const m = ext.post("/deny/p-" + uid);
+    await m.run({ a: 1 });
+    const blocked = await settled(api(X + "/__cors/direct-" + uid)); // the default api() never even tries
+    return { get: err(r.error()), post: err(m.error()), blocked: err(blocked.error()),
+             getHits: await hits("/__cors/deny/x-" + uid), directHits: await hits("/__cors/direct-" + uid) };
+  `);
+  expect(out.get).toMatchObject({ type: "network", message: "GET request failed: network error" });
+  expect(out.post).toMatchObject({ type: "network" });
+  expect(out.getHits).toBe(1); // the browser sent it and then hid the response — exactly once
+  expect(out.blocked.type).toBe("security");
+  expect(out.directHits).toBe(0);
+  expect(sent.filter((s) => s.url.includes("/deny/"))).toHaveLength(2);
+  expect(sent.every((s) => s.mode === "cors" || s.mode === "same-origin")).toBe(true);
+});
+
+test("createApi: no redirect is followed — 301/302/303/307/308, GET and POST, with retries enabled", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/" });
+    const targets = {
+      otherOrigin: "http://127.0.0.1:3900/__echo/escaped-" + uid,           // another origin (port change)
+      lookalike: "http://127.0.0.1.localhost:3901/__cors/escaped-l-" + uid,  // look-alike host
+      scheme: "https://127.0.0.1:3901/__cors/escaped-s-" + uid,              // scheme change
+      sameOrigin: X + "/__cors/escaped-same-" + uid,                          // even within the origin
+    };
+    const results = [];
+    for (const code of [301, 302, 303, 307, 308]) {
+      for (const [name, to] of Object.entries(targets)) {
+        const r = await settled(ext("/redirect/" + code, { query: { to }, retry: 2, retryDelay: 10 }));
+        const m = ext.post("/redirect/" + code, { query: { to }, idempotencyKey: () => "key-SECRET-" + uid, retry: 2, retryDelay: 10 });
+        await m.run({ card: "body-SECRET" });
+        results.push({ code, name, get: err(r.error()), post: err(m.error()) });
+      }
+    }
+    const reached = {};
+    for (const p of ["/__echo/escaped-", "/__cors/escaped-l-", "/__cors/escaped-s-", "/__cors/escaped-same-"]) reached[p] = await hits(p + uid);
+    return { results, reached, perCode: await hits("/__cors/redirect/307") };
+  `);
+  for (const { code, name, get, post } of out.results) {
+    expect(get, `${code} ${name} GET`).toMatchObject({ type: "security", message: "GET request blocked: a createApi() client doesn't follow redirects" });
+    expect(post, `${code} ${name} POST`).toMatchObject({ type: "security", message: "POST request blocked: a createApi() client doesn't follow redirects" });
+    expect(JSON.stringify(post)).not.toContain("SECRET");
+  }
+  // Nothing — no body, no key, no request at all — reached any redirect target.
+  expect(out.reached).toEqual({ "/__echo/escaped-": 0, "/__cors/escaped-l-": 0, "/__cors/escaped-s-": 0, "/__cors/escaped-same-": 0 });
+  // Redirects are terminal: one attempt each, never retried (5 codes × 4 targets × GET+POST).
+  expect(sent.filter((s) => s.url.includes("/__cors/redirect/"))).toHaveLength(40);
+});
+
+test.describe("with browser-managed HTTP credentials for the external origin", () => {
+  test.use({ httpCredentials: { username: "zoijs", password: "basic-SECRET" } });
+
+  test("createApi: HTTP authentication is never sent cross-origin", async ({ page, browserName }) => {
+    const { out } = await inExternal(page, `
+      const r = await settled(createApi({ baseURL: X + "/__cors/" })("/basic/client-" + uid));
+      const control = await realFetch(X + "/__cors/basic/control-" + uid, { credentials: "include" }).then((res) => res.status, () => "failed");
+      return { error: err(r.error()), client: await hitInfo("/__cors/basic/client-" + uid), control, controlHits: await hitInfo("/__cors/basic/control-" + uid) };
+    `);
+    expect(out.error).toMatchObject({ type: "http", status: 401 });
+    expect(out.client.authorized).toBe(0); // the challenge was not answered with credentials
+    // Proof the browser does hold credentials to answer with: a credentialed fetch sends them.
+    // Asserted in Chromium only — how Playwright supplies httpCredentials differs per engine.
+    if (browserName === "chromium") expect(out.controlHits.authorized).toBeGreaterThan(0);
+  });
+});
+
+test("createApi: paths can't escape the base — refused before any request; params stay one segment", async ({ page }) => {
+  const external = [];
+  page.on("request", (r) => {
+    if (r.url().startsWith(X) && !r.url().includes("/__cors/v1/files/")) external.push(r.url());
+  });
+  const { out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/v1/" });
+    const refused = [];
+    for (const url of ["http://127.0.0.1:3900/x", X + "/__cors/v1/x", "//127.0.0.1:3900/x", "\\\\x", "/\\\\127.0.0.1:3900/x", "../x", "/../x", "/%2e%2e/x", "/a/%2E./x", "x"]) {
+      try { ext(url); refused.push([url, "sent"]); } catch (e) { refused.push([url, e.name]); }
+    }
+    const traversal = await settled(ext("/files/:name", { params: { name: "../../admin" } }));
+    let badBase = [];
+    for (const baseURL of ["//127.0.0.1:3901/", "/api", "http://user:pw@127.0.0.1:3901/", "javascript:alert(1)", X + "/?x=1", "http://example.com/"]) {
+      try { createApi({ baseURL }); badBase.push("accepted"); } catch (e) { badBase.push(e.name); }
+    }
+    return { refused, path: traversal.data()?.path, badBase };
+  `);
+  for (const [url, result] of out.refused) expect(result, url).toBe("TypeError");
+  expect(out.path).toBe("/__cors/v1/files/..%2F..%2Fadmin");
+  expect(out.badBase.every((r) => r === "TypeError")).toBe(true);
+  expect(external).toEqual([]);
+});
+
+test("createApi: GET retry, timeout and problem details work through the shared engine", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/" });
+    const flaky = await settled(ext("/flaky/:id", { params: { id: "g-" + uid }, retry: 2, retryDelay: 10 }));
+    const slow = await settled(ext("/hang-once/:id", { params: { id: "t-" + uid }, timeout: 400, retry: 1, retryDelay: 10 }));
+    const timedOut = await settled(ext("/hang-once/:id", { params: { id: "t2-" + uid }, timeout: 300 }));
+    const m = ext.post("/problem", { problemDetails: true });
+    await m.run({ qty: -1 });
+    return { flaky: flaky.data()?.path, flakyHits: await hits("/__cors/flaky/g-" + uid), slow: slow.data()?.path, timedOut: err(timedOut.error()), problem: err(m.error()) };
+  `);
+  expect(out.flaky).toMatch(/^\/__cors\/flaky\/g-/);
+  expect(out.flakyHits).toBe(2);
+  expect(out.slow).toMatch(/^\/__cors\/hang-once\/t-/);
+  expect(out.timedOut).toMatchObject({ type: "timeout", message: "GET request timed out" });
+  expect(out.problem).toMatchObject({ type: "http", status: 422, message: "POST request failed: 422 Unprocessable Entity" });
+  expect(out.problem.problem).toEqual({ type: "https://errors.example/invalid", title: "Invalid order", status: 422, detail: "quantity must be positive" });
+  expect(new Set(sent.filter((s) => s.url.includes("/flaky/")).map((s) => s.url)).size).toBe(1); // same URL on retry
+});
+
+test("createApi: POST/PUT/PATCH/DELETE, FormData, idempotent retries and invalidation across boundaries", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const ext = createApi({ baseURL: X + "/__cors/" });
+    const local = api("./data/tasks.json");
+    await settled(local);
+    const save = ext.post("/flaky/:id", { idempotencyKey: true, retry: 2, retryDelay: 10, invalidate: local });
+    const saved = await save.run({ params: { id: "m-" + uid }, body: { total: 5 } });
+    await wait(150);
+    const put = await ext.put("/items/:id").run({ params: { id: 7 }, body: { a: 1 } });
+    const patch = await ext.patch("/items/:id").run({ params: { id: 7 }, body: { b: 2 } });
+    const del = await ext.delete("/items/:id", { query: { hard: true } }).run({ params: { id: 7 } });
+    const form = new FormData();
+    form.append("note", "über ✓");
+    form.append("file", new File([new Uint8Array([0, 1, 254, 255])], "a.bin", { type: "application/octet-stream" }));
+    const up = await ext.post("/flaky/:id", { idempotencyKey: true, retry: 1, retryDelay: 10 }).run({ params: { id: "f-" + uid }, body: form });
+    local.dispose();
+    return { saved, attempt: save.attempt(), put, patch, del, up };
+  `);
+  const saves = sent.filter((s) => s.url.includes("/flaky/m-"));
+  expect(saves).toHaveLength(2);
+  expect(saves[1].key).toBe(saves[0].key);
+  expect(saves[0].key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(out.saved).toMatchObject({ method: "POST", idempotencyKey: saves[0].key, contentType: "application/json" });
+  expect(Buffer.from(out.saved.body, "base64").toString()).toBe('{"total":5}');
+  expect(out.attempt).toBe(2);
+  expect(sent.filter((s) => s.url.endsWith("/data/tasks.json"))).toHaveLength(2); // initial + one invalidation
+  expect(out.put).toMatchObject({ method: "PUT", path: "/__cors/items/7" });
+  expect(out.patch).toMatchObject({ method: "PATCH", path: "/__cors/items/7" });
+  expect(out.del).toMatchObject({ method: "DELETE", path: "/__cors/items/7", search: "?hard=true", body: "" });
+  const parts = parseMultipart(out.up.contentType, out.up.body);
+  expect(parts[0].body.toString("utf8")).toBe("über ✓");
+  expect([...parts[1].body]).toEqual([0, 1, 254, 255]);
+  expect(sent.filter((s) => s.url.startsWith(X)).every((s) => s.mode === "cors" && s.credentials === "omit" && s.redirect === "manual" && s.referrerPolicy === "strict-origin-when-cross-origin")).toBe(true);
+});
