@@ -1,7 +1,7 @@
 {
   "name": "@zoijs/api",
-  "version": "0.2.0",
-  "description": "Same-origin data access for Zoijs: api(url, { params, query }) reads as a resource, api.post/put/patch/delete write as an action — safe URL building, JSON bodies, invalidation, HTTP errors and a same-origin policy built in; createApi({ baseURL }) for explicit single-origin external clients. No JSX, no build step.",
+  "version": "0.3.0",
+  "description": "Same-origin data access for Zoijs: api(url, { params, query }) reads as a resource, api.post/put/patch/delete write as an action — safe URL building, JSON bodies, invalidation, HTTP errors and a same-origin policy built in; createApi({ baseURL, auth }) for explicit single-origin external clients, with optional Bearer authentication. No JSX, no build step.",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
