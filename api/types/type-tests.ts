@@ -310,3 +310,34 @@ billing.post("/payments", { retry: 1 });
 api.baseURL;
 
 void [sameSurface, base];
+
+// ---- Phase 11: Bearer authentication --------------------------------------------------------------
+import type { ApiAuthProvider } from "../src/index.js";
+
+declare function currentToken(): string | null;
+declare function fetchToken(): Promise<string | undefined>;
+const syncAuth: ApiAuthProvider = () => currentToken();
+const asyncAuth: ApiAuthProvider = fetchToken;
+const authed: ApiClient = createApi({ baseURL: "https://api.example.com", auth: syncAuth });
+createApi({ baseURL: "https://api.example.com", auth: asyncAuth });
+createApi({ baseURL: "https://api.example.com", auth: () => null });
+createApi({ baseURL: "https://api.example.com", auth: async () => undefined });
+createApi({ baseURL: "https://api.example.com", auth: undefined });
+authed<{ id: string }>("/me", { retry: 2 }).refresh();
+authed.post("/orders", { idempotencyKey: true, retry: 2 }).run({ total: 1 });
+const authType: ApiErrorType = "auth";
+
+// @ts-expect-error — the token itself is not accepted, only a provider
+createApi({ baseURL: "https://api.example.com", auth: "my-token" });
+// @ts-expect-error — a provider must return a string, null or undefined
+createApi({ baseURL: "https://api.example.com", auth: () => 42 });
+// @ts-expect-error — a provider takes no arguments
+createApi({ baseURL: "https://api.example.com", auth: (scope: string) => scope });
+// @ts-expect-error — arbitrary headers stay unsupported
+createApi({ baseURL: "https://api.example.com", headers: { Authorization: "Bearer x" } });
+// @ts-expect-error — the provider is private
+authed.auth;
+// @ts-expect-error — and there's no token property
+authed.token;
+
+void [authType];

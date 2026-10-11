@@ -18,7 +18,7 @@ through one app — the **Task Board** demo — that uses five of them together.
 | [`@zoijs/router`](../../router/README.md) | Client-side routing | `createRouter` → `view`, `link`, `go`, `path`, `query` |
 | [`@zoijs/resource`](../../resource/README.md) | Reading async data | `resource(fetcher)` → `data`, `loading`, `error`, `refresh` |
 | [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
-| [`@zoijs/api`](../../api/README.md) | Same-origin HTTP | `api(url, options?)` → a resource; `api.post` / `put` / `patch` / `delete(url, options?)` → an action; `createApi({ baseURL })` → the same surface for one explicitly trusted external origin; `ApiError` |
+| [`@zoijs/api`](../../api/README.md) | Same-origin HTTP | `api(url, options?)` → a resource; `api.post` / `put` / `patch` / `delete(url, options?)` → an action; `createApi({ baseURL, auth? })` → the same surface for one explicitly trusted external origin, optionally with a Bearer token; `ApiError` |
 | [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
 | [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
 | [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
