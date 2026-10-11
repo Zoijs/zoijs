@@ -71,9 +71,11 @@ test("containment is segment-aware: a sibling like /v1-evil/ is never inside /v1
     assert.equal(url.origin, "https://api.example.com", u);
     assert.ok(url.pathname.startsWith("/v1/"), u);
   }
-  assert.ok(sent.includes("https://api.example.com/v1/v1-evil/"), "a leading / stays under the base");
-  assert.ok(sent.includes("https://api.example.com/v1/%252e%252e/admin"), "double-encoded dots stay literal (one decode on the server would give %2e%2e, not ..)");
-  assert.ok(sent.includes("https://api.example.com/v1/search?path=..%2F..%2Fadmin&sep=a%2Fb%5Cc%252f"));
+  // Exact URLs sent (set membership, not substring matching).
+  const sentSet = new Set(sent);
+  assert.ok(sentSet.has("https://api.example.com/v1/v1-evil/"), "a leading / stays under the base");
+  assert.ok(sentSet.has("https://api.example.com/v1/%252e%252e/admin"), "double-encoded dots stay literal (one decode on the server would give %2e%2e, not ..)");
+  assert.ok(sentSet.has("https://api.example.com/v1/search?path=..%2F..%2Fadmin&sep=a%2Fb%5Cc%252f"));
   // the base path itself as a sibling-prefix: /v1 vs /v1-evil
   const narrow = createApi({ baseURL: "https://api.example.com/v1" });
   await loaded(narrow("/x"));
