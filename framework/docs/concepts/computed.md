@@ -42,6 +42,24 @@ const subtotal = computed(() => items.get().reduce((s, i) => s + i.price, 0));
 const withTax  = computed(() => subtotal.get() * 1.2);
 ```
 
+## Custom equality
+
+By default a recomputed value counts as a change unless it is `Object.is`-equal to the previous
+one. Pass a comparator as the second argument when a fresh object can mean "no change":
+
+```js
+// a new object each time, but readers only wake when the page number really changes
+const paging = computed(
+  () => ({ page: Number(router.query().page || 1) }),
+  (prev, next) => prev.page === next.page
+);
+```
+
+`equals(prev, next)` returns `true` for "the same" (the previous value is kept and readers
+aren't woken). It is only ever called with two computed values — never on the first
+computation, which has nothing to compare with — so it can read properties of both arguments
+without null checks *(core 1.10.0+; earlier versions called it with `undefined` first)*.
+
 ## When to reach for `computed`
 
 Use it for:

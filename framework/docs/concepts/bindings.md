@@ -39,6 +39,10 @@ html`<button disabled=${() => busy.get()}>Save</button>`; // boolean attribute
 - **Numbers** and other values are converted with `String()`. An **array or plain object**
   becomes `"a,b"` / `"[object Object]"` — almost always a mistake, so development mode warns.
   Use `style=${{ … }}` (the [object form](../security.md#a-note-on-style)) for styles.
+- **`class`** is set as written on the first render; after that a binding adds and removes only
+  the class names *it* set, so classes other code adds (a UI library's JS, `el.classList.add`)
+  survive updates *(core 1.10.0+; earlier versions rewrote the whole attribute)*. `false`/`null`
+  remove the binding's names, and the attribute once nothing is left.
 - Name attributes the HTML way. Lit-style prefixes (`.value=`, `?disabled=`, `@click=`) aren't
   supported and throw when the template compiles: `value`/`checked` already use the property,
   booleans use `true`/`false` as above, and events use `onclick=${handler}`.
@@ -93,11 +97,35 @@ It runs once, isn't reactive, and can return a cleanup function. See
 
 ## SVG
 
-SVG works inside `html` as long as it's wrapped in `<svg>…</svg>`. Dynamic attributes (including `xlink:href`) are handled.
+SVG works inside `html`. Dynamic attributes (including `xlink:href`) are handled.
 
 ```js
 html`<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r=${() => radius.get()} /></svg>`;
 ```
+
+Anything you insert **inside** an `<svg>` — `each()` items, nested or conditional templates,
+components — is parsed as SVG, so lists of shapes and reusable chart parts just work
+*(core 1.10.0+; earlier versions needed every SVG element inside one `<svg>` literal)*:
+
+```js
+const Bar = (d) => html`<rect x=${d.x} y=${() => 100 - d.value} width="8" height=${() => d.value} />`;
+
+html`<svg viewBox="0 0 100 100" role="img" aria-label="Sales by month">
+  <defs>
+    <linearGradient id="fill">${each(() => stops.get(), (s) => s.offset, (s) => html`<stop offset=${s.offset} stop-color=${s.color} />`)}</linearGradient>
+  </defs>
+  <g fill="url(#fill)">${each(() => bars.get(), (d) => d.id, Bar)}</g>
+  ${() => (showAverage.get() ? html`<line x1="0" x2="100" y1=${average} y2=${average} stroke="currentColor" />` : null)}
+</svg>`;
+```
+
+Keyed updates (insert, reorder, remove), attributes — including case-sensitive ones like
+`viewBox` — and cleanup behave exactly as in HTML. Content inside `<foreignObject>` is HTML
+again, and `mount(App, svgElement)` parses `App` as SVG.
+
+The same goes for **MathML**: content inserted inside `<math>` is MathML, while the text
+elements (`<mi>`, `<mo>`, `<mn>`, `<ms>`, `<mtext>`) hold HTML. And `unsafeHTML()` markup placed
+inside an `<svg>` or `<math>` is parsed in that namespace. *(core 1.10.0+)*
 
 ---
 

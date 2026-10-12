@@ -34,10 +34,32 @@ router.destroy();
 // @ts-expect-error — go() needs a path
 router.go();
 
-// @ts-expect-error — link() needs text
+// @ts-expect-error — link() needs content
 router.link("/");
 
-void [v, a, path, id];
+// replace navigation (L5)
+router.go("/about", { replace: true });
+router.go("/about", {});
+// @ts-expect-error — replace is a boolean
+router.go("/about", { replace: "yes" });
+
+// rich link content and link building blocks (L6)
+const rich = router.link("/about", html`<b>About</b> us`);
+const reactive = router.link("/about", () => (path === "/" ? "Home" : html`<i>Back</i>`));
+const h: string = router.href("/about");
+const onClick: (e: MouseEvent) => void = router.onLinkClick("/about");
+const active: boolean = router.isActive("/docs", { exact: false });
+const custom = html`<a class="nav" href=${router.href("/x")} onclick=${router.onLinkClick("/x")}
+  aria-current=${() => (router.isActive("/x") ? "page" : null)}>X</a>`;
+// @ts-expect-error — link content isn't an arbitrary object
+router.link("/about", { label: "About" });
+// @ts-expect-error — exact is a boolean
+router.isActive("/x", { exact: 1 });
+
+// a route may render nothing (L8)
+createRouter({ "/": () => null, "*": () => html`<h1>404</h1>` });
+
+void [v, a, path, id, rich, reactive, h, onClick, active, custom];
 
 // ---- SEC-10: decodeSlash ----------------------------------------------------------
 createRouter({ "/f/:name": () => null }, { decodeSlash: false });

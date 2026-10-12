@@ -6,6 +6,63 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-10-12
+
+### Fixed
+Found while building the Zoijs Insight reference app. No API changes.
+
+- **SVG lists and nested templates draw.** A template is parsed once in HTML context, so an
+  `each()` item, a nested or conditional template, or a component rendered *inside* an `<svg>`
+  came out as HTML elements that don't draw (RFC 0003 §6). Content inserted under an SVG element
+  is now parsed in SVG context — keyed insert/move/remove, attributes (including case-sensitive
+  ones like `viewBox`) and cleanup work as for HTML; `<foreignObject>` content stays HTML;
+  `mount()` into an `<svg>` element parses the component as SVG; and hydrated SVG lists get the
+  same fix.
+- **`each()` items keep their own function fields.** The item proxy returned every function as
+  `fn.bind(item)` — a new function on each read, without the original's own properties
+  (`fn.preload`, …). Own function fields are now returned as-is; inherited methods
+  (`Date#getTime`, class methods) are still bound to the item.
+- **`computed(fn, equals)` never calls `equals` with `undefined` first.** The first value was
+  compared against `undefined`, so a comparator reading its arguments
+  (`(a, b) => a.page === b.page`) threw. The first value is now stored without a comparison —
+  including after a failed first run — and `undefined` is an ordinary value afterwards.
+- **List items copy and enumerate like the object.** The `each()` item proxy had an empty target,
+  so `{ ...item }`, `Object.keys(item)` and `JSON.stringify(item)` returned `{}` / `[]` —
+  `save({ ...todo, done: true })` silently dropped every field. They now see the live item; an
+  array item passes `Array.isArray`, and `instanceof` follows the item's class.
+- **Items with several root nodes stay together.** A record tracked a snapshot of its root
+  nodes, so content a top-level binding added later (a conditional detail row, a nested list)
+  stayed behind on a reorder and could be orphaned — duplicate or misplaced rows. Records now
+  track their live range of nodes (the audit's deferred "Rn3").
+- **MathML context, and `unsafeHTML()` in SVG/MathML.** Content inserted inside `<math>` is
+  parsed as MathML (HTML again inside `<mi>`, `<mo>`, `<mn>`, `<ms>`, `<mtext>`), like SVG; and
+  `unsafeHTML()` markup inside an `<svg>`/`<math>` is parsed in that namespace (the value is
+  parsed in place, never concatenated, so a `TrustedHTML` stays intact).
+- **Style bindings work under a strict `style-src` CSP.** `style=${…}` (object, string and mixed
+  forms) was applied with `setAttribute("style", …)`, which a policy without `'unsafe-inline'` /
+  `style-src-attr` refuses. Bindings now write `el.style.cssText` (the CSSOM, which CSP doesn't
+  govern): the same declarations, the same whole-value replacement, the same object-form
+  validation; `null`/`false` still remove the attribute. `style-src-attr 'unsafe-inline'` is no
+  longer needed for bindings (static `style="…"` in markup still needs it).
+
+### Migration notes
+- **`this` in an item's own methods.** `item.method()` inside `each()` now runs with `this` = the
+  item proxy (which reads the live item and, new, writes through to it) instead of the raw item.
+  Reads and `this.x = …` behave as before. A method that compares `this` by identity, or one
+  destructured off the item (`const { method } = item; method()`), no longer gets the item as
+  `this` — call it as `item.method()` or use an arrow function field.
+- **Strict CSP.** If you added `style-src-attr 'unsafe-inline'` only for `style=${…}` bindings,
+  you can remove it after upgrading.
+- **Chromium and `style=""`.** Removing a style through a binding removes the attribute in
+  every engine (Chromium needed an explicit check: it re-creates a lazily synced `style=""`).
+- **`class=${…}` keeps classes added by other code.** After the first render a class binding
+  adds and removes only the names it set, instead of rewriting the attribute — so classes a UI
+  library or `classList.add` put on the element survive updates. `false`/`null` remove the
+  binding's names (and the attribute once it's empty). If you relied on a binding wiping
+  classes added elsewhere, remove them where you add them.
+- **List items are proxies.** `structuredClone(item)` throws (it always did); clone
+  `{ ...item }` instead, which now works.
+
 ## [1.9.0] — 2026-10-05
 
 ### Migration notes
@@ -376,6 +433,7 @@ First stable release. The public API is frozen at seven functions.
   (Playwright), and TypeScript type tests.
 - No build step required at any point.
 
+[1.10.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.10.0
 [1.9.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.9.0
 [1.1.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.1.0
 [1.0.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.0.0

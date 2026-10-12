@@ -111,6 +111,21 @@ test("fireEvent sets a target property before dispatching (input value)", async 
   assert.equal(value.peek(), "hello");
 });
 
+test("mockRouter mirrors the router's link building blocks (href/onLinkClick/isActive, go replace)", async () => {
+  const router = mockRouter({ path: "/" });
+  const el = document.createElement("div");
+  mount(() => html`<a href=${router.href("/reports")} onclick=${router.onLinkClick("/reports")}
+    aria-current=${() => (router.isActive("/reports", { exact: false }) ? "page" : null)}>R</a>`, el);
+  const a = el.querySelector("a");
+  a.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+  await new Promise((r) => setTimeout(r));
+  assert.equal(router.path(), "/reports");
+  assert.equal(a.getAttribute("aria-current"), "page");
+  router.go("/reports/7", { replace: true });
+  assert.equal(router.isActive("/reports", { exact: false }), true);
+  assert.equal(router.isActive("/reports"), false);
+});
+
 test("mockRouter exposes reactive path/query and go()", async () => {
   const router = mockRouter({ path: "/home" });
   const target = document.createElement("div");

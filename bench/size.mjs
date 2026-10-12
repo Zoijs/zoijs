@@ -47,7 +47,12 @@ const SRC = join(root, "framework", "src");
 // is not cut to fit an outdated ceiling; PERF-2 replaces it with separate production/minified and
 // source-delivery budgets. SEC-10's fixes live in the router/i18n/storage/action packages, so they
 // should not move this number.
-const BUDGET_GZIP = 26.5 * 1024; // 26.5 KB (27,136 B) — temporary Phase 1 source budget, see above
+// Raised to 28.5 KB (2026-10-12, reviewed with the maintainer) for the Zoijs Insight limitation fixes:
+// L1/L2/L3/L7 landed at exactly 27,136 B, and the follow-up fixes need ~+500 B of code (live span
+// tracking for multi-root each() items, enumerable item proxies, foreign-class-preserving class
+// bindings, MathML context, unsafeHTML in SVG/MathML) plus their explanatory comments (~28.1 KB
+// total). Same terms as above: a temporary commented-source budget until PERF-2.
+const BUDGET_GZIP = 28.5 * 1024; // 28.5 KB (29,184 B) — temporary source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They

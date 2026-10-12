@@ -54,7 +54,7 @@ test("counts up on click", async () => {
 | `waitFor(fn, options?)` | Retry `fn` until it stops throwing (for async data / animations). |
 | `tick()` | `await tick()` — yield until Zoijs's reactive flush has run. |
 | `cleanup()` | Unmount everything `render` created and remove its containers (use in `afterEach`). |
-| `mockRouter(init?)` | A controllable stand-in for an `@zoijs/router` instance (`setPath` / `setQuery`). |
+| `mockRouter(init?)` | A controllable stand-in for an `@zoijs/router` instance (`setPath` / `setQuery`); also mirrors `href` / `onLinkClick` / `isActive` and accepts `go(path, { replace })` *(testing 0.2.0+)*. |
 
 ## Philosophy
 

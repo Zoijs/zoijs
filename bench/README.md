@@ -14,8 +14,8 @@ size of `framework/src/**/*.js` (client-reachable files, including opt-in entrie
 `unsafe.js`; the server-only `server.js` is excluded) is what a browser can fetch from a
 gzip/brotli CDN. `npm run bench:size` prints the current numbers.
 
-Phase 1 currently tracks **commented source size**: about **25.9 KB gzipped
-(26,498 B as of this writing) against a temporary 26.5 KB (27,136 B) budget**, enforced by `npm test`
+Phase 1 currently tracks **commented source size**: about **27.4 KB gzipped
+(28,066 B as of this writing) against a temporary 28.5 KB (29,184 B) budget**, enforced by `npm test`
 (`bench/size.mjs --check`). That is **not** a production payload figure — the source
 ships with its comments, and a page only loads the modules it imports. The budget was
 raised deliberately through Phase 1 for reviewed security and correctness fixes (the

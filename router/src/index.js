@@ -67,14 +67,13 @@ export function createRouter(routes, options = {}) {
   // the request URL as `location`, so `view()` renders the matching route.
   const appPath = () =>
     typeof window === "undefined" ? stripBase(serverPathname) : stripBase(window.location.pathname);
-  const readLocation = () => ({
-    path: appPath(),
-    query: parseQuery(typeof window === "undefined" ? serverSearch : window.location.search),
-  });
+  const readQuery = () => parseQuery(typeof window === "undefined" ? serverSearch : window.location.search);
 
-  // One reactive cell holds the current location. path(), query(), and the
-  // active-link state read it, so they update when the URL changes.
-  const location = createState(readLocation());
+  // Two value-gated cells hold the current location, so code that reads only path() doesn't
+  // re-run when just the query (or hash) changes, and an equal query doesn't wake query()
+  // readers. path(), query(), and the active-link state read them.
+  const pathCell = createState(appPath());
+  const queryCell = createState(readQuery(), sameParams);
 
   // The page itself is rendered imperatively with mount(): mounting runs the
   // component inside an owner scope (so its onCleanup is captured) and the
@@ -101,7 +100,8 @@ export function createRouter(routes, options = {}) {
         pendingRender = false;
         const m = match(appPath());
         if (unmountPage) unmountPage(); // dispose the previous page → its onCleanup runs
-        unmountPage = mount(() => (m.component ? m.component(m.params) : null), outlet);
+        // A route may render nothing — `null` (or no "*" route): mount an empty template then.
+        unmountPage = mount(() => (m.component && m.component(m.params)) ?? html``, outlet);
         currentMatch = m;
       } while (pendingRender); // a nav during mount asked for another render — do it now, in order
     } finally {
@@ -112,14 +112,17 @@ export function createRouter(routes, options = {}) {
   // Apply a URL change: refresh the reactive cell, and swap the page ONLY when the matched route
   // or its params actually changed (Ro1). A hash- or query-only change keeps the same component
   // mounted — re-mounting it would wipe uncontrolled DOM state (form input, scroll, focus) and
-  // flicker head tags — while the reactive `location` cell still updates for query()/path() reads.
+  // flicker head tags — while the reactive cells still update for query()/path() reads.
+  // Returns true when the page was (re)rendered.
   const apply = () => {
-    location.set(readLocation());
+    pathCell.set(appPath());
+    queryCell.set(readQuery());
     if (currentMatch) {
       const next = match(appPath());
-      if (next.component === currentMatch.component && sameParams(next.params, currentMatch.params)) return;
+      if (next.component === currentMatch.component && sameParams(next.params, currentMatch.params)) return false;
     }
     renderPage();
+    return true;
   };
 
   // ---- scroll management (Ro2/Ro3) ------------------------------------------
@@ -180,8 +183,8 @@ export function createRouter(routes, options = {}) {
   // user would expect to behave normally (new-tab/modifier clicks, target,
   // download, external origins, other schemes, same-page #hashes, links outside the
   // app's base, and an explicit `data-native` opt-out).
-  const onLinkClick = (e) => {
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const onDocumentClick = (e) => {
+    if (!plainClick(e)) return;
     const a = e.target.closest && e.target.closest("a[href]");
     if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download") || a.hasAttribute("data-native")) return;
     if (a.origin !== window.location.origin) return; // external origin → real navigation
@@ -193,7 +196,7 @@ export function createRouter(routes, options = {}) {
     e.preventDefault();
     go(stripBase(a.pathname) + a.search + a.hash);
   };
-  if (options.interceptLinks && typeof window !== "undefined") window.addEventListener("click", onLinkClick);
+  if (options.interceptLinks && typeof window !== "undefined") window.addEventListener("click", onDocumentClick);
 
   let destroyed = false;
   const destroy = () => {
@@ -201,7 +204,7 @@ export function createRouter(routes, options = {}) {
     destroyed = true;
     if (typeof window !== "undefined") {
       window.removeEventListener("popstate", onPopstate);
-      if (options.interceptLinks) window.removeEventListener("click", onLinkClick);
+      if (options.interceptLinks) window.removeEventListener("click", onDocumentClick);
     }
     if (unmountPage) unmountPage();
   };
@@ -225,39 +228,72 @@ export function createRouter(routes, options = {}) {
     return { component: notFound, params: {} };
   };
 
-  const go = (to) => {
+  // go(path, { replace: true }) REPLACES the current history entry instead of adding one — for
+  // redirects, and for URL state that changes often (search-as-you-type, filters, stepping
+  // through records) where Back should skip the intermediate states. A replace scrolls only
+  // when there is a reason to: to the #hash target, or to the top when the page changed.
+  const go = (to, options) => {
     assertAppPath(to);
     if (typeof window === "undefined") return; // navigation is a client-only action
     const target = toBrowser(String(to));
     if (target === currentUrl()) return; // already here — don't spam history
+    const h = target.indexOf("#");
+    const hash = h >= 0 ? target.slice(h) : "";
+    if (options && options.replace) {
+      window.history.replaceState(window.history.state, "", target); // keeps this entry's saved scroll
+      const changed = apply();
+      const el = hashTarget(hash);
+      if (el) el.scrollIntoView();
+      else if (changed) window.scrollTo(0, 0);
+      return;
+    }
     saveScroll(); // remember where we are, on the OUTGOING entry (so Back can restore it)
     window.history.pushState({}, "", target);
     apply();
     // Forward nav: scroll to the target's #hash (Ro3), or to the top for a new page (Ro2).
-    const h = target.indexOf("#");
-    scrollAfterForward(h >= 0 ? target.slice(h) : "");
+    scrollAfterForward(hash);
   };
 
-  const link = (to, text) => {
-    const onClick = (e) => {
-      // Let the browser handle anything that isn't a plain left-click, and any
-      // absolute URL (external link) — so "open in new tab" etc. still work.
-      if (e.defaultPrevented) return;
-      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      // Absolute (`scheme:`) OR protocol-relative (`//host/…`) targets are external — let the
-      // browser navigate. Ro6: `//host` is a DIFFERENT origin, so pushState() would throw a
-      // SecurityError and the click would do nothing.
-      if (/^[a-z][a-z0-9+.-]*:/i.test(to) || String(to).startsWith("//")) return;
-      e.preventDefault();
-      go(to);
-    };
-    return html`<a
-      href=${toBrowser(to)}
-      onclick=${onClick}
-      aria-current=${() => (location.get().path === to ? "page" : false)}
-      >${text}</a
-    >`;
+  // ---- links ------------------------------------------------------------------
+  // `html` can't spread attributes, so a link with its own classes, icons, data-*/ARIA attributes
+  // or extra handlers is a plain <a> built from these three, which link() itself uses:
+  //   html`<a class="nav" href=${router.href("/reports")} onclick=${router.onLinkClick("/reports")}
+  //          aria-current=${() => (router.isActive("/reports", { exact: false }) ? "page" : null)}
+  //        ><span class="icon" aria-hidden="true">📈</span> Reports</a>`
+
+  // The browser URL for a link to `to`: app paths get the base; external URLs are left alone.
+  const href = (to) => (isExternal(to) ? String(to) : toBrowser(String(to)));
+
+  // A click handler that navigates client-side. It lets the browser handle everything a user
+  // expects to behave natively: modified/middle clicks (new tab), a link with a target (other
+  // than _self) or download, an already-handled event, and external URLs — `scheme:` or
+  // protocol-relative `//host` (Ro6: pushState to another origin would throw).
+  const onLinkClick = (to) => (e) => {
+    const a = e.currentTarget;
+    if (!plainClick(e) || isExternal(to)) return;
+    if (a && a.getAttribute && ((a.getAttribute("target") || "_self") !== "_self" || a.hasAttribute("download"))) return;
+    e.preventDefault();
+    go(to);
   };
+
+  // Is `to` the current route? (Reactive.) Exact by default: same path, and — when `to` has a
+  // query — the same query. `{ exact: false }` also matches sub-paths ("/docs" ↔ "/docs/intro")
+  // and ignores the query. The hash never counts.
+  const isActive = (to, options) => {
+    const s = String(to).split("#")[0];
+    const q = s.indexOf("?");
+    const p = (q >= 0 ? s.slice(0, q) : s) || path(); // "?tab=2" is relative to the current path
+    if (options && options.exact === false) return path() === p || (p !== "/" && path().startsWith(p.replace(/\/$/, "") + "/"));
+    return path() === p && (q < 0 || sameParams(parseQuery(s.slice(q)), query()));
+  };
+
+  // An <a> for `to`. `content` is text or any template content (icons, markup).
+  const link = (to, content) => html`<a
+      href=${href(to)}
+      onclick=${onLinkClick(to)}
+      aria-current=${() => (isActive(to) ? "page" : false)}
+      >${content}</a
+    >`;
 
   // view() returns the outlet: a wrapper element the router renders the current page into.
   // Place it once in your layout. It carries the class `zoijs-router-outlet` rather than an
@@ -286,10 +322,10 @@ export function createRouter(routes, options = {}) {
   // accepts a URL path (the base and any query string are handled for you).
   const matched = (to) => match(to != null ? stripBase(String(to).split("?")[0]) : appPath());
 
-  const path = () => location.get().path;
-  const query = () => location.get().query;
+  const path = () => pathCell.get();
+  const query = () => queryCell.get();
 
-  return { view, link, go, path, query, match: matched, destroy };
+  return { view, link, href, onLinkClick, isActive, go, path, query, match: matched, destroy };
 }
 
 // ---- internals ---------------------------------------------------------------
@@ -339,6 +375,11 @@ function sameParams(a, b) {
   return true;
 }
 
+// A plain primary click — anything else (new tab, download, …) belongs to the browser.
+function plainClick(e) {
+  return !e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
 function currentUrl() {
   return window.location.pathname + window.location.search;
 }
@@ -353,9 +394,12 @@ function parseQuery(search) {
 // "x"). An absolute URL, any scheme (javascript: included), or a protocol-relative "//host"
 // (or "/\host" — browsers read "\" as "/") is refused with a clear, deterministic error rather
 // than the browser's opaque SecurityError (SEC-10). To leave the app use location.assign().
-function assertAppPath(to) {
+function isExternal(to) {
   const s = String(to).replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
-  if (/^[a-z][a-z0-9+.-]*:/i.test(s) || /^[\\/]{2}/.test(s)) {
+  return /^[a-z][a-z0-9+.-]*:/i.test(s) || /^[\\/]{2}/.test(s);
+}
+function assertAppPath(to) {
+  if (isExternal(to)) {
     throw new TypeError('@zoijs/router: go() only navigates within the app — pass a path like "/page" (use location.assign() or a plain <a> for other URLs)');
   }
 }

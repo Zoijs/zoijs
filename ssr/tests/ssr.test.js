@@ -342,3 +342,12 @@ test("SEC-9: target=_blank is emitted with noopener noreferrer, merged into the 
   assert.equal(renderToString(() => html`<a target=${"_self"} rel="external">x</a>`), '<a target="_self" rel="external">x</a>');
   assert.equal(renderToString(() => html`<form target="_blank" action=${"/go"}></form>`), '<form action="/go" target="_blank" rel="noopener noreferrer"></form>');
 });
+
+// L8 (found by Zoijs Insight): a route component may return null — on the server too.
+test("routed SSR: a route that returns null (or no '*' route) renders an empty outlet", async () => {
+  const { createRouter } = await import("../../router/src/index.js");
+  const empty = createRouter({ "/": () => html`<p>home</p>`, "/nothing": () => null }, { location: "/nothing" });
+  assert.equal(renderToString(() => html`<main>${empty.view()}</main>`), "<main></main>");
+  const noStar = createRouter({ "/": () => html`<p>home</p>` }, { location: "/missing" });
+  assert.equal(renderToString(() => html`<main>${noStar.view()}</main>`), "<main></main>");
+});

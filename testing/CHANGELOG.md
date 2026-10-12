@@ -2,6 +2,14 @@
 
 All notable changes to `@zoijs/testing` are documented here.
 
+## 0.2.0 — 2026-10-12
+
+### Added
+- **`mockRouter()` mirrors the `@zoijs/router` 0.7.0 link API**: `href(path)`, `onLinkClick(path)`,
+  `isActive(path, { exact })`, `link(path, content)` with template content, and
+  `go(path, { replace })` (accepted; the mock keeps no history) — so components built on them
+  can be tested with the mock.
+
 ## 0.1.1 — 2026-10-05
 
 ### Documentation

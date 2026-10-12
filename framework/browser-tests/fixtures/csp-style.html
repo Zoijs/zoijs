@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      A strict STYLE policy, enforced: style-src 'self' with no 'unsafe-inline' and no
+      style-src-attr — so setAttribute("style", …) and parser-inserted style="…" attributes are
+      refused. Zoijs style bindings write through the CSSOM (el.style), which CSP doesn't govern.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';" />
+    <title>Zoijs — strict style-src fixture</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./csp-style-app.js"></script>
+  </body>
+</html>

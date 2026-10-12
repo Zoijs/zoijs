@@ -183,3 +183,25 @@ test("uncalled-component binding: server and client agree; hydrated child is not
   assert.equal(target.querySelector(".panel"), panel);
   assert.equal(target.querySelector(".panel p").textContent, "dark", "its own binding is live");
 });
+
+// L1 (found by Zoijs Insight): SVG list items rendered on the server and then hydrated. Hydration
+// re-renders each slot's content on the client, which must happen in SVG context too.
+test("hydrated each() items inside <svg> are SVG elements and stay live", async () => {
+  const SVG = "http://www.w3.org/2000/svg";
+  const Chart = () => {
+    const pts = createState([1, 2]);
+    return html`<div>
+      <svg viewBox="0 0 10 10">${each(() => pts.get(), (n) => n, (n) => html`<circle cx=${n} r="1" />`)}</svg>
+      <button onclick=${() => pts.set([...pts.get(), 3])}>add</button>
+    </div>`;
+  };
+  const host = document.createElement("div");
+  host.innerHTML = renderToString(Chart, { hydratable: true });
+  const svg = host.querySelector("svg");
+  hydrate(Chart, host);
+  assert.equal(host.querySelector("svg"), svg, "the <svg> was adopted");
+  assert.deepEqual([...host.querySelectorAll("circle")].map((c) => c.namespaceURI), [SVG, SVG]);
+  host.querySelector("button").dispatchEvent(new window.Event("click"));
+  await tick();
+  assert.deepEqual([...host.querySelectorAll("circle")].map((c) => c.namespaceURI), [SVG, SVG, SVG]);
+});

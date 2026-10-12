@@ -51,3 +51,16 @@ export function createTemplate(htmlText) {
   template.innerHTML = trustedHTML(htmlText);
   return template;
 }
+
+/** createTemplate in SVG or MathML context (`tag` = "svg" | "math"), cached per template. */
+const foreignTemplates = new Map();
+export function foreignTemplate(htmlText, tag) {
+  const key = tag + ">" + htmlText;
+  let template = foreignTemplates.get(key);
+  if (!template) {
+    foreignTemplates.set(key, (template = createTemplate(`<${tag}>${htmlText}</${tag}>`)));
+    const root = template.content.firstChild;
+    root.replaceWith(...root.childNodes);
+  }
+  return template;
+}
