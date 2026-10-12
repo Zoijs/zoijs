@@ -35,6 +35,7 @@ jobs:
       dir: ${{ steps.check.outputs.dir }}
       name: ${{ steps.check.outputs.name }}
       version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.published.outputs.publish }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -51,16 +52,38 @@ jobs:
       - name: Release checks
         id: check
         run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
-      - name: Not already published
+      # npm versions are immutable. If this version is already on npm, the tag must point at the
+      # SAME release: the tarball packed from the tagged commit must have the shasum npm recorded
+      # (npm pack is reproducible). That's a re-pushed or moved tag — nothing to publish, and the
+      # run succeeds. Different contents under a published version fail the release. A registry
+      # error other than "not found" fails too, rather than guessing.
+      - name: Already published?
+        id: published
+        env:
+          NAME: ${{ steps.check.outputs.name }}
+          VERSION: ${{ steps.check.outputs.version }}
+          DIR: ${{ steps.check.outputs.dir }}
         run: |
-          if npm view "${{ steps.check.outputs.name }}@${{ steps.check.outputs.version }}" version >/dev/null 2>&1; then
-            echo "::error::${{ steps.check.outputs.name }}@${{ steps.check.outputs.version }} is already on npm"
+          set -euo pipefail
+          if ! published=$(npm view "$NAME@$VERSION" dist.shasum 2>npm-view.err); then
+            if grep -q E404 npm-view.err; then published=""; else cat npm-view.err; echo "::error::couldn't check the registry for $NAME@$VERSION"; exit 1; fi
+          fi
+          if [ -z "$published" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          packed=$(cd "$DIR" && npm pack --dry-run --json --ignore-scripts | node -e 'console.log(JSON.parse(require("fs").readFileSync(0))[0].shasum)')
+          if [ "$packed" != "$published" ]; then
+            echo "::error::$NAME@$VERSION is already on npm with different contents (npm $published, this tag $packed) — bump the version"
             exit 1
           fi
+          echo "::notice::$NAME@$VERSION is already on npm with identical contents ($published) — the tag was re-pushed or moved; nothing to publish"
+          echo "publish=false" >> "$GITHUB_OUTPUT"
 
   publish:
     name: Publish ${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}
     needs: [ci, verify]
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     # Protected environment: configure required reviewers + "tags matching *-v*" as the
     # only allowed deployment refs in GitHub settings. It holds NO npm secret.

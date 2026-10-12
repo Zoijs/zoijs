@@ -33,6 +33,15 @@ test("every job runs on a pinned runner image, never a floating *-latest label",
   }
 });
 
+test("publish.yml never republishes: an already-published version must be byte-identical, and then nothing is published", () => {
+  const verify = job(publish, "verify");
+  assert.match(verify, /publish: \$\{\{ steps\.published\.outputs\.publish \}\}/);
+  assert.match(verify, /npm view "\$NAME@\$VERSION" dist\.shasum/, "compares against the shasum npm recorded");
+  assert.match(verify, /npm pack --dry-run --json --ignore-scripts/, "packs the tagged commit to compare");
+  assert.match(verify, /different contents[\s\S]*exit 1/, "different contents under a published version fail the release");
+  assert.match(job(publish, "publish"), /if: needs\.verify\.outputs\.publish == 'true'/, "publishing is skipped when there's nothing new");
+});
+
 test("publish.yml runs the full CI workflow, and publishing needs it", () => {
   assert.match(job(publish, "ci"), /uses: \.\/\.github\/workflows\/ci\.yml/);
   assert.match(job(publish, "publish"), /needs: \[ci, verify\]/);
