@@ -13,7 +13,11 @@
 
 import { isHtmlTemplate, templateText, HOLE } from "../util/scan.js";
 
-const OPEN_TAG = /<[a-zA-Z][a-zA-Z0-9-]*\b((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+// Attributes: quoted strings, or any character except ">" and the quotes themselves. Keeping the
+// quotes out of the catch-all makes every split unambiguous, so matching is linear — with `[^>]`
+// an unclosed tag full of quotes backtracked exponentially (a ReDoS). A stray quote inside a tag
+// is invalid HTML anyway (unquoted values can't contain " or '), so such a tag is just skipped.
+const OPEN_TAG = /<[a-zA-Z][a-zA-Z0-9-]*\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 // A `style` attribute whose value (quoted or unquoted) contains an interpolation hole.
 const STYLE_DYNAMIC = new RegExp(
   "(^|\\s)style\\s*=\\s*(?:\"[^\"]*" + HOLE + "|'[^']*" + HOLE + "|" + HOLE + ")",

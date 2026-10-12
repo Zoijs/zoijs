@@ -43,7 +43,7 @@
     "no-jsx"
   ],
   "scripts": {
-    "test": "node --test tests/require-reactive-binding.test.js tests/a11y.test.js tests/security.test.js",
+    "test": "node --test tests/require-reactive-binding.test.js tests/a11y.test.js tests/security.test.js tests/redos.test.js",
     "test:types": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

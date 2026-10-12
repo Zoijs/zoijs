@@ -3,6 +3,20 @@
 All notable changes to `@zoijs/eslint-plugin` are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+Proposed as **0.4.1** (patch).
+
+### Security
+- **Fixed a regular-expression denial of service (ReDoS)** in the tag scanners of `alt-text`,
+  `no-dynamic-style`, `no-static-element-interactions` and `no-target-blank-without-rel`
+  (CodeQL `js/redos`, `js/polynomial-redos`). An unclosed tag full of quote characters in an
+  `html` template made matching exponential — 48 quotes took about 50 seconds and each extra pair
+  roughly four times longer — so linting one crafted file could hang ESLint. Matching is now
+  linear. A tag containing an unbalanced quote (invalid HTML: unquoted attribute values can't
+  contain `"` or `'`) is now skipped instead of scanned; well-formed tags are checked exactly as
+  before, including quoted values that contain `>` or the other quote.
+
 ## 0.4.0 — 2026-10-05
 
 ### Added
