@@ -4,6 +4,42 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
+Proposed as **0.5.0** (additive: new exported types; no runtime change). Existing JavaScript and
+TypeScript code keeps working unchanged.
+
+### Added — TypeScript: URLs type their params
+- A URL written as a string literal now types its `/:name` placeholders: `params` names are checked
+  in `api()` options (objects and reactive functions) and in mutation `run({ params })`, so
+  `api("/users/:id", { params: { userId } })` is a type error in the editor, not only at runtime.
+- Mutations know from a literal URL what `run()` takes: the body (JSON or `FormData`) without
+  placeholders, `{ params, body? }` with them; `api.delete()` without placeholders takes no
+  argument — the same rules the runtime enforces.
+- New exported types: `ApiPathParamNames<Url>`, `ApiPathParams<Url>`, `ApiMutationInput<TBody, Url>`,
+  `ApiDeleteRunInput<Url>`. `ApiOptions`, `ApiBaseOptions`, `ApiRouteInput` and `ApiDeleteInput`
+  gained an optional `Url` parameter (default `string`: exactly the previous types).
+- Compatibility: a URL typed as `string`, an explicit response generic (`api<User>(…)`), and
+  values typed with the existing `ApiOptions` / `ApiParams` keep the loose types and compile as
+  before. Param names are optional in the literal-URL type for that reason — a *missing* param is
+  still refused at runtime, as before.
+
+### Docs
+- README: a four-step **Quick start** (read, write, another origin, authentication), a **Handling
+  errors** cookbook (404, 422, 5xx, network, auth, 401, timeouts, cancellation), **Request
+  lifecycle** timelines (what cancellation can and can't stop), **Options at a glance**,
+  **Debugging** and **Testing** guides (unit tests with a stubbed `fetch`, Playwright routes).
+- The README's examples are now run by the test suite (`tests/readme.test.js`), along with checks
+  that its code only uses real exports and options, its links resolve, no example logs or stores a
+  token, and it never claims cookie auth or complete token redaction.
+- Accessibility: the mutation and Quick start examples label their inputs and announce state.
+- `ApiError` docs list the `"auth"` type everywhere; "In this version" mentions `authTimeout`.
+
+### Example
+- `examples/users`: an accessible user-management app on an authenticated `createApi()` client —
+  CRUD with invalidation, 422 problem details, an idempotent retried POST, network and auth
+  timeouts, simulated outages and the bounded 401 recovery — against a deterministic demo API on a
+  second origin (`scripts/demo-users-api.mjs`, served by the test server). Browser-tested in
+  Chromium, Firefox and WebKit.
+
 ## 0.4.1 — 2026-10-12
 
 Patch: no API changes.

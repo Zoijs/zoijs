@@ -185,7 +185,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/resource`](resource) | The simplest async-data helper — reactive `loading` / `data` / `error` / `refresh`, plus a server `{ initial }` hand-off. |
 | [`@zoijs/head`](head) | Set the document title and meta description from a component (restore-on-cleanup). SSR-safe. |
 | [`@zoijs/action`](action) | The write-side companion to resource — reactive `pending` / `error` / `done` for submits, saves, deletes. |
-| [`@zoijs/api`](api) | Same-origin HTTP on top of resource and action — `api("/api/users")` reads, `api.post("/api/users")` writes. Safe URL params/queries, JSON, HTTP errors, invalidation; cross-origin blocked by default. |
+| [`@zoijs/api`](api) | Same-origin HTTP on top of resource and action — `api("/api/users")` reads, `api.post("/api/users")` writes. Safe URL params/queries, JSON, HTTP errors, invalidation; cross-origin blocked by default, with explicit `createApi()` clients (optional Bearer auth) for external APIs. |
 | [`@zoijs/storage`](storage) | A localStorage-backed reactive value — a drop-in, persistent `createState` for themes, drafts, and preferences. |
 | [`@zoijs/forms`](forms) | A native-forms-first helper — reactive values, errors, and touched state, plus tiny validation. Pairs with `@zoijs/action`. |
 | [`@zoijs/i18n`](i18n) | A reactive locale — message lookup with plurals (`Intl.PluralRules`) and `Intl` number/date/list formatting. |

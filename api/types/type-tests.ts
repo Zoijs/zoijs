@@ -360,3 +360,56 @@ const readonlySignal: ApiAuthProvider = (ctx) => ((ctx.signal = new AbortControl
 createApi({ baseURL: "https://api.example.com" }).authTimeout;
 
 void [readonlySignal];
+
+// ---- Phase 13: URL-typed params ---------------------------------------------------------------------
+
+import type { ApiPathParamNames, ApiPathParams, ApiMutationInput, ApiDeleteRunInput, ApiDeleteInput } from "../src/index.js";
+type Equal<A, B> = (<X>() => X extends A ? 1 : 2) extends <X>() => X extends B ? 1 : 2 ? true : false;
+const assertType = <T extends true>() => {};
+assertType<Equal<ApiPathParamNames<"/api/users/:id/posts/:postId">, "id" | "postId">>();
+assertType<Equal<ApiPathParamNames<"/api/users/:id?tab=1#top">, "id">>();
+assertType<Equal<ApiPathParamNames<":id/x">, "id">>();
+assertType<Equal<ApiPathParamNames<"./data/tasks/:file">, "file">>();
+assertType<Equal<ApiPathParamNames<"/api/users">, never>>();
+assertType<Equal<ApiPathParams<string>, ApiParams>>();
+
+// A literal URL checks param names — in objects and in reactive functions…
+api("/api/users/:id/posts/:postId", { params: { id: 1, postId: "a" } });
+api("/api/users/:id", { params: () => ({ id: search.get() }) });
+// @ts-expect-error — misspelled param name
+api("/api/users/:id", { params: { userId: 1 } });
+// @ts-expect-error — misspelled in a reactive function too
+api("/api/users/:id", { params: () => ({ userid: 1 }) });
+// @ts-expect-error — an extra name next to a valid one, in an object
+api("/api/users/:id", { params: { id: 1, extra: 2 } });
+// @ts-expect-error — values are still ApiParamValue
+api("/api/users/:id", { params: { id: {} } });
+// …while code written against the loose types keeps compiling
+declare const looseParams: ApiParams;
+api("/api/users/:id", { params: looseParams });
+declare const someUrl: string;
+api(someUrl, { params: { anything: 1 } });
+api<Task>("/api/tasks/:taskId", { params: { taskId: 1 } }); // explicit T: the URL isn't inferred, loose
+
+// Mutations: the URL decides what run() takes, as at runtime
+const create = api.post<Task, NewTask>("/api/tasks");
+create.run({ title: "x" });
+const createTyped = api.post("/api/tasks");
+createTyped.run({ title: "x" });
+createTyped.run(new FormData());
+const rename = api.patch("/api/tasks/:id");
+rename.run({ params: { id: 1 }, body: { title: "x" } });
+// @ts-expect-error — with placeholders, run() takes { params, body }, not the body itself
+rename.run({ title: "x" });
+// @ts-expect-error — misspelled param name in run()
+rename.run({ params: { taskId: 1 } });
+const removeOne = api.delete("/api/tasks/:id");
+removeOne.run({ params: { id: 1 } });
+const signOut = api.delete("/api/session");
+signOut.run();
+// @ts-expect-error — DELETE without placeholders takes no argument
+signOut.run({ params: { id: 1 } });
+assertType<Equal<ApiMutationInput<NewTask, "/api/tasks">, NewTask | FormData>>();
+assertType<Equal<ApiDeleteRunInput<"/api/session">, never>>();
+assertType<Equal<ApiDeleteRunInput<string>, ApiDeleteInput>>();
+void [create, createTyped, rename, removeOne, signOut];

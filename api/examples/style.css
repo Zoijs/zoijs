@@ -64,3 +64,52 @@ li span {
 .time {
   font-size: 1.1rem;
 }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #e2e2e6;
+}
+
+label input[type="radio"] {
+  margin-right: 0.35rem;
+}
+
+input:not([type="radio"]) {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #8e8e93;
+  border-radius: 6px;
+  width: min(100%, 24rem);
+}
+
+input[aria-invalid="true"] {
+  border-color: #b91c1c;
+}
+
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  background: #fff;
+  padding: 0.5rem;
+}
+
+fieldset.card {
+  margin-top: 1.5rem;
+}
