@@ -50,23 +50,33 @@ core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
 import { api } from "@zoijs/api";
 ```
 
-## Usage
+## Quick start
 
+Four steps, each building on the last. Steps 1 and 2 need nothing but your own server, and none
+needs a build step. The main examples on this page are run by this package's test suite
+(`tests/readme.test.js`), so they match the real API.
+
+### 1. Read data
+
+<!-- doctest: quick-read -->
 ```js
 import { html, mount, each } from "@zoijs/core";
 import { api } from "@zoijs/api";
 
 function Tasks() {
-  const tasks = api("/api/tasks");
+  const tasks = api("/api/tasks"); // GET, as a reactive resource
 
   return html`
     ${() => {
-      if (tasks.loading() && !tasks.data()) return html`<p>Loading...</p>`;
+      if (tasks.loading() && tasks.data() === undefined) return html`<p role="status">Loading tasks…</p>`;
       if (tasks.error())
-        return html`<p role="alert">Failed: ${tasks.error().message}
-          <button onclick=${() => tasks.refresh()}>Retry</button></p>`;
+        return html`<div role="alert">
+          <p>Couldn't load tasks: ${tasks.error().message}</p>
+          <button onclick=${() => tasks.refresh()}>Try again</button>
+        </div>`;
+      if (tasks.data().length === 0) return html`<p>No tasks yet.</p>`;
       return html`<ul>
-        ${each(() => tasks.data() ?? [], (task) => task.id, (task) => html`<li>${task.title}</li>`)}
+        ${each(() => tasks.data(), (task) => task.id, (task) => html`<li>${task.title}</li>`)}
       </ul>`;
     }}
   `;
@@ -74,6 +84,10 @@ function Tasks() {
 
 mount(Tasks, "#app");
 ```
+
+That's the four states every view needs — loading, error (with a way out), empty and data — from
+three reactive reads. No `fetch`, `res.ok` check, JSON parsing, abort controller or cleanup of
+your own.
 
 `api(url)` returns the same object `resource()` does, with the same behavior:
 
@@ -90,6 +104,80 @@ It loads once immediately, only the latest request can update it, it stops when 
 unmounts, and failures are reported to `configure({ onError })` as `kind: "resource"` — all of
 that is `resource()`. A request superseded by `refresh()`, or still in flight when the component
 unmounts, is also aborted.
+
+### 2. Write data
+
+<!-- doctest: quick-write -->
+```js
+import { html } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function NewTask({ tasks }) {
+  const addTask = api.post("/api/tasks", { invalidate: tasks, exclusive: true });
+
+  async function submit(event) {
+    event.preventDefault();
+    const form = event.currentTarget; // read it now: it's null once the handler has awaited
+    await addTask.run({ title: new FormData(form).get("title") }); // never rejects
+    if (addTask.done()) form.reset(); // `tasks` reloads by itself (invalidate)
+  }
+
+  return html`
+    <form onsubmit=${submit}>
+      <label for="new-task">New task</label>
+      <input id="new-task" name="title" required />
+      <button disabled=${() => addTask.pending()}>${() => (addTask.pending() ? "Adding…" : "Add")}</button>
+      <p role="alert">${() => addTask.error()?.message ?? ""}</p>
+    </form>
+  `;
+}
+```
+
+A mutation sends nothing until `run()`, and `run()` never throws or rejects: the outcome is in
+`pending()`, `done()`, `result()` and `error()`. `exclusive` makes a double submit send once;
+`invalidate` refreshes the list after the server succeeds. More in
+[Mutations](#mutations-apipost-apiput-apipatch-apidelete).
+
+### 3. Call another origin
+
+`api()` only talks to your page's own origin. An external API gets an explicit client, locked to
+that one origin — requests use CORS, send no cookies and never follow redirects:
+
+<!-- doctest: quick-external -->
+```js
+import { createApi } from "@zoijs/api";
+
+const github = createApi({ baseURL: "https://api.github.com" });
+const repos = github("/users/:user/repos", { params: { user: "zoijs" } }); // same resource API
+```
+
+The API must allow your page's origin (CORS). See [External APIs](#external-apis-createapi).
+
+### 4. Add authentication
+
+Give the client an `auth` provider that returns the current access token — Zoijs sends it as
+`Authorization: Bearer <token>`, only to that origin:
+
+<!-- doctest: quick-auth -->
+```js
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: async ({ signal }) => getAccessToken({ signal }), // your session code; pass the signal on
+  authTimeout: 5000, // optional: give up on a slow provider after 5 s
+});
+
+const profile = backend("/profile");
+const save = backend.post("/orders", { idempotencyKey: true, retry: 2 });
+```
+
+The provider runs once per request (never per retry), may be async, and can return `null` for an
+anonymous request. Zoijs never stores or refreshes tokens. See
+[Authenticated API clients](#authenticated-api-clients) and
+[Recovering from a 401](#recovering-from-a-401).
+
+**Next:** [Handling errors](#handling-errors) · [Request lifecycle](#request-lifecycle) ·
+[Options at a glance](#options-at-a-glance) · [Debugging](#debugging) · [Testing](#testing) ·
+[Example app](#example-app)
 
 ## Dynamic URLs: `params` and `query`
 
@@ -285,14 +373,15 @@ function Tasks() {
 
   return html`
     <form onsubmit=${submit}>
-      <input name="title" required />
+      <label for="task-title">Title</label>
+      <input id="task-title" name="title" required />
       <button disabled=${() => addTask.pending()}>${() => (addTask.pending() ? "Adding..." : "Add")}</button>
       ${() => (addTask.error() ? html`<p role="alert">${addTask.error().message}</p>` : null)}
     </form>
     <ul>
       ${each(() => tasks.data() ?? [], (task) => task.id, (task) => html`
         <li>${task.title}
-          <button onclick=${() => removeTask.run({ params: { id: task.id } })}>Delete</button></li>`)}
+          <button aria-label=${`Delete ${task.title}`} onclick=${() => removeTask.run({ params: { id: task.id } })}>Delete</button></li>`)}
     </ul>
   `;
 }
@@ -699,7 +788,7 @@ import { api, ApiError } from "@zoijs/api";
 
 const users = api("/api/users");
 
-users.error()?.type;   // "http" | "network" | "security" | "parse" | "config" | "timeout"
+users.error()?.type;   // "http" | "network" | "security" | "parse" | "config" | "timeout" | "auth"
 users.error()?.status; // 404 — the HTTP status ("http"/"parse"), otherwise null
 ```
 
@@ -721,6 +810,345 @@ can carry identifiers or tokens (`/reset/<token>`). Only a blocked cross-origin 
 the target origin. If you need the endpoint, read `error.url` (origin + path, never the query
 string or fragment) and decide yourself whether to log it — with `params`, the path includes
 the param values.
+
+## Handling errors
+
+Every failure is an [`ApiError`](#apierror) in `error()`, never a thrown exception or a rejected
+promise. Its `type` tells you what happened; `status` (for `"http"`) and, with
+`problemDetails: true`, `problem` add detail. One function that turns it into words for people
+is usually all an app needs:
+
+<!-- doctest: errors-describe -->
+```js
+function describe(error) {
+  switch (error.type) {
+    case "http":
+      if (error.status === 404) return "We couldn't find that.";
+      if (error.status === 401) return "Your session has expired. Please sign in again.";
+      if (error.status === 403) return "You don't have access to this.";
+      if (error.status === 422) return error.problem?.detail ?? "Please check what you entered.";
+      if (error.status >= 500) return "The server had a problem. Try again in a moment.";
+      return `The request was refused (${error.status}).`;
+    case "timeout":
+      return "The server took too long to answer.";
+    case "network":
+      return "Can't reach the server. Check your connection and try again.";
+    case "auth":
+      return "We couldn't get your sign-in token. Please sign in again.";
+    default: // "security", "parse", "config": a bug or a misbehaving server — log it, show something generic
+      return "Something went wrong.";
+  }
+}
+```
+
+| `type` | What happened | Was anything sent? | Retried with `retry`? | What to do |
+|---|---|---|---|---|
+| `"http"` | The server answered outside 2xx | yes | 408, 425, 429, 500, 502–504 | depends on `status` — below |
+| `"network"` | No answer: offline, DNS, CORS refusal, dropped connection | maybe | yes | offer a retry |
+| `"timeout"` | Your `timeout` elapsed (per attempt) | yes — a mutation may have succeeded | yes | offer a retry; reload data before re-running a mutation |
+| `"auth"` | The `auth` provider threw, rejected, returned an invalid token or exceeded `authTimeout` | **no** | no | sign in again, or retry |
+| `"security"` | A refused URL or redirect, or no page (SSR) | no | no | a bug in the app — fix the URL |
+| `"parse"` | A 2xx response that says JSON but isn't | yes | no | a server bug — log it |
+| `"config"` | Your code passed something unsendable (a bad body, param or query) | no | no | a bug in the app — fix the call |
+
+**Not found (404).** Show a not-found state rather than a generic error:
+
+<!-- doctest: errors-404 -->
+```js
+function UserPage({ id }) {
+  const user = api("/api/users/:id", { params: { id } });
+  return html`${() => {
+    const e = user.error();
+    if (e?.type === "http" && e.status === 404) return html`<h1>No such user</h1><a href="/users">All users</a>`;
+    if (e) return html`<p role="alert">${describe(e)}</p>`;
+    return user.data() ? html`<h1>${user.data().name}</h1>` : html`<p role="status">Loading…</p>`;
+  }}`;
+}
+```
+
+**Validation (422).** If your API answers with [problem details](#problem-details), opt in with
+`problemDetails: true` and show `problem.detail` (or `title`) — as text, it's server-supplied.
+Only the standard members are kept, so a field-by-field error list in an extension member isn't
+available: put the message people should read in `detail`, and validate in the browser too.
+
+<!-- doctest: errors-422 -->
+```js
+const signUp = api.post("/api/users", { problemDetails: true });
+
+await signUp.run({ name: "Ada", email: "not-an-email" });
+const e = signUp.error();
+if (e?.type === "http" && e.status === 422) {
+  showFormError(e.problem?.detail ?? "Please check what you entered."); // e.g. "Enter a valid email address."
+}
+```
+
+**Server errors (5xx) and network failures.** Show a generic message and a way to try again —
+`refresh()` for a resource, another `run()` for a mutation. For GETs, `retry` absorbs brief
+outages first (see [GET retries](#get-retries)); mutations retry only
+[with an idempotency key](#idempotency-keys-and-retries).
+
+```js
+const orders = api("/api/orders", { retry: 2 }); // up to 3 attempts for network errors, timeouts, 5xx
+
+html`${() => orders.error() && html`<div role="alert">
+  <p>${describe(orders.error())}</p>
+  <button onclick=${() => orders.refresh()}>Try again</button>
+</div>`}`;
+```
+
+**Authentication.** `"auth"` means *your provider* failed — threw, rejected, timed out or returned
+something that isn't a token — and **nothing was sent**. The error never contains the provider's
+own error or the value it returned, so log what you need *inside* your provider. A **401** is
+different: the request reached the server, which refused the token — recover explicitly and only
+once, as shown in [Recovering from a 401](#recovering-from-a-401). Never refresh on a 403.
+
+**Timeouts.** A network timeout (the `timeout` option) is type `"timeout"`; an auth-provider
+timeout (`authTimeout`) is type `"auth"` — they can't be confused. An `"auth"` error that came
+from `authTimeout` has the message `"… the auth provider timed out"`, but the reaction is the same
+as for any provider failure: let the person retry or sign in again.
+
+**Cancellation is not an error.** A request superseded by `refresh()` or a reactive change, a
+resource disposed or unmounted, and a mutation `reset()` while waiting for its token all end
+**silently**: `error()` stays `null`, `loading()`/`pending()` end, and nothing reaches
+`configure({ onError })`. Don't show a message for them. (What cancellation can and can't stop is
+in [Request lifecycle](#request-lifecycle).)
+
+## Request lifecycle
+
+**A resource** (`api(url)`, `client(url)`) loads once when created — unless seeded with
+[`initial`](#server-rendering-initial) — and again on `refresh()` or when a reactive
+`params`/`query` function produces a different URL (after `debounce`). Each of those is one
+*logical load*:
+
+```
+create / refresh() / params or query change
+  └─▶ build + check the URL ─▶ [auth provider] ─▶ attempt 1 ─▶ (retryable failure, retries left?) ─▶ wait ─▶ attempt 2 … ─▶ data() or error()
+       │                          │                    │
+       │                          └ aborts at once when the load is superseded, disposed or unmounted —
+       │                            or fails as "auth" after authTimeout; nothing is sent
+       └ a newer load supersedes this one: its provider and request are aborted, its result is ignored
+dispose() / unmount ─▶ the in-flight load is aborted, loading() ends, data() keeps its last value, nothing is reported
+```
+
+**A mutation** sends nothing until `run()`. Each `run()` is one *logical run*:
+
+```
+run(input)
+  └─▶ build the URL + body (+ idempotency key) ─▶ [auth provider] ─▶ attempt 1 ─▶ wait ─▶ attempt 2 … ─▶ done() or error()
+                                                   │                      │
+                                                   │                      └ reset() / unmount: no NEW attempt starts —
+                                                   │                        an attempt already sent runs to completion
+                                                   └ reset() / unmount: the provider is aborted, nothing is sent
+```
+
+| Event | GET resource | Mutation |
+|---|---|---|
+| params/query change, `refresh()` | new load; the old one is aborted and ignored | — |
+| `dispose()` / component unmount | in-flight load aborted, silently | (unmount — mutations have no `dispose()`) waiting provider and backoff cancelled; a sent attempt completes, its result ignored |
+| `reset()` | — | state cleared; waiting provider and backoff cancelled; a sent attempt completes, its result ignored |
+| a second `run()` while one is pending | — | `exclusive: true`: joins the pending run (no second request, no second token). Otherwise: a new run is sent; the older one keeps its first request but stops retrying, and only the newest updates the state |
+| retryable failure | retried within `retry`, same URL and token | retried within `retry` only with an idempotency key — same URL, body, key and token |
+| `timeout` elapses | that attempt fails (`"timeout"`), may be retried | the same — and the server may still have acted |
+
+**Cancelled is not the same as not received.** Aborting stops the *browser* from waiting and
+guarantees Zoijs won't start anything new for that operation. It can't recall a request that has
+already left: the server may have received it, and may already have acted on it. That's why
+mutations aren't aborted on unmount, why a timed-out mutation is only retried with an
+idempotency key, and why the server must make repeated or abandoned requests safe.
+
+## Options at a glance
+
+The canonical rules are in each linked section; this table is for finding them.
+
+| Option | On | Default | Accepts | See |
+|---|---|---|---|---|
+| `params` | `api()`, `run({ params })` | — | object or function of one; values `string`/`number`/`bigint`/`boolean`, one path segment each | [Path parameters](#path-parameters) |
+| `query` | `api()` (object or function), mutations (object) | — | scalars or one-level arrays; secret-looking keys refused | [Query parameters](#query-parameters) |
+| `debounce` | `api()` | `0` | ms, 0–2147483647; only with reactive params/query | [Debounce](#debounce) |
+| `timeout` | `api()`, mutations | `0` (none) | ms, 0–2147483647, per attempt | [Timeouts](#timeouts) |
+| `retry` | `api()`, mutations | `0` | 0–5 extra attempts; mutations need `idempotencyKey` | [GET retries](#get-retries), [retries](#idempotency-keys-and-retries) |
+| `retryDelay` | `api()`, mutations | `250` | ms base backoff; needs `retry` | [Backoff](#backoff-and-retry-after) |
+| `problemDetails` | `api()`, mutations | `false` | boolean | [Problem details](#problem-details) |
+| `initial` | `api()` | — (absent) | any value; skips the first request | [Server rendering](#server-rendering-initial) |
+| `invalidate` | mutations | — | an `api()` resource or an array of them | [Invalidation](#invalidation) |
+| `exclusive` | mutations | `false` | boolean | [Options](#options) |
+| `idempotencyKey` | mutations | `false` | `true` (random UUID per run) or a function returning one | [Idempotency keys](#idempotency-keys) |
+| `baseURL` | `createApi()` | required | absolute `https:` URL (`http:` only for loopback), optional base path | [External APIs](#external-apis-createapi) |
+| `auth` | `createApi()` | — | a function `({ signal }) => token \| null \| undefined` (or a promise of one) | [Authenticated API clients](#authenticated-api-clients) |
+| `authTimeout` | `createApi()` | `0` (none) | ms, 0–2147483647; needs `auth` | [Authenticated API clients](#authenticated-api-clients) |
+
+There are no global settings, no headers option and no credentials option. An unknown or
+misplaced option throws a `TypeError` naming the accepted ones — for example `retry` on a
+mutation without `idempotencyKey`, or `initial` on a mutation. With TypeScript, a URL written as a
+string literal also checks `params` names: `api("/users/:id", { params: { userId } })` is a type
+error.
+
+## Debugging
+
+What you can inspect, all of it safe to show or log:
+
+- **State:** `loading()`, `data()`, `error()` on a resource; `pending()`, `done()`, `result()`,
+  `error()`, `attempt()` (which attempt is in flight) and `retrying()` on a mutation.
+- **The error:** `type`, `status`, `statusText`, `method`, `url` (origin + path, no query string)
+  and, with `problemDetails`, `problem`. `message` never contains the URL path, query, headers,
+  bodies or tokens. With `params`, `url` contains their values — decide whether those are fine to
+  log.
+- **Monitoring:** `configure({ onError })` receives every final failure — `kind: "resource"` or
+  `"action"` — once per logical request. Intermediate failures that a retry recovered from, and
+  cancellations, are never reported.
+
+<!-- doctest: debug-monitoring -->
+```js
+import { configure } from "@zoijs/core";
+import { ApiError } from "@zoijs/api";
+
+configure({
+  onError(error, info) {
+    if (!(error instanceof ApiError)) return;
+    monitoring.capture({ kind: info.kind, type: error.type, status: error.status, method: error.method, message: error.message });
+  },
+});
+```
+
+- **The network itself:** your browser's developer tools show every request — including its
+  `Authorization` header, on your machine. Zoijs adds no request logger and never logs tokens;
+  don't add one that does.
+
+## Testing
+
+Components that use `@zoijs/api` are tested against **stubbed responses** — no real server, no
+real credentials. Stub `globalThis.fetch` in unit tests, or route requests in a browser test.
+
+**Unit tests** (`node:test` + jsdom, with [`@zoijs/testing`](../testing/README.md)). The DOM needs
+a page URL so `api()` has an origin, e.g. `new JSDOM("", { url: "https://app.example.com/" })`.
+
+<!-- doctest: testing-unit -->
+```js
+import test from "node:test";
+import assert from "node:assert/strict";
+import { html } from "@zoijs/core";
+import { api, createApi } from "@zoijs/api";
+import { render, waitFor, cleanup } from "@zoijs/testing";
+
+const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const realFetch = globalThis.fetch;
+let requests = [];
+function respond(handler) {
+  requests = [];
+  globalThis.fetch = async (url, init) => (requests.push({ url: String(url), method: init.method }), handler(new URL(url), init));
+}
+test.afterEach(() => {
+  cleanup();
+  globalThis.fetch = realFetch;
+});
+
+function Tasks() {
+  const tasks = api("/api/tasks");
+  return html`${() => (tasks.error() ? html`<p role="alert">Failed</p>` : html`<p>${tasks.data()?.length ?? "…"} tasks</p>`)}`;
+}
+
+test("renders the response", async () => {
+  respond(() => json([{ id: 1 }, { id: 2 }]));
+  const { getByText } = render(Tasks);
+  await waitFor(() => getByText("2 tasks"));
+});
+
+test("an HTTP error and a network failure both show the alert", async () => {
+  respond(() => json({}, 500));
+  const failed = render(Tasks);
+  await waitFor(() => failed.getByRole("alert"));
+  cleanup();
+  respond(() => Promise.reject(new TypeError("Failed to fetch"))); // what a browser does offline
+  const offline = render(Tasks);
+  await waitFor(() => offline.getByRole("alert"));
+});
+
+test("a delayed response: loading, then data", async () => {
+  let answer;
+  respond(() => new Promise((resolve) => (answer = () => resolve(json([{ id: 1 }])))));
+  const tasks = api("/api/tasks");
+  assert.equal(tasks.loading(), true);
+  await waitFor(() => assert.ok(answer));
+  answer();
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.deepEqual(tasks.data(), [{ id: 1 }]);
+  tasks.dispose();
+});
+
+test("retries are bounded and deterministic with retryDelay: 0", async () => {
+  respond(() => json({}, 503));
+  const save = api.post("/api/orders", { idempotencyKey: true, retry: 2, retryDelay: 0 });
+  await save.run({ total: 1 });
+  assert.equal(requests.length, 3);
+  assert.equal(save.error().status, 503);
+});
+
+test("a mutation's result, and invalidation", async () => {
+  respond((url, init) => (init.method === "POST" ? json({ id: 3 }, 201) : json([])));
+  const tasks = api("/api/tasks");
+  const add = api.post("/api/tasks", { invalidate: tasks });
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.deepEqual(await add.run({ title: "x" }), { id: 3 });
+  await waitFor(() => assert.equal(requests.filter((r) => r.method === "GET").length, 2)); // reloaded
+  tasks.dispose();
+});
+
+test("cancellation: a disposed resource sends nothing more and reports nothing", async () => {
+  let answer;
+  respond(() => new Promise((resolve) => (answer = resolve)));
+  const tasks = api("/api/tasks");
+  await waitFor(() => assert.ok(answer));
+  tasks.dispose();
+  answer(json([{ id: 1 }]));
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.equal(tasks.error(), null);
+  assert.equal(tasks.data(), undefined);
+});
+
+test("an auth provider failure: type auth, and nothing is sent", async () => {
+  respond(() => json([]));
+  const backend = createApi({ baseURL: "https://api.example.com", auth: () => { throw new Error("no session"); } });
+  const me = backend("/me");
+  await waitFor(() => assert.equal(me.error()?.type, "auth"));
+  assert.equal(requests.length, 0);
+  me.dispose();
+});
+```
+
+- A stubbed `fetch` receives exactly what Zoijs would send: check `init.method`,
+  `init.headers` (including `Authorization` for a client) and `init.body` in your handler.
+- `retryDelay: 0` makes retries immediate, so tests don't wait. Use controlled promises, not
+  timers, to hold a response back.
+- Create resources inside the rendered component, or `dispose()` the ones you create in a test.
+
+**Browser tests** (Playwright). Route the page's requests to canned answers:
+
+```js
+await page.route("**/api/tasks", (route) => route.fulfill({ json: [{ id: 1, title: "Write tests" }] }));
+await page.route("**/api/orders", (route) => route.fulfill({ status: 503, body: "" }));
+await page.route("**/api/flaky", (route) => route.abort()); // a network error
+```
+
+For a `createApi()` client the browser enforces CORS, so a routed answer for another origin needs
+`Access-Control-Allow-Origin` (and an authenticated one, a preflight that allows
+`Authorization`). A small local server is often simpler — the [example app](#example-app)'s
+demo API is one.
+
+## Example app
+
+[`examples/users`](examples/users/) is a complete, accessible user-management app built on the
+public API only: an authenticated `createApi()` client, a reactive list with loading, empty and
+error states, create/update/delete mutations with invalidation, 422 validation messages from
+problem details, an idempotent retried POST, network and auth timeouts, simulated outages and the
+bounded 401 recovery — against a deterministic demo API on a second origin, with no real
+credentials. Run it from this repository:
+
+```bash
+npm --prefix api run dev
+```
+
+then open `http://127.0.0.1:3900/api/examples/users/`. Its browser tests
+(`api/browser-tests/users-example.spec.js`) run in Chromium, Firefox and WebKit.
 
 ## Same-origin only
 
@@ -957,6 +1385,7 @@ retried within the bound like any network error (the browser doesn't say why it 
 Zoijs never retries a 401 or asks for a new token by itself — that's how authentication loops
 start. Recover explicitly, once, from your own code:
 
+<!-- doctest: recover-401 -->
 ```js
 import { effect } from "@zoijs/core";
 
@@ -1034,9 +1463,9 @@ redirect risks, and the bar any future proposal must meet).
   retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
   or optimistic updates.**
 - **Browser requests only.** Requests need a page origin; on the server, use `initial`.
-- **`createApi()` takes only `baseURL` and `auth`** — Bearer tokens only: no OAuth flows, token
-  refresh or storage, per-request auth, custom headers or cookie-based cross-origin auth, and one
-  origin per client.
+- **`createApi()` takes only `baseURL`, `auth` and `authTimeout`** — Bearer tokens only: no OAuth
+  flows, token refresh or storage, per-request auth, custom headers or cookie-based cross-origin
+  auth, and one origin per client.
 
 ## License
 

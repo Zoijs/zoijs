@@ -78,6 +78,38 @@ export type ApiParamValue = string | number | bigint | boolean;
 /** Path parameters, by placeholder name. */
 export type ApiParams = { readonly [name: string]: ApiParamValue };
 
+/**
+ * The `:name` placeholders of a URL template, as a union of names — `never` when it has none.
+ * Only the path counts (a query string or fragment is ignored), as at runtime.
+ *
+ * ```ts
+ * type N = ApiPathParamNames<"/api/users/:id/posts/:postId">; // "id" | "postId"
+ * ```
+ */
+export type ApiPathParamNames<Url extends string> = Url extends `${infer Path}?${string}`
+  ? ApiPathParamNames<Path>
+  : Url extends `${infer Path}#${string}`
+    ? ApiPathParamNames<Path>
+    : Url extends `:${infer Rest}`
+      ? ApiPathParamSegment<Rest>
+      : Url extends `${string}/:${infer Rest}`
+        ? ApiPathParamSegment<Rest>
+        : never;
+type ApiPathParamSegment<Rest extends string> = Rest extends `${infer Name}/${infer Tail}` ? Name | ApiPathParamNames<`/${Tail}`> : Rest;
+
+/**
+ * The `params` a URL template takes. For a string-literal URL with placeholders, its names — so
+ * a misspelled or unknown name (`{ userId }` for `"/users/:id"`) is a type error in your editor,
+ * not only at runtime. Names are optional here so that existing code passing a value typed as
+ * {@link ApiParams} keeps compiling; a *missing* param is still refused when the request is built.
+ * Any {@link ApiParams} for a URL known only as `string`, or one without placeholders.
+ */
+export type ApiPathParams<Url extends string = string> = string extends Url
+  ? ApiParams
+  : [ApiPathParamNames<Url>] extends [never]
+    ? ApiParams
+    : { readonly [K in ApiPathParamNames<Url>]?: ApiParamValue };
+
 /** One query value. `null` / `undefined` contribute nothing; everything else is sent as text. */
 export type ApiQueryScalar = string | number | bigint | boolean | null | undefined;
 
@@ -90,14 +122,14 @@ export type ApiQueryValue = ApiQueryScalar | readonly ApiQueryScalar[];
 /** Query parameters, by key. Secret-looking keys (`token`, `password`, `api_key`, …) are refused. */
 export type ApiQuery = { readonly [key: string]: ApiQueryValue };
 
-/** Options every {@link api} resource accepts. */
-export interface ApiBaseOptions<T = unknown> {
+/** Options every {@link api} resource accepts. `Url` (a string-literal URL) types `params`. */
+export interface ApiBaseOptions<T = unknown, Url extends string = string> {
   /**
    * Values for the URL's `/:name` segments — an object (read once), or a function returning one
    * (reactive: read state inside it and the request is sent again when it changes). Every
    * placeholder needs a param and every param must be used.
    */
-  readonly params?: ApiParams | (() => ApiParams);
+  readonly params?: ApiPathParams<Url> | (() => ApiPathParams<Url>);
   /**
    * Query parameters — an object (read once), or a function returning one (reactive, like `params`).
    */
@@ -127,7 +159,7 @@ export interface ApiBaseOptions<T = unknown> {
  * The only options {@link api} accepts. Anything else (including the mutation-only
  * `idempotencyKey`, `exclusive`, `invalidate`) is refused. `retryDelay` requires `retry`.
  */
-export type ApiOptions<T = unknown> = ApiBaseOptions<T> &
+export type ApiOptions<T = unknown, Url extends string = string> = ApiBaseOptions<T, Url> &
   (
     | {
         /** No retries (the default). */
@@ -150,15 +182,33 @@ export type ApiOptions<T = unknown> = ApiBaseOptions<T> &
 export type ApiJson = string | number | boolean | null | readonly ApiJson[] | { readonly [key: string]: ApiJson | undefined };
 
 /** `run()`'s argument when the mutation URL has `/:name` placeholders. */
-export interface ApiRouteInput<TBody> {
-  readonly params: ApiParams;
+export interface ApiRouteInput<TBody, Url extends string = string> {
+  readonly params: ApiPathParams<Url>;
   readonly body?: TBody | FormData;
 }
 
 /** `run()`'s argument for `api.delete()` with `/:name` placeholders (DELETE sends no body). */
-export interface ApiDeleteInput {
-  readonly params: ApiParams;
+export interface ApiDeleteInput<Url extends string = string> {
+  readonly params: ApiPathParams<Url>;
 }
+
+/**
+ * What a POST/PUT/PATCH `run()` takes, decided by the URL as at runtime: for a string-literal URL
+ * without placeholders, the body (JSON or `FormData`); with placeholders, `{ params, body? }`.
+ * For a URL only known as `string`, either.
+ */
+export type ApiMutationInput<TBody, Url extends string = string> = string extends Url
+  ? TBody | FormData | ApiRouteInput<TBody>
+  : [ApiPathParamNames<Url>] extends [never]
+    ? TBody | FormData
+    : ApiRouteInput<TBody, Url>;
+
+/** What a DELETE `run()` takes: nothing, or `{ params }` when the URL has placeholders. */
+export type ApiDeleteRunInput<Url extends string = string> = string extends Url
+  ? ApiDeleteInput
+  : [ApiPathParamNames<Url>] extends [never]
+    ? never
+    : ApiDeleteInput<Url>;
 
 /** Options every mutation factory accepts. */
 export interface ApiMutationBaseOptions {
@@ -259,7 +309,7 @@ export interface Api {
    * placeholder, a static param or query value it can't send, a missing or unused static param, or
    * a secret-looking query key. Reactive functions report the same mistakes as a `"config"` error().
    */
-  <T = unknown>(url: string, options?: ApiOptions<T>): ApiResource<T>;
+  <T = unknown, Url extends string = string>(url: Url, options?: ApiOptions<T, Url>): ApiResource<T>;
   /**
    * POST JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders.
    *
@@ -268,13 +318,13 @@ export interface Api {
    * await addTask.run({ title: "Learn Zoijs" });
    * ```
    */
-  post<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
+  post<TResponse = unknown, TBody = ApiJson, Url extends string = string>(url: Url, options?: ApiMutationOptions): ApiMutation<TResponse, ApiMutationInput<TBody, Url>>;
   /** PUT JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
-  put<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
+  put<TResponse = unknown, TBody = ApiJson, Url extends string = string>(url: Url, options?: ApiMutationOptions): ApiMutation<TResponse, ApiMutationInput<TBody, Url>>;
   /** PATCH JSON or FormData. `run(body)`, or `run({ params, body? })` when the URL has `/:name` placeholders. */
-  patch<TResponse = unknown, TBody = ApiJson>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, TBody | FormData | ApiRouteInput<TBody>>;
+  patch<TResponse = unknown, TBody = ApiJson, Url extends string = string>(url: Url, options?: ApiMutationOptions): ApiMutation<TResponse, ApiMutationInput<TBody, Url>>;
   /** DELETE, with no body. `run()`, or `run({ params })` when the URL has `/:name` placeholders. */
-  delete<TResponse = unknown>(url: string, options?: ApiMutationOptions): ApiMutation<TResponse, ApiDeleteInput>;
+  delete<TResponse = unknown, Url extends string = string>(url: Url, options?: ApiMutationOptions): ApiMutation<TResponse, ApiDeleteRunInput<Url>>;
 }
 
 /** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). Not configurable. */

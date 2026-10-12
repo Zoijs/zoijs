@@ -31,6 +31,8 @@
 //   /__cors/auth/…            any of the above, with Authorization also allowed by the preflight
 //                             (elsewhere a request carrying Authorization fails its preflight); the
 //                             echo reports the Authorization header it received
+// /__demo/<workspace>/…  the in-memory users API behind api/examples/users (see demo-users-api.mjs):
+//                         Bearer sessions, CRUD, 422 validation problems, simulated outages
 // GET /__hits/<path> answers { count, authorized }: how many non-preflight requests /<path>
 // received (on any port), and how many carried an Authorization header — so a test can prove a
 // request, or a credential, never reached a server.
@@ -43,6 +45,7 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, relative, isAbsolute, extname, join } from "node:path";
+import { demoUsers } from "./demo-users-api.mjs";
 
 const [rootArg, portArg, crossArg] = process.argv.slice(2);
 const ROOT = resolve(rootArg || ".");
@@ -152,6 +155,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://127.0.0.1");
     if (url.pathname.startsWith("/__cors/")) return cors(req, res, url);
+    if (url.pathname.startsWith("/__demo/")) return demoUsers(req, res, url, ALLOWED_ORIGIN);
     if (req.method === "GET" && url.pathname.startsWith("/__hits/")) {
       const p = url.pathname.slice("/__hits".length);
       return send(res, 200, JSON.stringify({ count: hits.get(p) || 0, authorized: authorized.get(p) || 0 }), "application/json; charset=utf-8");

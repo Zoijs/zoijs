@@ -53,7 +53,7 @@
     "test": "node --test --import ./tests/setup-dom.js",
     "test:types": "tsc --noEmit -p tsconfig.json",
     "test:browser": "playwright test",
-    "dev": "node ../scripts/test-server.mjs .. 3900"
+    "dev": "node ../scripts/test-server.mjs .. 3900 3901"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
