@@ -4,7 +4,9 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
-Proposed as **0.4.0** (additive). `api()` and clients without `auth` are unchanged.
+## 0.4.0 — 2026-10-12
+
+Additive: `api()` and clients without `auth` are unchanged.
 
 ### Added — the auth provider's lifecycle
 - The `auth` provider now receives `{ signal }`: an `AbortSignal` that aborts when its request is
