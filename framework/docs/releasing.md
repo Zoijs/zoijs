@@ -146,6 +146,12 @@ test time. The port table lives in that file's header and is enforced by the con
 A suite can give it a second port — another origin — for real cross-origin tests (`@zoijs/api`
 uses 3901 for `createApi()` and CORS).
 
+**Re-pushed or moved tags.** Pushing a release tag again — or moving it, e.g. after a history
+rewrite — starts `publish.yml` again. If that version is already on npm, Verify packs the tagged
+commit and compares it with the shasum npm recorded: identical → the run succeeds with a notice and
+publishes nothing; different → the run fails (“already on npm with different contents — bump the
+version”). npm versions are immutable, so a changed release always needs a new version.
+
 ## Before tagging
 
 - The package's `version`, `CHANGELOG.md`, and README are updated and merged to `main`.
