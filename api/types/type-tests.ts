@@ -341,3 +341,22 @@ authed.auth;
 authed.token;
 
 void [authType];
+
+// ---- Phase 12: abortable providers, authTimeout ------------------------------------------------------
+import type { ApiAuthContext } from "../src/index.js";
+
+declare function fetchTokenWith(init: { signal: AbortSignal }): Promise<string>;
+const abortable: ApiAuthProvider = ({ signal }) => fetchTokenWith({ signal });
+const usesContext = (ctx: ApiAuthContext): string => (ctx.signal.aborted ? "" : "t");
+createApi({ baseURL: "https://api.example.com", auth: abortable, authTimeout: 10_000 });
+createApi({ baseURL: "https://api.example.com", auth: usesContext });
+createApi({ baseURL: "https://api.example.com", auth: () => "still fine without the context" });
+
+// @ts-expect-error — authTimeout is a number of milliseconds
+createApi({ baseURL: "https://api.example.com", auth: abortable, authTimeout: "10s" });
+// @ts-expect-error — the context is read-only
+const readonlySignal: ApiAuthProvider = (ctx) => ((ctx.signal = new AbortController().signal), "t");
+// @ts-expect-error — and the client exposes no authTimeout
+createApi({ baseURL: "https://api.example.com" }).authTimeout;
+
+void [readonlySignal];

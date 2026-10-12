@@ -203,11 +203,11 @@ async function request(input, entries, signal, method = METHOD, payload, opts = 
     }
     const mediaType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     if (!res.ok) {
-      const statusText = typeof res.statusText === "string" ? res.statusText : "";
+      const statusText = redact(typeof res.statusText === "string" ? res.statusText : "", opts.token);
       // The body stays private unless the caller opted in AND it's problem+json; even then only
       // the known fields, never in the message, and a bad body never changes this HTTP error.
       const want = typeof opts.problemDetails === "function" ? opts.problemDetails(res.status) : opts.problemDetails;
-      const problem = want && mediaType === "application/problem+json" ? await readProblem(res) : (discard(res), null);
+      const problem = want && mediaType === "application/problem+json" ? await readProblem(res, opts.token) : (discard(res), null);
       const err = new ApiError(`${method} request failed: ${res.status}${statusText ? " " + statusText : ""}`, { type: "http", method, status: res.status, statusText, url: where, problem });
       if (res.status === 429 || res.status === 503) {
         const wait = retryAfterMs(res.headers.get("retry-after"));
@@ -268,7 +268,7 @@ function retryAfterMs(value) {
 // a larger (declared or actual) body is dropped unread past the limit — and only the five standard
 // members with the expected primitive types are kept. Extension members are ignored.
 const MAX_PROBLEM_BYTES = 64 * 1024;
-async function readProblem(res) {
+async function readProblem(res, token) {
   try {
     const declared = Number(res.headers.get("content-length"));
     if (declared > MAX_PROBLEM_BYTES) return discard(res), null;
@@ -299,7 +299,7 @@ async function readProblem(res) {
     if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const own = (k) => Object.prototype.hasOwnProperty.call(raw, k);
     const problem = {};
-    for (const k of ["type", "title", "detail", "instance"]) if (own(k) && typeof raw[k] === "string") problem[k] = raw[k];
+    for (const k of ["type", "title", "detail", "instance"]) if (own(k) && typeof raw[k] === "string") problem[k] = redact(raw[k], token);
     if (own("status") && Number.isInteger(raw.status)) problem.status = raw.status;
     return Object.freeze(problem);
   } catch {
@@ -604,7 +604,7 @@ function get(client, url, options) {
       });
     const send = () => withRetries(attemptOnce, retry, retryDelay, alive, waits.sleep);
     const sent = client && client.auth
-      ? authorize(client, req.path, req.entries, METHOD, alive).then((t) => {
+      ? authorize(client, req.path, req.entries, METHOD, alive, ac ? ac.signal : undefined).then((t) => {
           token = t;
           return send();
         })
@@ -837,6 +837,7 @@ function mutation(client, method, url, options) {
   onCleanup(() => {
     torn = true;
     waits.cancel();
+    abortAuthWaits();
   });
 
   // Retry observability, alongside (not instead of) the action's own state. attempt(): 0 idle, then
@@ -852,6 +853,11 @@ function mutation(client, method, url, options) {
   // or error, one onError report). Anything wrong before sending becomes a config error().
   let lastCall = null;
   let resets = 0;
+  const authWaits = new Set(); // runs still waiting for their token: reset() and unmount abort them
+  const abortAuthWaits = () => {
+    for (const w of authWaits) w.abort();
+    authWaits.clear();
+  };
   const send = (...args) => {
     const call = { ok: false };
     lastCall = call;
@@ -897,10 +903,14 @@ function mutation(client, method, url, options) {
     // newer non-exclusive run doesn't — without auth, this run's first request would already be
     // on its way — it only stops this run's retries, as before.
     const epoch = resets;
-    return authorize(client, path, entries, method, () => !torn && epoch === resets).then((t) => {
-      token = t;
-      return sendAll();
-    });
+    const waiting = typeof AbortController === "function" ? new AbortController() : null;
+    if (waiting) authWaits.add(waiting);
+    return authorize(client, path, entries, method, () => !torn && epoch === resets, waiting ? waiting.signal : undefined)
+      .finally(() => waiting && authWaits.delete(waiting))
+      .then((t) => {
+        token = t;
+        return sendAll();
+      });
   };
   const act = action(send, { exclusive });
 
@@ -928,7 +938,8 @@ function mutation(client, method, url, options) {
     // status clears, and a retry still waiting to be sent is cancelled — nobody is waiting for it.
     reset() {
       owner = null;
-      resets++; // a run still waiting for its token never sends
+      resets++; // a run still waiting for its token never sends…
+      abortAuthWaits(); // …and its provider's signal aborts
       waits.cancel();
       act.reset();
       attempt.set(0);
@@ -1005,26 +1016,60 @@ const CANCELLED = new ApiError("request not sent: cancelled", { type: "config" }
 
 // The token for one logical request, or undefined for an anonymous one. The URL is checked FIRST
 // (page origin, client boundary, secret query keys): a request that can't be sent never asks for
-// a credential — so during SSR the provider isn't called. Then the provider runs once; alive()
-// is checked after it settles, so a superseded, disposed, unmounted or reset request never
-// reaches fetch(). A provider failure is type "auth", carries neither the thrown value nor its
-// message, and isn't retried. The provider's wait isn't covered by `timeout` (that's per attempt).
-async function authorize(client, path, entries, method, alive) {
+// a credential — so during SSR the provider isn't called. Then the provider runs once, given
+// `{ signal }`: an AbortSignal that aborts when the request is cancelled (`cancelled` aborts:
+// superseded, disposed, unmounted, reset) or when the client's authTimeout elapses. Either way the
+// request stops waiting at once — it doesn't depend on the provider honoring the signal — and is
+// never sent. Cancellation is silent (CANCELLED); a timeout, a throw/rejection or an invalid
+// token is type "auth", carries neither the value nor the thrown error, and isn't retried.
+// `timeout` (per network attempt) doesn't cover the provider; authTimeout does.
+async function authorize(client, path, entries, method, alive, cancelled) {
   const url = safeUrl(resolveTarget(client, path, entries, method));
-  let value;
-  try {
-    value = await client.auth();
-  } catch {
-    if (!alive()) throw CANCELLED;
-    throw new ApiError(`${method} request not sent: the auth provider failed`, { type: "auth", method, url });
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  let halt;
+  const halted = new Promise((resolve) => (halt = resolve)); // → "cancelled" | "timeout"
+  const onCancel = () => {
+    if (ctl) ctl.abort();
+    halt("cancelled");
+  };
+  let timer = null;
+  if (cancelled) {
+    if (cancelled.aborted) onCancel();
+    else cancelled.addEventListener("abort", onCancel, { once: true });
   }
-  if (!alive()) throw CANCELLED;
+  if (client.authTimeout > 0) {
+    timer = setTimeout(() => {
+      if (ctl) ctl.abort(typeof DOMException === "function" ? new DOMException("the auth provider timed out", "TimeoutError") : undefined);
+      halt("timeout");
+    }, client.authTimeout);
+  }
+  const context = Object.freeze(ctl ? { signal: ctl.signal } : {});
+  let outcome;
+  try {
+    outcome = await Promise.race([
+      Promise.resolve()
+        .then(() => client.auth(context))
+        .then((value) => ({ value }), () => ({ failed: true })), // a late rejection is handled, never unhandled
+      halted.then((why) => ({ why })),
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+    if (cancelled) cancelled.removeEventListener("abort", onCancel);
+  }
+  if (outcome.why === "cancelled" || !alive()) throw CANCELLED;
+  if (outcome.why === "timeout") throw new ApiError(`${method} request not sent: the auth provider timed out`, { type: "auth", method, url });
+  if (outcome.failed) throw new ApiError(`${method} request not sent: the auth provider failed`, { type: "auth", method, url });
+  const value = outcome.value;
   if (value === null || value === undefined) return undefined; // anonymous, by design
   if (typeof value !== "string" || value.length > MAX_TOKEN || !BEARER.test(value)) {
     throw new ApiError(`${method} request not sent: the auth provider returned an invalid token — a Bearer token (RFC 6750 characters, at most ${MAX_TOKEN}), null or undefined`, { type: "auth", method, url });
   }
   return value;
 }
+
+// A server may echo the request's own token back (in problem details or the status text): never
+// let it reach an ApiError or monitoring. Exact occurrences are replaced; with no token, unchanged.
+const redact = (text, token) => (token && text.includes(token) ? text.split(token).join("[redacted]") : text);
 
 // ---- createApi(): one explicitly trusted origin ---------------------------------------------------
 //
@@ -1101,20 +1146,25 @@ function readBaseURL(value) {
  * trusted origin. Paths resolve under `baseURL`'s path; requests are CORS, without cookies, and
  * never follow redirects. With `auth`, each logical request asks it once for a Bearer token.
  * `client.baseURL` is the normalized base (read-only).
- * @param {{ baseURL: string, auth?: () => string | null | undefined | Promise<string | null | undefined> }} options
+ * @param {{ baseURL: string, auth?: (context: { signal: AbortSignal }) => string | null | undefined | Promise<string | null | undefined>, authTimeout?: number }} options
  */
 export function createApi(options) {
   if (arguments.length !== 1) throw clientError("takes one options object: createApi({ baseURL })");
   if (options === null || typeof options !== "object" || Array.isArray(options)) throw clientError(`options must be a plain object, got ${describe(options)}`);
-  let baseURL, auth;
+  let baseURL, auth, authTimeout;
   for (const key of Object.keys(options)) {
     if (key === "baseURL") baseURL = options.baseURL;
     else if (key === "auth") auth = options.auth;
-    else throw clientError(`unsupported option "${key}" — createApi() accepts baseURL and auth (no headers or credentials)`);
+    else if (key === "authTimeout") authTimeout = options.authTimeout;
+    else throw clientError(`unsupported option "${key}" — createApi() accepts baseURL, auth and authTimeout (no headers or credentials)`);
   }
   // The provider is captured here, privately, and never called now: it runs per logical request.
   if (auth !== undefined && typeof auth !== "function") throw clientError("auth must be a function returning the access token (or null/undefined for none) — never the token itself");
-  const boundary = Object.freeze({ ...readBaseURL(baseURL), auth });
+  if (authTimeout !== undefined) {
+    if (auth === undefined) throw clientError("authTimeout limits how long the auth provider may take — it needs auth");
+    if (typeof authTimeout !== "number" || !Number.isFinite(authTimeout) || authTimeout < 0 || authTimeout > MAX_MS) throw clientError(`authTimeout must be a finite number of milliseconds from 0 to ${MAX_MS} (0 = no limit)`);
+  }
+  const boundary = Object.freeze({ ...readBaseURL(baseURL), auth, authTimeout: authTimeout || 0 });
   const client = surface(boundary);
   Object.defineProperty(client, "baseURL", { value: boundary.href, enumerable: true });
   return Object.freeze(client);

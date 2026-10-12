@@ -504,7 +504,9 @@ test("the token appears on no public surface: errors, problem details, retry sta
     const own = (e) => ({ m: e.message, s: e.stack, str: String(e), json: JSON.stringify({ ...e, problem: undefined }), cause: e.cause === undefined ? "none" : String(e.cause), ...e, problem: undefined });
     const dump = JSON.stringify({ surfaces: surfaces.map(own), reported: reported.map(({ e, info }) => ({ ...own(e), info })), state: [m.attempt(), m.retrying(), m.result(), r.data(), t.data(), u.data()] });
     assert.ok(!dump.includes(T), "token found on a library surface");
-    assert.equal(m.error().problem.detail, T, "(the server's own problem text is passed through untouched — it's the server's text, not ours)");
+    // Phase 12: a server that echoes the token back has it redacted from problem details too.
+    assert.equal(m.error().problem.detail, "[redacted]");
+    assert.equal(m.error().problem.title, "Bearer [redacted]");
     assert.equal(Object.keys(c).includes("auth") || Object.keys(c).includes("token"), false);
     assert.equal(c.auth, undefined);
     assert.equal(c.token, undefined);
@@ -555,11 +557,14 @@ test("immutability: the provider is private and fixed at creation", async () => 
   assert.deepEqual(calls.slice(1).map((x) => x.auth), ["Bearer s1", "Bearer s2"]);
 });
 
-test("the provider is called with no arguments and no `this`", async () => {
+test("the provider is called with one frozen { signal } argument and no `this` (Phase 12)", async () => {
   let seen;
   stubFetch([json()]);
   await loaded(createApi({ baseURL: BASE, auth: function (...args) { seen = { args, self: this }; return "t"; } })("/x"));
-  assert.deepEqual(seen.args, []);
+  assert.equal(seen.args.length, 1);
+  assert.deepEqual(Object.keys(seen.args[0]), ["signal"]);
+  assert.ok(seen.args[0].signal instanceof AbortSignal);
+  assert.ok(Object.isFrozen(seen.args[0]));
   assert.ok(seen.self === undefined || typeof seen.self === "object"); // never the client or options
   assert.notEqual(seen.self?.baseURL, BASE);
 });

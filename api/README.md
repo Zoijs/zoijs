@@ -901,18 +901,34 @@ contains the token, the returned value or the thrown error (no `cause`).
 |---|---|
 | `auth` isn't a function (e.g. the token string itself) | `TypeError` from `createApi()` |
 | provider returns `null` / `undefined` | anonymous request |
-| provider throws/rejects, or returns an invalid token | `ApiError` type `"auth"`, nothing sent |
+| provider throws/rejects, returns an invalid token, or exceeds `authTimeout` | `ApiError` type `"auth"`, nothing sent |
 | server answers 401 or 403 | `ApiError` type `"http"` — **not retried, no new token requested** |
 | network failure, CORS refusal | `"network"` (retried only within `retry`) |
 | `timeout` elapsed | `"timeout"` |
 | origin escape, redirect, no page | `"security"` |
 
-**While the provider is pending**, the resource is `loading()` and the mutation `pending()`. A
-request that is superseded (reactive change, `refresh()`), disposed, unmounted or `reset()` in
-the meantime is never sent when the old provider finally answers; a newer resource load asks
-for its own token. (A newer non-exclusive `run()` doesn't cancel an older one's first request —
-exactly as without `auth`.) **`timeout` doesn't cover the provider:** it times each network
-attempt, not how long your token takes to arrive.
+**While the provider is pending**, the resource is `loading()` and the mutation `pending()`.
+
+**Cancellation and `authTimeout`.** The provider receives `{ signal }`, an `AbortSignal` for that
+one request. It aborts when the request no longer needs a token — superseded (a reactive change
+or `refresh()`), disposed, unmounted or `reset()` — and the request stops waiting **at once**,
+whether or not your provider honors the signal; it's never sent, and nothing is reported. Pass the
+signal on to cancel your own work, e.g. a token-endpoint fetch:
+
+```js
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: async ({ signal }) => (await (await fetch("/session/token", { signal })).json()).accessToken,
+  authTimeout: 10_000, // optional: give up on the provider after 10 s
+});
+```
+
+`authTimeout` (milliseconds; no limit by default) bounds the provider per request: when it
+elapses, the signal aborts (`signal.reason` is a `"TimeoutError"`) and the request fails with
+type `"auth"` — nothing is sent, nothing retried. It's off by default because interactive
+token flows (a login pop-up) can legitimately take minutes. It's separate from `timeout`, which
+times each network attempt. (A newer non-exclusive `run()` doesn't cancel an older one's first
+request — exactly as without `auth`.) Providers written for 0.3.0, with no parameter, still work.
 
 **The token only goes where the client goes.** It's sent only to the client's exact origin and
 under its base path, checked on the final URL of every attempt; requests are still
@@ -921,10 +937,51 @@ so no redirect can carry it elsewhere. A request that can't be sent — a refuse
 query key, or no browser page (SSR) — fails **before** the provider is asked. Clients never
 share providers, and `api()` never sends an `Authorization` header.
 
+**A token echoed back is redacted.** If the API puts the request's own token into its
+problem-details fields or its HTTP status text (a careless error handler), every exact occurrence
+is replaced with `[redacted]` before it reaches `error.problem`, `error.statusText`,
+`error.message` or `configure({ onError })`. Other server text is passed through unchanged — and
+remains untrusted.
+
 **CORS:** a request with `Authorization` needs a preflight, so the external API must allow it —
 for example `Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key`. If it
 doesn't, the browser refuses the request and you get a `"network"` error; with `retry`, that's
 retried within the bound like any network error (the browser doesn't say why it refused).
+
+### Recovering from a 401
+
+Zoijs never retries a 401 or asks for a new token by itself — that's how authentication loops
+start. Recover explicitly, once, from your own code:
+
+```js
+const profile = backend("/profile");
+
+// Call when profile.error() changes — e.g. from the component that renders the error.
+let refreshedFor = null;
+async function recoverFrom401() {
+  const e = profile.error();
+  if (e?.type !== "http" || e.status !== 401 || refreshedFor === e) return;
+  refreshedFor = e;                         // one attempt per failure — never a loop
+  if (await session.refreshAccessToken()) { // your own logic: refresh token, re-login, …
+    profile.refresh();                      // a new logical request → the provider is asked again
+  }
+}
+
+const save = backend.post("/orders", { idempotencyKey: true });
+await save.run(order);
+if (save.error()?.status === 401 && (await session.refreshAccessToken())) {
+  await save.run(order);                    // a new run: new token, new idempotency key
+}
+```
+
+Make the provider return the *current* token (`auth: () => session.accessToken`), so the next
+request picks up the refreshed one. Retrying a mutation after a 401 is safe only because the
+server rejected it before acting; if your API can fail with 401 *after* side effects, don't retry.
+For a 403, don't refresh: the token is valid but not allowed — show the error.
+
+**Cookies across origins** are deliberately not supported: see the security review in
+[RFC 0009](../framework/docs/rfcs/0009-api-cookie-auth-review.md) (CSRF, CORS, SameSite and
+redirect risks, and the bar any future proposal must meet).
 
 **Security guidance**
 

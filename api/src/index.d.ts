@@ -15,7 +15,8 @@ export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  * unsupported value or a secret-looking key, `refresh()` after `dispose()`, or a mutation `run()`
  * whose input or JSON body can't be sent; `"timeout"` the `timeout` option elapsed (for a
  * mutation, the server may still have acted on it); `"auth"` a {@link createApi} client's `auth`
- * provider threw, rejected or returned an invalid token — the request was not sent.
+ * provider threw, rejected, exceeded `authTimeout` or returned an invalid token — the request was
+ * not sent.
  */
 export type ApiErrorType = "http" | "network" | "security" | "parse" | "config" | "timeout" | "auth";
 
@@ -279,16 +280,28 @@ export interface Api {
 /** Same-origin reads (`api(url)`) and writes (`api.post/put/patch/delete`). Not configurable. */
 export declare const api: Api;
 
+/** What a {@link createApi} client's `auth` provider is given for one call. */
+export interface ApiAuthContext {
+  /**
+   * Aborts when the request no longer needs a token — superseded (a reactive change or
+   * `refresh()`), disposed, unmounted or `reset()` — or when the client's `authTimeout` elapses
+   * (then `signal.reason` is a `"TimeoutError"`). Pass it on to your own token fetch to stop that
+   * work too; the request itself stops waiting either way.
+   */
+  readonly signal: AbortSignal;
+}
+
 /**
  * Supplies a {@link createApi} client's Bearer access token: called once per logical request
  * (each load, `refresh()` or `run()` — never per retry, never at creation), so it can return the
  * current token from your own session state. Return the token itself — Zoijs sends
  * `Authorization: Bearer <token>` — or `null`/`undefined` to send the request without one.
  * A token must use RFC 6750 characters (`A–Z a–z 0–9 - . _ ~ + /`, then optional `=`), at most
- * 8192 of them; anything else (including a `"Bearer …"` prefix or an empty string), a throw or a
- * rejection fails the request as type `"auth"` without sending it.
+ * 8192 of them; anything else (including a `"Bearer …"` prefix or an empty string), a throw, a
+ * rejection or exceeding `authTimeout` fails the request as type `"auth"` without sending it.
+ * It receives an {@link ApiAuthContext} with an `AbortSignal`; providers that ignore it still work.
  */
-export type ApiAuthProvider = () => string | null | undefined | PromiseLike<string | null | undefined>;
+export type ApiAuthProvider = (context: ApiAuthContext) => string | null | undefined | PromiseLike<string | null | undefined>;
 
 /**
  * The only options {@link createApi} accepts. Headers and credentials are refused.
@@ -306,6 +319,13 @@ export interface CreateApiOptions {
    * itself). Sent only to this client's origin; cookies stay omitted. See {@link ApiAuthProvider}.
    */
   readonly auth?: ApiAuthProvider;
+  /**
+   * Milliseconds (0 to 2147483647; 0 or absent = no limit) the `auth` provider may take per
+   * request. When it elapses, the provider's signal aborts and the request fails with type
+   * `"auth"` — nothing is sent, nothing is retried. Requires `auth`. Unrelated to `timeout`,
+   * which times each network attempt.
+   */
+  readonly authTimeout?: number;
 }
 
 /**
