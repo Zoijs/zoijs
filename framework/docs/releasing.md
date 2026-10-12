@@ -196,7 +196,7 @@ from `@zoijs/sanitize` and `@zoijs/ssr`'s `hydrate`, `@zoijs/core/devtools` from
      first in 1.9.0 (today: **`@zoijs/ssr`**), bump the packages being released, and regenerate
      their lockfiles (`npm install --package-lock-only --ignore-scripts --prefix <pkg>`);
    - regenerate the scaffolder's map from the published files:
-     `node scripts/cdn-importmap.mjs @zoijs/core@1.9.0 --write create/core-cdn.json`
+     `node scripts/cdn-importmap.mjs @zoijs/core@<version> --write create/core-cdn.json`
      (`--check create/core-cdn.json` verifies it), and refresh the import maps shown in docs
      (`docs/installation.md`, the sanitize README) with the same tool;
    - `npm run release:check -- --all --strict` must be all **READY**.
