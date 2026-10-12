@@ -5,7 +5,7 @@ follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
-Proposed as **0.4.1** (patch).
+## 0.4.1 — 2026-10-12
 
 ### Security
 - **Fixed a regular-expression denial of service (ReDoS)** in the tag scanners of `alt-text`,
