@@ -237,7 +237,7 @@ doesn't relitigate them:
 - **An optional template compiler** — must be behavior-identical and never required.
 - **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
   completion of the reactive trio. An optional **`svg`** helper — **not needed**
-  (RFC 0003 §6 deferred it; the next release parses content inserted inside an
+  (RFC 0003 §6 deferred it; core 1.10.0 parses content inserted inside an
   `<svg>` in SVG context, which fixes dynamic-SVG composition with no new export). An **error-boundary** helper (`boundary`) —
   **shipped in 1.3.0** (RFC 0004): catches a synchronous setup/render throw and
   renders a fallback.

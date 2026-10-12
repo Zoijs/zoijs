@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
-## Unreleased
+## 0.7.0 — 2026-10-12
 
 Found while building the Zoijs Insight reference app. Additive; no breaking changes.
 

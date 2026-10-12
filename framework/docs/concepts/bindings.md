@@ -41,7 +41,7 @@ html`<button disabled=${() => busy.get()}>Save</button>`; // boolean attribute
   Use `style=${{ … }}` (the [object form](../security.md#a-note-on-style)) for styles.
 - **`class`** is set as written on the first render; after that a binding adds and removes only
   the class names *it* set, so classes other code adds (a UI library's JS, `el.classList.add`)
-  survive updates *(next release; earlier versions rewrote the whole attribute)*. `false`/`null`
+  survive updates *(core 1.10.0+; earlier versions rewrote the whole attribute)*. `false`/`null`
   remove the binding's names, and the attribute once nothing is left.
 - Name attributes the HTML way. Lit-style prefixes (`.value=`, `?disabled=`, `@click=`) aren't
   supported and throw when the template compiles: `value`/`checked` already use the property,
@@ -105,7 +105,7 @@ html`<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r=${() => radius.get()} />
 
 Anything you insert **inside** an `<svg>` — `each()` items, nested or conditional templates,
 components — is parsed as SVG, so lists of shapes and reusable chart parts just work
-*(next release; earlier versions needed every SVG element inside one `<svg>` literal)*:
+*(core 1.10.0+; earlier versions needed every SVG element inside one `<svg>` literal)*:
 
 ```js
 const Bar = (d) => html`<rect x=${d.x} y=${() => 100 - d.value} width="8" height=${() => d.value} />`;
@@ -125,7 +125,7 @@ again, and `mount(App, svgElement)` parses `App` as SVG.
 
 The same goes for **MathML**: content inserted inside `<math>` is MathML, while the text
 elements (`<mi>`, `<mo>`, `<mn>`, `<ms>`, `<mtext>`) hold HTML. And `unsafeHTML()` markup placed
-inside an `<svg>` or `<math>` is parsed in that namespace. *(next release)*
+inside an `<svg>` or `<math>` is parsed in that namespace. *(core 1.10.0+)*
 
 ---
 

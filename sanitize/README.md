@@ -171,7 +171,7 @@ It is **not** a drop-in replacement for a dedicated, independently-audited sanit
 
 Never assign untrusted data to `innerHTML` yourself: that bypasses Zoijs (and this package) entirely.
 
-**Trusted Types** *(next release)*. `DOMParser` is a Trusted Types sink, so `sanitize()` parses through its own policy, **`zoijs-sanitize`**. On a page that enforces `require-trusted-types-for 'script'`, list it next to the core's policy:
+**Trusted Types** *(sanitize 0.3.0+)*. `DOMParser` is a Trusted Types sink, so `sanitize()` parses through its own policy, **`zoijs-sanitize`**. On a page that enforces `require-trusted-types-for 'script'`, list it next to the core's policy:
 
 ```
 Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs zoijs-sanitize

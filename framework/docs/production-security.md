@@ -189,7 +189,7 @@ into a `Link` header — the map is discarded. See [Deployment](deployment.md#im
 
 - **`style=${…}` bindings** (object, string or mixed form) are applied through the CSSOM
   (`el.style.cssText`), which CSP doesn't govern — they work under `style-src 'self'` with no
-  exception *(next release; core ≤ 1.9.0 used `setAttribute("style", …)` and needed
+  exception *(core 1.10.0+; core ≤ 1.9.0 used `setAttribute("style", …)` and needed
   `style-src-attr 'unsafe-inline'`)*. This changes how the value is applied, not what is
   allowed: the object form still validates every declaration, and a string is still applied
   verbatim — bind strings only from data you control.
@@ -210,7 +210,7 @@ string assignments to HTML sinks (`innerHTML`, …) anywhere on the page. Zoijs'
 parsing goes through a policy named `zoijs`, which only ever receives HTML built from your
 static template strings — and `html()` refuses runtime arrays and data (`ZJS010`), so data can't reach it. Know the current limits before enabling it:
 
-- **`@zoijs/sanitize` uses its own policy, `zoijs-sanitize`** *(next release)*: list it too —
+- **`@zoijs/sanitize` uses its own policy, `zoijs-sanitize`** *(sanitize 0.3.0+)*: list it too —
   `trusted-types zoijs zoijs-sanitize`. It only passes the untrusted string to the parse into an
   inert document, which is then pruned; `sanitize()` returns nodes, never markup, and the policy
   object stays private to the package. Without the name, `sanitize()` fails with an error that

@@ -6,6 +6,8 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-10-12
+
 ### Fixed
 Found while building the Zoijs Insight reference app. No API changes.
 
@@ -431,6 +433,7 @@ First stable release. The public API is frozen at seven functions.
   (Playwright), and TypeScript type tests.
 - No build step required at any point.
 
+[1.10.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.10.0
 [1.9.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.9.0
 [1.1.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.1.0
 [1.0.0]: https://github.com/Zoijs/zoijs/releases/tag/core-v1.0.0

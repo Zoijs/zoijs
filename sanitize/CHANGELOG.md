@@ -2,7 +2,7 @@
 
 All notable changes to `@zoijs/sanitize` are documented here.
 
-## Unreleased
+## 0.3.0 — 2026-10-12
 
 ### Added
 - **Works under enforced Trusted Types.** `DOMParser.parseFromString` is a Trusted Types sink, so

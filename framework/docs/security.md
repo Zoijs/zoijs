@@ -211,13 +211,13 @@ Zoijs is friendly to a strict Content Security Policy:
   From core 1.9.0, compatible copies of the core share one runtime and so
   one `zoijs` policy (created once — no `'allow-duplicates'` needed); with core 1.8.0 and
   older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. `@zoijs/sanitize` parses through its own
-  `zoijs-sanitize` policy — add that name to `trusted-types` on pages that sanitize *(next release;
+  `zoijs-sanitize` policy — add that name to `trusted-types` on pages that sanitize *(sanitize 0.3.0+;
   earlier versions fail under enforcement)*.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
 hash, or a nonce) and, if your templates write static `style="…"` attributes,
 `style-src-attr 'unsafe-inline'`. A `style=${…}` binding needs no exception: it is applied
-through the CSSOM (`el.style`), which CSP doesn't govern *(next release; earlier versions set the
+through the CSSOM (`el.style`), which CSP doesn't govern *(core 1.10.0+; earlier versions set the
 attribute, so bindings needed `style-src-attr 'unsafe-inline'` too)*.
 
 **The full production policy** — `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`,

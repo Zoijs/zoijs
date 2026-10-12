@@ -134,14 +134,26 @@ test("the (next release) marker convention stays defined for the next release cy
   assert.match(read("framework/docs/README.md"), /\*\(next release\)\*/, "the convention is defined");
 });
 
-test("migration notes for the next core release exist and cover the material changes", () => {
+// A release's section of framework/CHANGELOG.md (or [Unreleased] if that version isn't cut yet).
+function coreSection(version) {
   const log = read("framework/CHANGELOG.md");
-  // Before the release they sit under [Unreleased]; once the version is cut, under its heading.
-  const version = JSON.parse(read("framework/package.json")).version;
   const head = log.includes(`## [${version}]`) ? `## [${version}]` : "## [Unreleased]";
-  const unreleased = log.slice(log.indexOf(head), log.indexOf("\n## [", log.indexOf(head) + 1));
-  assert.match(unreleased, /### Migration notes/);
+  return log.slice(log.indexOf(head), log.indexOf("\n## [", log.indexOf(head) + 1));
+}
+
+test("1.9.0's migration notes cover its material changes", () => {
+  const notes = coreSection("1.9.0");
+  assert.match(notes, /### Migration notes/);
   for (const topic of ["ZJS010", "? Child : null", "Child()", "user-content-", "idPrefix: \"\"", ".prop=", "noopener noreferrer", "go()", "decodeSlash: false", "<base>"]) {
-    assert.ok(unreleased.includes(topic), `migration notes mention ${topic}`);
+    assert.ok(notes.includes(topic), `1.9.0 migration notes mention ${topic}`);
+  }
+});
+
+test("1.10.0's migration notes cover its behavior changes", () => {
+  const notes = coreSection("1.10.0");
+  assert.match(notes, /### Migration notes/);
+  // own methods' `this`, the CSP allowance that can go, Chromium's style="" fix, class bindings, structuredClone
+  for (const topic of ["item.method()", "style-src-attr 'unsafe-inline'", "style=\"\"", "class=${…}", "structuredClone"]) {
+    assert.ok(notes.includes(topic), `1.10.0 migration notes mention ${topic}`);
   }
 });

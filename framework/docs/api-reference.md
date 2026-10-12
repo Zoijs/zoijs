@@ -64,7 +64,7 @@ A reactive value. See [State](concepts/state.md).
 computed(fn, equals?) → { get, peek }
 ```
 
-A lazy, cached, value-gated derived value. `equals(prev, next)` (default `Object.is`) returns `true` when a recomputed value is "the same"; it is never called on the first computation *(next release)*. See [Computed](concepts/computed.md#custom-equality).
+A lazy, cached, value-gated derived value. `equals(prev, next)` (default `Object.is`) returns `true` when a recomputed value is "the same"; it is never called on the first computation *(core 1.10.0+)*. See [Computed](concepts/computed.md#custom-equality).
 
 | Method | Description |
 |---|---|

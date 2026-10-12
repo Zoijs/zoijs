@@ -96,8 +96,8 @@ not. Skip the rule and the outlet is just a normal `<div>` wrapper.
 | `createRouter(routes)` | Build a router from a `{ pattern: component }` map |
 | `router.view()` | Reactive content for the current page — place it once |
 | `router.link(path, content)` | An `<a>` that navigates without a page reload (`content`: text or a template) |
-| `router.href(path)` / `router.onLinkClick(path)` / `router.isActive(path, { exact })` | Build your own `<a>` — classes, icons, attributes, extra handlers *(next release)* |
-| `router.go(path)` | Navigate from code — `go(path, { replace: true })` replaces the current entry *(next release)* |
+| `router.href(path)` / `router.onLinkClick(path)` / `router.isActive(path, { exact })` | Build your own `<a>` — classes, icons, attributes, extra handlers *(router 0.7.0+)* |
+| `router.go(path)` | Navigate from code — `go(path, { replace: true })` replaces the current entry *(router 0.7.0+)* |
 | `router.path()` | The current path, e.g. `"/users/42"` (reactive) |
 | `router.query()` | The query string as a plain object (reactive) |
 | `router.match(path?)` | Resolve a path to `{ component, params }` without rendering (for routed SSR) |
@@ -122,7 +122,7 @@ Static routes always win over param routes, so you can have both `/users/new`
 and `/users/:id` and `/users/new` will match first.
 
 A component may return `null` to render nothing — the outlet is simply empty. So does an
-unmatched URL when there is no `"*"` route. *(next release; earlier versions threw.)*
+unmatched URL when there is no `"*"` route. *(router 0.7.0+; earlier versions threw.)*
 
 ## Links
 
@@ -140,7 +140,7 @@ nav a[aria-current="page"] {
 }
 ```
 
-### Your own links: `href`, `onLinkClick`, `isActive` *(next release)*
+### Your own links: `href`, `onLinkClick`, `isActive` *(router 0.7.0+)*
 
 `html` can't spread attributes, so when a link needs its own class, `data-`/ARIA
 attributes or an extra handler, write the `<a>` yourself from three building blocks —
@@ -206,7 +206,7 @@ router.go(`/users/${id}`);    // build a path
 
 `go()` adds a history entry, so the back button returns to the previous page.
 
-**Replace instead of push** *(next release)*. `go(path, { replace: true })` swaps the current
+**Replace instead of push** *(router 0.7.0+)*. `go(path, { replace: true })` swaps the current
 history entry for the new URL (`history.replaceState`) — use it for redirects, and for URL
 state that changes often, so Back skips the intermediate states:
 
@@ -240,7 +240,7 @@ strings — treat them like params.
 `path()` and `query()` update independently: code that reads only `path()` doesn't re-run
 when just the query or hash changes, and an unchanged query keeps the same object (so it
 doesn't wake `query()` readers). A query- or hash-only change also keeps the same page
-mounted. *(Path/query independence: next release.)*
+mounted. *(Path/query independence: router 0.7.0+.)*
 
 ## Hosting under a sub-path (`base`)
 

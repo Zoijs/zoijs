@@ -58,7 +58,7 @@ const paging = computed(
 `equals(prev, next)` returns `true` for "the same" (the previous value is kept and readers
 aren't woken). It is only ever called with two computed values — never on the first
 computation, which has nothing to compare with — so it can read properties of both arguments
-without null checks *(next release; earlier versions called it with `undefined` first)*.
+without null checks *(core 1.10.0+; earlier versions called it with `undefined` first)*.
 
 ## When to reach for `computed`
 
