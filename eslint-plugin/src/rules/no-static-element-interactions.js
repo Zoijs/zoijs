@@ -10,7 +10,11 @@
 
 import { isHtmlTemplate, templateText, hasAttr } from "../util/scan.js";
 
-const STATIC_TAG = /<(div|span)\b((?:"[^"]*"|'[^']*'|[^>])*)>/gi;
+// Attributes: quoted strings, or any character except ">" and the quotes themselves. Keeping the
+// quotes out of the catch-all makes every split unambiguous, so matching is linear — with `[^>]`
+// an unclosed tag full of quotes backtracked exponentially (a ReDoS). A stray quote inside a tag
+// is invalid HTML anyway (unquoted values can't contain " or '), so such a tag is just skipped.
+const STATIC_TAG = /<(div|span)\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi;
 
 /** @type {import("../index.d.ts").ZoijsRuleModule} */
 const rule = {
