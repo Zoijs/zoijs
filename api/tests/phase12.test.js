@@ -312,3 +312,195 @@ test("the client exposes neither the provider nor authTimeout", () => {
   assert.equal(c.authTimeout, undefined);
   assert.throws(() => (c.authTimeout = 1), TypeError);
 });
+
+// ---- audit regressions (cancellation edges, timeout races, redaction limits, 401 recovery) --------
+
+// Run fn after k microtasks.
+const afterTicks = (k, fn) => {
+  let p = Promise.resolve();
+  for (let i = 0; i < k; i++) p = p.then(() => {});
+  p.then(fn);
+};
+
+test("a request cancelled in the microtasks after its token arrives is never sent (GET dispose, mutation reset)", async () => {
+  for (const kind of ["get", "mutation"]) {
+    for (let k = 0; k < 16; k++) {
+      let cancelled = false;
+      let late = 0;
+      globalThis.fetch = () => {
+        if (cancelled) late++;
+        return Promise.resolve(json()());
+      };
+      let r, m;
+      const c = createApi({
+        baseURL: BASE,
+        auth: () => {
+          afterTicks(k, () => {
+            cancelled = true;
+            if (r) r.dispose();
+            else m.reset();
+          });
+          return "t";
+        },
+      });
+      if (kind === "get") r = c("/a");
+      else (m = c.post("/x")).run({});
+      await settle();
+      assert.equal(late, 0, `${kind}: fetch() was called after cancelling ${k} microtasks after the provider`);
+    }
+  }
+});
+
+test("a request cancelled before its provider was called never calls it", async () => {
+  let n = 0;
+  stubFetch([json()]);
+  const c = createApi({ baseURL: BASE, auth: () => (n++, "t") });
+  c("/a").dispose(); // same tick as the load starts
+  const m = c.post("/x");
+  const run = m.run({});
+  m.reset();
+  await run;
+  await settle();
+  assert.equal(n, 0, "the provider was asked for a request nobody wanted any more");
+  assert.equal(calls.length, 0);
+});
+
+test("a provider rejecting after cancellation: no unhandled rejection, no error state, nothing reported", async () => {
+  const unhandled = [];
+  const onUnhandled = (e) => unhandled.push(e);
+  process.on("unhandledRejection", onUnhandled);
+  const reported = [];
+  configure({ onError: (e) => reported.push(e) });
+  try {
+    const rejects = [];
+    const c = createApi({ baseURL: BASE, auth: () => new Promise((_, reject) => rejects.push(reject)) });
+    stubFetch([json()]);
+    const r = c("/a");
+    const m = c.post("/x");
+    const run = m.run({});
+    await settle();
+    r.dispose();
+    m.reset();
+    await run;
+    for (const reject of rejects) reject(new Error("refresh failed for tok.SECRET-1"));
+    await settle();
+    assert.equal(rejects.length, 2);
+    assert.deepEqual(unhandled, []);
+    assert.deepEqual(reported, []);
+    assert.equal(r.error(), null);
+    assert.equal(m.error(), null);
+    assert.equal(calls.length, 0);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+    configure({ onError: null });
+  }
+});
+
+test("authTimeout races: late answers can't revive a timed-out request; dispose first cancels silently and clears the timer", async () => {
+  mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_700_000_000_000 });
+  const reported = [];
+  configure({ onError: (e) => reported.push(e) });
+  try {
+    const settlers = [];
+    const signals = [];
+    const c = createApi({ baseURL: BASE, authTimeout: 100, auth: ({ signal }) => (signals.push(signal), new Promise((resolve, reject) => settlers.push({ resolve, reject }))) });
+    stubFetch([json()]);
+    // Timed out, then the provider resolves (late) — and another one rejects (late).
+    const a = c("/a");
+    const b = c("/b");
+    await settle();
+    mock.timers.tick(100);
+    await loaded(a);
+    await loaded(b);
+    settlers[0].resolve("late");
+    settlers[1].reject(new Error("late tok.SECRET-2"));
+    await settle();
+    assert.equal(a.error().type, "auth");
+    assert.equal(b.error().message, "GET request not sent: the auth provider timed out", "the timeout wins; the late rejection changes nothing");
+    assert.equal(calls.length, 0);
+    assert.equal(reported.length, 2);
+    // Disposed before the limit: silent, the signal's reason isn't a timeout, and no timer fires later.
+    const d = c("/d");
+    await settle();
+    d.dispose();
+    await settle();
+    assert.notEqual(signals[2].reason?.name, "TimeoutError");
+    mock.timers.tick(10_000);
+    await settle();
+    assert.equal(d.error(), null);
+    assert.equal(reported.length, 2, "a cancelled request's timer never reports");
+    // Rejected before the limit: a provider failure, not a timeout.
+    const e = c("/e");
+    await settle();
+    settlers[3].reject(new Error("x"));
+    await loaded(e);
+    assert.equal(e.error().message, "GET request not sent: the auth provider failed");
+    mock.timers.tick(10_000);
+    await settle();
+    assert.equal(e.error().message, "GET request not sent: the auth provider failed");
+  } finally {
+    configure({ onError: null });
+  }
+});
+
+test("redaction covers repeated, embedded and JSON-escaped echoes — and, by design, only exact ones", async () => {
+  const T = "ab+c/d.e==";
+  const echo = (body) => () => new Response(body, { status: 400, statusText: "Bad", headers: { "Content-Type": "application/problem+json" } });
+  const c = createApi({ baseURL: BASE, auth: () => T });
+  stubFetch([echo(String.raw`{"detail":"x${"ab+c\/d.e=="}y ab+c/d.e== ${T}${T}"}`)]);
+  const r = await loaded(c("/a", { problemDetails: true }));
+  assert.equal(r.error().problem.detail, "x[redacted]y [redacted] [redacted][redacted]", "the body is parsed before redaction, so JSON escapes don't hide the token");
+  // Documented limit (README "A token echoed back is redacted"): transformed forms aren't recognized.
+  stubFetch([echo(JSON.stringify({ detail: encodeURIComponent(T) }))]);
+  const enc = await loaded(c("/b", { problemDetails: true }));
+  assert.equal(enc.error().problem.detail, encodeURIComponent(T));
+});
+
+test("README 401 recovery: one refresh per failure streak, never a loop — even when every retry is a 401", async () => {
+  const { effect } = await import("@zoijs/core");
+  let refreshes = 0;
+  const session = { accessToken: "t1", refreshAccessToken: async () => ((session.accessToken = `t${++refreshes + 1}`), true) };
+  const statuses = [401, 401, 401, 200, 401, 401];
+  let i = 0;
+  globalThis.fetch = (url, init) => {
+    calls.push({ auth: init.headers.Authorization });
+    const status = statuses[Math.min(i++, statuses.length - 1)];
+    return Promise.resolve(new Response(status === 200 ? "{}" : "", { status, headers: { "Content-Type": "application/json" } }));
+  };
+  calls = [];
+  const backend = createApi({ baseURL: BASE, auth: () => session.accessToken });
+  // ---- the README example, verbatim from here ----
+  const profile = backend("/profile");
+  let recovered = false; // at most ONE recovery until a load succeeds
+
+  const stop = effect(() => {
+    if (profile.loading()) return; // wait for the load to settle
+    const e = profile.error();
+    if (!e) recovered = false; // success: a later 401 may recover again
+    else if (e.type === "http" && e.status === 401 && !recovered) {
+      recovered = true; // a 401 right after refreshing is shown, not retried
+      refreshThenReload();
+    }
+  });
+
+  async function refreshThenReload() {
+    if (await session.refreshAccessToken()) profile.refresh(); // a new request: the provider is asked again
+  }
+  // ---- end of the README example ----
+  for (let n = 0; n < 5; n++) await loaded(profile);
+  assert.equal(calls.length, 2, "first 401 → one refresh → second 401 is shown, not retried");
+  assert.equal(refreshes, 1);
+  assert.deepEqual(calls.map((x) => x.auth), ["Bearer t1", "Bearer t2"]);
+  assert.equal(profile.error().status, 401);
+  profile.refresh(); // the user tries again: 401 → recovery? no — still the same streak
+  for (let n = 0; n < 5; n++) await loaded(profile);
+  assert.equal(calls.length, 3);
+  profile.refresh(); // succeeds (200), which ends the streak…
+  for (let n = 0; n < 5; n++) await loaded(profile);
+  profile.refresh(); // …so the next 401 recovers once more
+  for (let n = 0; n < 5; n++) await loaded(profile);
+  assert.equal(refreshes, 2);
+  assert.equal(calls.length, 6);
+  if (typeof stop === "function") stop();
+  profile.dispose();
+});

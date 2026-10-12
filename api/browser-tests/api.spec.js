@@ -1294,3 +1294,39 @@ test("auth lifecycle: a server echoing the token in problem details and status t
   // HTTP/1.1 carries the reason phrase; where the browser exposes one, it's redacted too
   for (const s of out.surfaces) if (s.statusText) expect(s.statusText).toBe("Unauthorized Bearer [redacted]");
 });
+
+test("auth lifecycle: cancellation never waits for, revives or leaks from an ignoring provider — late rejections stay handled", async ({ page }) => {
+  const { sent, out } = await inExternal(page, `
+    const unhandled = [];
+    const onUnhandled = (e) => unhandled.push(String(e.reason));
+    window.addEventListener("unhandledrejection", onUnhandled);
+    const reported = [];
+    core.configure({ onError: (e) => reported.push(e.message) });
+    let calls = 0;
+    const rejects = [];
+    const ext = createApi({ baseURL: X + "/__cors/auth/", auth: () => (calls++, new Promise((_, reject) => rejects.push(reject))) });
+    ext("/same-tick-" + uid).dispose(); // cancelled before the provider's turn: never asked
+    const r = ext("/ignored-" + uid);
+    const m = ext.post("/ignored-" + uid, { idempotencyKey: true, retry: 2 });
+    const run = m.run({});
+    await wait(50);
+    const started = performance.now();
+    r.dispose();
+    m.reset();
+    await run;
+    const ms = performance.now() - started;
+    for (const reject of rejects) reject(new Error("refresh failed for tok.SECRET-" + uid));
+    await wait(100);
+    window.removeEventListener("unhandledrejection", onUnhandled);
+    core.configure({ onError: null });
+    return { calls, ms, unhandled, reported, loading: r.loading(), pending: m.pending(), errors: [r.error(), m.error()], hits: await hitInfo("/__cors/auth/ignored-" + uid) };
+  `);
+  expect(out.calls).toBe(2);
+  expect(out.ms).toBeLessThan(500);
+  expect(out.unhandled).toEqual([]);
+  expect(out.reported).toEqual([]);
+  expect([out.loading, out.pending]).toEqual([false, false]);
+  expect(out.errors).toEqual([null, null]);
+  expect(out.hits).toEqual({ count: 0, authorized: 0 });
+  expect(sent).toEqual([]);
+});

@@ -940,8 +940,12 @@ share providers, and `api()` never sends an `Authorization` header.
 **A token echoed back is redacted.** If the API puts the request's own token into its
 problem-details fields or its HTTP status text (a careless error handler), every exact occurrence
 is replaced with `[redacted]` before it reaches `error.problem`, `error.statusText`,
-`error.message` or `configure({ onError })`. Other server text is passed through unchanged — and
-remains untrusted.
+`error.message` or `configure({ onError })`. Only **exact** occurrences are recognized (repeated or
+embedded in other text, and after JSON escapes are decoded): a server that echoes a *transformed*
+token — percent- or base64-encoded, truncated, re-cased or split across fields — isn't caught, and
+no heuristic could catch every form. Treat this as a safety net, not a guarantee: problem details
+are opt-in (`problemDetails`), they're untrusted server text, so don't forward them to logs or
+monitoring wholesale — and fix a server that echoes credentials.
 
 **CORS:** a request with `Authorization` needs a preflight, so the external API must allow it —
 for example `Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key`. If it
@@ -954,17 +958,23 @@ Zoijs never retries a 401 or asks for a new token by itself — that's how authe
 start. Recover explicitly, once, from your own code:
 
 ```js
-const profile = backend("/profile");
+import { effect } from "@zoijs/core";
 
-// Call when profile.error() changes — e.g. from the component that renders the error.
-let refreshedFor = null;
-async function recoverFrom401() {
+const profile = backend("/profile");
+let recovered = false; // at most ONE recovery until a load succeeds
+
+effect(() => {
+  if (profile.loading()) return; // wait for the load to settle
   const e = profile.error();
-  if (e?.type !== "http" || e.status !== 401 || refreshedFor === e) return;
-  refreshedFor = e;                         // one attempt per failure — never a loop
-  if (await session.refreshAccessToken()) { // your own logic: refresh token, re-login, …
-    profile.refresh();                      // a new logical request → the provider is asked again
+  if (!e) recovered = false; // success: a later 401 may recover again
+  else if (e.type === "http" && e.status === 401 && !recovered) {
+    recovered = true; // a 401 right after refreshing is shown, not retried
+    refreshThenReload();
   }
+});
+
+async function refreshThenReload() {
+  if (await session.refreshAccessToken()) profile.refresh(); // a new request: the provider is asked again
 }
 
 const save = backend.post("/orders", { idempotencyKey: true });
@@ -974,8 +984,10 @@ if (save.error()?.status === 401 && (await session.refreshAccessToken())) {
 }
 ```
 
-Make the provider return the *current* token (`auth: () => session.accessToken`), so the next
-request picks up the refreshed one. Retrying a mutation after a 401 is safe only because the
+The flag is what bounds it: each reload's 401 is a *new* error, so "once per error" would refresh
+forever against a server that keeps refusing; "once until a load succeeds" can't. Make the
+provider return the *current* token (`auth: () => session.accessToken`), so the next request picks
+up the refreshed one. Retrying a mutation after a 401 is safe only because the
 server rejected it before acting; if your API can fail with 401 *after* side effects, don't retry.
 For a 403, don't refresh: the token is valid but not allowed — show the error.
 
