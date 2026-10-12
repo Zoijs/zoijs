@@ -25,6 +25,14 @@ const job = (yaml, name) => {
   return m ? m[1] : null;
 };
 
+test("every job runs on a pinned runner image, never a floating *-latest label", () => {
+  for (const [name, yaml] of [["ci.yml", ci], ["publish.yml", publish]]) {
+    const labels = [...yaml.matchAll(/^\s*runs-on:\s*(\S+)/gm)].map((m) => m[1]);
+    assert.ok(labels.length > 0, `${name} has jobs`);
+    for (const label of labels) assert.match(label, /^ubuntu-\d+\.\d+$/, `${name}: runs-on ${label} — pin an exact image such as ubuntu-24.04`);
+  }
+});
+
 test("publish.yml runs the full CI workflow, and publishing needs it", () => {
   assert.match(job(publish, "ci"), /uses: \.\/\.github\/workflows\/ci\.yml/);
   assert.match(job(publish, "publish"), /needs: \[ci, verify\]/);

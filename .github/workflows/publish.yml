@@ -30,7 +30,7 @@ jobs:
 
   verify:
     name: Verify release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       dir: ${{ steps.check.outputs.dir }}
       name: ${{ steps.check.outputs.name }}
@@ -61,7 +61,7 @@ jobs:
   publish:
     name: Publish ${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}
     needs: [ci, verify]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Protected environment: configure required reviewers + "tags matching *-v*" as the
     # only allowed deployment refs in GitHub settings. It holds NO npm secret.
     environment: npm-release
