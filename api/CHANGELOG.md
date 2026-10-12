@@ -4,6 +4,25 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
+Proposed as **0.4.0** (additive). `api()` and clients without `auth` are unchanged.
+
+### Added — the auth provider's lifecycle
+- The `auth` provider now receives `{ signal }`: an `AbortSignal` that aborts when its request is
+  superseded, disposed, unmounted or `reset()`, or when `authTimeout` elapses. The request stops
+  waiting immediately — even if the provider ignores the signal — and is never sent. Providers
+  with no parameter (0.3.0 style) keep working.
+- `createApi({ …, authTimeout })`: optional limit (ms) on the provider per request; when it
+  elapses the request fails with type `"auth"` ("the auth provider timed out"), nothing is sent or
+  retried. No limit by default (interactive token flows may take minutes). Requires `auth`.
+
+### Security
+- A token the server echoes back in problem-details fields or the HTTP status text is redacted
+  (`[redacted]`) before it reaches `ApiError` or monitoring.
+
+### Documentation
+- "Recovering from a 401": explicit, once-only token refresh and retry — still nothing automatic.
+- RFC 0009: security review of cookie authentication for cross-origin clients — not implemented.
+
 ## 0.3.0 — 2026-10-11
 
 Additive: `api()` and unauthenticated clients are unchanged.

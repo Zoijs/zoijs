@@ -1223,3 +1223,74 @@ test("auth: unauthenticated clients and api() are unchanged — no Authorization
   expect(sent.every((s) => !s.authorization)).toBe(true);
   expect(sent.find((s) => s.url.endsWith("/data/tasks.json"))).toMatchObject({ mode: "same-origin", credentials: "same-origin", redirect: null, referrerPolicy: null });
 });
+
+// ---- Phase 12: the auth provider's lifecycle (abort signal, authTimeout, echoed-token redaction) -------
+
+test("auth lifecycle: authTimeout ends a hanging provider — signal aborted with TimeoutError, nothing sent", async ({ page }) => {
+  const { out } = await inExternal(page, `
+    let seen;
+    const ext = createApi({ baseURL: X + "/__cors/auth/", authTimeout: 300, auth: ({ signal }) => { seen = signal; return new Promise(() => {}); } });
+    const started = performance.now();
+    const r = await settled(ext("/never-" + uid, { retry: 2, retryDelay: 10 }));
+    return { error: err(r.error()), ms: performance.now() - started, aborted: seen.aborted, reason: seen.reason?.name, hits: await hitInfo("/__cors/auth/never-" + uid) };
+  `);
+  expect(out.error).toMatchObject({ type: "auth", message: "GET request not sent: the auth provider timed out" });
+  expect(out.aborted).toBe(true);
+  expect(out.reason).toBe("TimeoutError");
+  expect(out.ms).toBeLessThan(3000);
+  expect(out.hits).toEqual({ count: 0, authorized: 0 });
+});
+
+test("auth lifecycle: a superseded request aborts the provider's own token fetch (signal passed through)", async ({ page }) => {
+  const { out } = await inExternal(page, `
+    const tokenFetches = [];
+    const ext = createApi({
+      baseURL: X + "/__cors/auth/",
+      auth: async ({ signal }) => {
+        const n = tokenFetches.length;
+        tokenFetches.push("pending");
+        try {
+          // a token endpoint that's slow the first time (3 s), fast afterwards
+          await realFetch(X + "/__cors/hang-once/token-" + uid, { signal });
+          tokenFetches[n] = "done";
+          return "tok-" + n;
+        } catch (e) {
+          tokenFetches[n] = e.name;
+          throw e;
+        }
+      },
+    });
+    const r = ext("/me-" + uid);
+    await wait(150);
+    r.refresh(); // supersedes the first load while its token fetch is still in flight
+    await settled(r);
+    await wait(50);
+    const data = r.data();
+    r.dispose();
+    return { tokenFetches, auth: data?.authorization, error: err(r.error()) };
+  `);
+  expect(out.tokenFetches[0]).toBe("AbortError"); // the provider's own fetch was cancelled
+  expect(out.tokenFetches[1]).toBe("done");
+  expect(out.auth).toBe("Bearer tok-1");
+  expect(out.error).toBeNull();
+});
+
+test("auth lifecycle: a server echoing the token in problem details and status text never exposes it", async ({ page }) => {
+  const { out } = await inExternal(page, `
+    const reported = [];
+    core.configure({ onError: (e) => reported.push({ message: e.message, statusText: e.statusText, problem: e.problem && { ...e.problem } }) });
+    const T = "tok.MARKER-" + uid;
+    const ext = createApi({ baseURL: X + "/__cors/auth/", auth: () => T });
+    const r = await settled(ext("/echo-problem", { problemDetails: true }));
+    const m = ext.post("/echo-problem", { problemDetails: true });
+    await m.run({});
+    core.configure({ onError: null });
+    const surfaces = [r.error(), m.error()].map((e) => ({ message: e.message, statusText: e.statusText, url: e.url, stack: e.stack, problem: e.problem && { ...e.problem } }));
+    return { T, surfaces, reported, leaked: JSON.stringify({ surfaces, reported }).includes(T) };
+  `);
+  expect(out.leaked).toBe(false);
+  expect(out.surfaces[0].problem).toMatchObject({ title: "Rejected Bearer [redacted]", detail: "The credential Bearer [redacted] has expired", status: 401 });
+  expect(out.reported.length).toBeGreaterThan(0);
+  // HTTP/1.1 carries the reason phrase; where the browser exposes one, it's redacted too
+  for (const s of out.surfaces) if (s.statusText) expect(s.statusText).toBe("Unauthorized Bearer [redacted]");
+});

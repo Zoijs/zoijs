@@ -26,6 +26,8 @@
 //   /__cors/problem           422 application/problem+json
 //   /__cors/redirect/<code>?to=<url>   a <code> redirect to <url>
 //   /__cors/basic/…           401 + WWW-Authenticate: Basic unless the request carries Authorization
+//   /__cors/echo-problem      401 application/problem+json that echoes the received Authorization
+//                             header back in its fields and status text (a careless server)
 //   /__cors/auth/…            any of the above, with Authorization also allowed by the preflight
 //                             (elsewhere a request carrying Authorization fails its preflight); the
 //                             echo reports the Authorization header it received
@@ -118,6 +120,12 @@ function cors(req, res, url) {
   };
   const first = (prefix) => route.startsWith(prefix) && !once.has(path) && once.add(path);
   if (route.startsWith("/__cors/basic/") && !req.headers.authorization) return reply(401, "", "text/plain", { "WWW-Authenticate": 'Basic realm="zoijs-test"' });
+  if (route === "/__cors/echo-problem") {
+    const got = String(req.headers.authorization || "none").replace(/[^\x21-\x7e ]/g, "");
+    if (res.destroyed) return;
+    res.writeHead(401, `Unauthorized ${got}`, { ...headers, "Content-Type": "application/problem+json" });
+    return res.end(JSON.stringify({ type: "https://errors.example/auth", title: `Rejected ${got}`, detail: `The credential ${got} has expired`, status: 401 }));
+  }
   if (route === "/__cors/problem") return reply(422, JSON.stringify({ type: "https://errors.example/invalid", title: "Invalid order", status: 422, detail: "quantity must be positive", secretInternal: "dropped" }), "application/problem+json");
   const redirect = /^\/__cors\/redirect\/(30[12378])$/.exec(route);
   if (redirect) return reply(Number(redirect[1]), "", "text/plain", { Location: url.searchParams.get("to") || "/" });
