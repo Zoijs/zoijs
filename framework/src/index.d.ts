@@ -103,6 +103,14 @@ export function createState<T>(initial: T, equals?: (a: T, b: T) => boolean): St
  * ```ts
  * const fullName = computed(() => `${first.get()} ${last.get()}`); // Computed<string>
  * ```
+ *
+ * `equals(previous, next)` (default `Object.is`) decides whether a recomputed value counts as
+ * a change; when it returns `true` the previous value is kept and readers aren't woken. It is
+ * only ever called with two computed values — never on the first computation:
+ *
+ * ```ts
+ * const page = computed(() => ({ n: Number(query.get().page) }), (a, b) => a.n === b.n);
+ * ```
  */
 export function computed<T>(fn: () => T, equals?: (a: T, b: T) => boolean): Computed<T>;
 

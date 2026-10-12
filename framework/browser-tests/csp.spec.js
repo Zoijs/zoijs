@@ -73,3 +73,35 @@ test("two core copies share one zoijs Trusted Types policy (no 'allow-duplicates
   await expect(page.locator("#from-b")).toHaveText("B 1");
   expect(await page.evaluate(() => window.__violations)).toEqual([]);
 });
+
+// L7 (found by Zoijs Insight): style bindings under a strict `style-src 'self'` — no
+// 'unsafe-inline', no style-src-attr. Core ≤ 1.9.0 used setAttribute("style"), which every engine
+// refuses there; bindings now write through the CSSOM, which CSP doesn't govern. All engines.
+test("style bindings apply under a strict style-src policy with no violations", async ({ page }) => {
+  await page.goto("/browser-tests/fixtures/csp-style.html");
+  await page.waitForFunction(() => window.__rendered || window.__error);
+  expect(await page.evaluate(() => window.__error)).toBeNull();
+
+  const css = (sel, prop) => page.evaluate(([s, p]) => getComputedStyle(document.querySelector(s)).getPropertyValue(p).trim(), [sel, prop]);
+  expect(await css("#obj", "height")).toBe("10px");
+  expect(await css("#obj", "--gap")).toBe("6px");
+  expect(await css("#obj", "opacity")).toBe("0.5");
+  expect(await css("#str", "width")).toBe("33px");
+  expect(await css("#str", "color")).toBe("rgb(0, 128, 0)");
+  expect(await css("#mixed", "width")).toBe("20px");
+  expect(await css("#mixed", "border-top-width")).toBe("0px"); // no border-style → computed 0
+  expect(await css("#swap", "color")).toBe("rgb(255, 0, 0)");
+  expect(await css("#swap", "margin-top")).toBe("4px");
+  expect(await css("#rect", "fill")).toBe("rgb(255, 0, 0)");
+
+  await page.evaluate(() => (window.__style.grow(), window.__style.swap()));
+  await expect.poll(() => css("#obj", "height")).toBe("20px");
+  expect(await css("#mixed", "width")).toBe("40px");
+  expect(await css("#swap", "color")).toBe("rgb(0, 0, 255)");
+  expect(await css("#swap", "margin-top")).toBe("0px"); // stale declaration removed
+
+  await page.evaluate(() => window.__style.clear());
+  await expect.poll(() => page.evaluate(() => document.querySelector("#swap").hasAttribute("style"))).toBe(false);
+
+  expect(await page.evaluate(() => window.__violations)).toEqual([]);
+});

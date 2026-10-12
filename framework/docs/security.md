@@ -214,8 +214,10 @@ Zoijs is friendly to a strict Content Security Policy:
   a policy, so it fails under enforcement.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
-hash, or a nonce) and, if your templates use `style` attributes, `style-src-attr 'unsafe-inline'`
-(a `style=${…}` binding is applied as an attribute).
+hash, or a nonce) and, if your templates write static `style="…"` attributes,
+`style-src-attr 'unsafe-inline'`. A `style=${…}` binding needs no exception: it is applied
+through the CSSOM (`el.style`), which CSP doesn't govern *(next release; earlier versions set the
+attribute, so bindings needed `style-src-attr 'unsafe-inline'` too)*.
 
 **The full production policy** — `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`,
 `frame-ancestors 'none'`, the self-hosted vs CDN differences, and copy-paste headers for

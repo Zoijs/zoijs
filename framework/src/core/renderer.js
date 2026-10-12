@@ -19,8 +19,14 @@ import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivit
 import { isDev } from "../reactivity/env.js";
 import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
 import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
+import { svgTemplate } from "../utils/dom.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+// Content inserted under SVG (not <foreignObject>) parses as SVG; a fragment root inherits it.
+export const inSvg = (parent, inherited) =>
+  parent.nodeType === 1 ? parent.namespaceURI === SVG_NS && parent.localName !== "foreignObject" : inherited;
 const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
 const noop = () => {};
 
@@ -45,9 +51,10 @@ function warnStringified(el, name, v) {
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
  * @param {Element} [hydrateRoot]  when given, bind to this EXISTING server-rendered
  *   subtree in place (no clone) instead of building fresh DOM — see hydration below.
+ * @param {boolean} [svg]  parse in SVG context
  * @returns {{ node: Node, dispose: Function }}
  */
-export function render(result, hydrateRoot) {
+export function render(result, hydrateRoot, svg) {
   // Only a genuine (Symbol-branded) html`…` result is instantiated — its markup is
   // author source. Anything else reaching here (data returned by a component or an
   // each() render function) is refused rather than having its fields trusted.
@@ -59,7 +66,7 @@ export function render(result, hydrateRoot) {
   // reused, never re-created; each dynamic slot is cleared + re-rendered (same
   // values → no visible change). Otherwise build a fresh clone.
   const hydrating = hydrateRoot != null;
-  const fragment = hydrating ? hydrateRoot : result.template.content.cloneNode(true);
+  const fragment = hydrating ? hydrateRoot : (svg ? svgTemplate(result.__staticHTML) : result.template).content.cloneNode(true);
   const { parts, values } = result;
 
   // Collect every part's target node first (document order), so a binding that
@@ -74,7 +81,7 @@ export function render(result, hydrateRoot) {
 
       if (part.type === "child") {
         if (hydrating) clearHydratedSlot(node); // drop this slot's server content
-        bindChild(node, values[part.hole]);
+        bindChild(node, values[part.hole], inSvg(node.parentNode, svg));
       } else {
         node.removeAttribute("data-zoijs-bind");
         for (const attr of part.attrs) bindAttribute(node, attr, values);
@@ -121,10 +128,10 @@ function collectNodes(fragment, parts, hasElements) {
   return nodes;
 }
 
-function bindChild(anchor, value) {
-  if (isEachResult(value)) setupKeyedList(anchor, value);
-  else if (typeof value === "function") bindReactiveContent(anchor, value);
-  else insertStaticContent(anchor, value);
+function bindChild(anchor, value, svg) {
+  if (isEachResult(value)) setupKeyedList(anchor, value, svg);
+  else if (typeof value === "function") bindReactiveContent(anchor, value, svg);
+  else insertStaticContent(anchor, value, svg);
 }
 
 // unsafeHTML() is content-only: refused in any attribute, before URL/name checks.
@@ -223,7 +230,7 @@ function bindRef(el, fn) {
 
 // ---- text / content bindings -------------------------------------------------
 
-function bindReactiveContent(anchor, getValue) {
+function bindReactiveContent(anchor, getValue, svg) {
   let mode = null; // "text" | "nodes"
   let textNode = null;
   let items = []; // [{ nodes, dispose }]
@@ -265,7 +272,7 @@ function bindReactiveContent(anchor, getValue) {
       if (mode === "text") clearText();
       else clearNodes();
       mode = "nodes";
-      insertItems(anchor, value, items);
+      insertItems(anchor, value, items, svg);
     }
   }));
 
@@ -275,10 +282,10 @@ function bindReactiveContent(anchor, getValue) {
   });
 }
 
-function insertStaticContent(anchor, value) {
+function insertStaticContent(anchor, value, svg) {
   if (value == null) return;
   const items = [];
-  insertItems(anchor, value, items);
+  insertItems(anchor, value, items, svg);
   onCleanup(() => {
     for (const it of items) {
       it.dispose();
@@ -287,21 +294,21 @@ function insertStaticContent(anchor, value) {
   });
 }
 
-function insertItems(anchor, value, items) {
+function insertItems(anchor, value, items, svg) {
   const parent = anchor.parentNode;
   const list = Array.isArray(value) ? value : [value];
   for (const v of list) {
-    const item = renderChild(v);
+    const item = renderChild(v, svg);
     for (const n of item.nodes) parent.insertBefore(n, anchor);
     items.push(item);
   }
 }
 
-function renderChild(value) {
+function renderChild(value, svg) {
   if (value == null || value === false || value === true) return { nodes: [], dispose: noop };
   if (value instanceof Node) return { nodes: [value], dispose: noop };
   if (isTemplateResult(value)) {
-    const r = render(value);
+    const r = render(value, undefined, svg);
     return { nodes: [...r.node.childNodes], dispose: r.dispose };
   }
   if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html), dispose: noop };
@@ -350,7 +357,7 @@ function longestIncreasingSubsequence(arr) {
   return keep;
 }
 
-function setupKeyedList(anchor, marker) {
+function setupKeyedList(anchor, marker, svg) {
   const { items, keyFn, renderFn } = marker;
   const listOwner = createOwner(); // item subtrees nest here
   let records = new Map();
@@ -374,7 +381,7 @@ function setupKeyedList(anchor, marker) {
     let nodes;
     untrack(() =>
       runWithOwner(itemOwner, () => {
-        const r = render(renderFn(arg));
+        const r = render(renderFn(arg), undefined, svg);
         nodes = [...r.node.childNodes];
       })
     );
@@ -499,7 +506,12 @@ function makeItemProxy(itemCell) {
         const item = itemCell.get();
         if (item == null) return undefined;
         const v = item[prop];
-        return typeof v === "function" ? v.bind(item) : v;
+        // Bind inherited methods (Date#getTime); own functions keep identity (`this` = this proxy).
+        return typeof v === "function" && !Object.prototype.hasOwnProperty.call(item, prop) ? v.bind(item) : v;
+      },
+      set(_, prop, v) {
+        const item = itemCell.peek();
+        return item == null || Reflect.set(item, prop, v);
       },
       has(_, prop) {
         const item = itemCell.get();
@@ -540,10 +552,8 @@ function applyAttribute(el, name, value, check) {
     if (value !== null && typeof value === "object") {
       // Object form: values come from an object, not string concatenation, so they
       // can't break out of the attribute or inject extra declarations.
-      el.setAttribute("style", styleObjectToCss(value));
-      return;
-    }
-    if (isDev() && typeof value === "string" && styleWarned && !styleWarned.has(el) && SUSPICIOUS_STYLE.test(value)) {
+      value = styleObjectToCss(value);
+    } else if (isDev() && typeof value === "string" && styleWarned && !styleWarned.has(el) && SUSPICIOUS_STYLE.test(value)) {
       styleWarned.add(el);
       console.warn(
         `Zoijs: bound "style" contains a risky token (url()/expression()/comment). ` +
@@ -551,7 +561,11 @@ function applyAttribute(el, name, value, check) {
           `style=\${() => ({ ... })}. See docs/security.md.`
       );
     }
-    // A string style falls through and is set verbatim (unchanged behavior).
+    // CSSOM write: a strict style-src CSP blocks setAttribute("style"), not el.style.
+    if (typeof value === "string" && el.style) {
+      el.style.cssText = value;
+      return;
+    }
   }
   if (lname === "value" || lname === "checked") {
     el[lname] = value; // form-control state lives on the property
@@ -567,7 +581,8 @@ function applyAttribute(el, name, value, check) {
     return;
   }
   if (value === false || value == null) {
-    el.removeAttribute(name);
+    // hasAttribute syncs Chromium's lazy CSSOM style attribute (else it survives removal).
+    if (el.hasAttribute(name)) el.removeAttribute(name);
   } else if (value === true) {
     el.setAttribute(name, "");
   } else {

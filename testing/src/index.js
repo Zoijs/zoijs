@@ -244,10 +244,24 @@ for (const type of ["click", "input", "change", "submit", "keydown", "keyup", "f
 export function mockRouter({ path = "/", query = {} } = {}) {
   const pathState = createState(path);
   const queryState = createState({ ...query });
+  const go = (to) => pathState.set(to); // `{ replace }` is accepted; the mock keeps no history
+  const isActive = (to, options) => {
+    const p = String(to).split(/[?#]/)[0];
+    const now = pathState.get();
+    return now === p || (!!options && options.exact === false && p !== "/" && now.startsWith(p.replace(/\/$/, "") + "/"));
+  };
+  const onLinkClick = (to) => (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    go(to);
+  };
   return {
     view: () => document.createElement("div"),
-    link: (to, text) => html`<a href=${to}>${text}</a>`,
-    go: (to) => pathState.set(to),
+    link: (to, content) => html`<a href=${to} onclick=${onLinkClick(to)}>${content}</a>`,
+    href: (to) => String(to),
+    onLinkClick,
+    isActive,
+    go,
     path: () => pathState.get(),
     query: () => queryState.get(),
     destroy: () => {},

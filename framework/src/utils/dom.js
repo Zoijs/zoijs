@@ -51,3 +51,15 @@ export function createTemplate(htmlText) {
   template.innerHTML = trustedHTML(htmlText);
   return template;
 }
+
+/** createTemplate in SVG context (content of an <svg>), cached per template. */
+const svgTemplates = new Map();
+export function svgTemplate(htmlText) {
+  let template = svgTemplates.get(htmlText);
+  if (!template) {
+    svgTemplates.set(htmlText, (template = createTemplate("<svg>" + htmlText + "</svg>")));
+    const svg = template.content.firstChild;
+    svg.replaceWith(...svg.childNodes);
+  }
+  return template;
+}

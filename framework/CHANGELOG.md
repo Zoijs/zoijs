@@ -6,6 +6,42 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+Found while building the Zoijs Insight reference app. No API changes.
+
+- **SVG lists and nested templates draw.** A template is parsed once in HTML context, so an
+  `each()` item, a nested or conditional template, or a component rendered *inside* an `<svg>`
+  came out as HTML elements that don't draw (RFC 0003 §6). Content inserted under an SVG element
+  is now parsed in SVG context — keyed insert/move/remove, attributes (including case-sensitive
+  ones like `viewBox`) and cleanup work as for HTML; `<foreignObject>` content stays HTML;
+  `mount()` into an `<svg>` element parses the component as SVG; and hydrated SVG lists get the
+  same fix.
+- **`each()` items keep their own function fields.** The item proxy returned every function as
+  `fn.bind(item)` — a new function on each read, without the original's own properties
+  (`fn.preload`, …). Own function fields are now returned as-is; inherited methods
+  (`Date#getTime`, class methods) are still bound to the item.
+- **`computed(fn, equals)` never calls `equals` with `undefined` first.** The first value was
+  compared against `undefined`, so a comparator reading its arguments
+  (`(a, b) => a.page === b.page`) threw. The first value is now stored without a comparison —
+  including after a failed first run — and `undefined` is an ordinary value afterwards.
+- **Style bindings work under a strict `style-src` CSP.** `style=${…}` (object, string and mixed
+  forms) was applied with `setAttribute("style", …)`, which a policy without `'unsafe-inline'` /
+  `style-src-attr` refuses. Bindings now write `el.style.cssText` (the CSSOM, which CSP doesn't
+  govern): the same declarations, the same whole-value replacement, the same object-form
+  validation; `null`/`false` still remove the attribute. `style-src-attr 'unsafe-inline'` is no
+  longer needed for bindings (static `style="…"` in markup still needs it).
+
+### Migration notes
+- **`this` in an item's own methods.** `item.method()` inside `each()` now runs with `this` = the
+  item proxy (which reads the live item and, new, writes through to it) instead of the raw item.
+  Reads and `this.x = …` behave as before. A method that compares `this` by identity, or one
+  destructured off the item (`const { method } = item; method()`), no longer gets the item as
+  `this` — call it as `item.method()` or use an arrow function field.
+- **Strict CSP.** If you added `style-src-attr 'unsafe-inline'` only for `style=${…}` bindings,
+  you can remove it after upgrading.
+- **Chromium and `style=""`.** Removing a style through a binding removes the attribute in
+  every engine (Chromium needed an explicit check: it re-creates a lazily synced `style=""`).
+
 ## [1.9.0] — 2026-10-05
 
 ### Migration notes

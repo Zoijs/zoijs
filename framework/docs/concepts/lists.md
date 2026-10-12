@@ -66,6 +66,14 @@ Inside `renderFn`, the item supports reactive bindings:
 
 When that item's data changes, only its own bindings update — the rest of the list is untouched.
 
+The item is a live view of the current object for that key: reading `todo.text` always gives
+the latest value. Function fields come back as they are — `todo.onSelect === original`, with any
+properties you attached to it — and when called as `todo.method()`, `this` reads (and writes)
+the live item. Methods inherited from a class or built-in (`date.getTime()`) keep their real
+object. *(Next release; earlier versions returned every function field re-bound, as a new
+function without its properties.)* Call methods as `item.method()` rather than destructuring
+them off the item.
+
 ## Common mistakes
 
 - **Using the array index as the key** → breaks reuse on reorder. Use a stable id.

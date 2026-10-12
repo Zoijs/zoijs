@@ -95,8 +95,9 @@ not. Skip the rule and the outlet is just a normal `<div>` wrapper.
 |---|---|
 | `createRouter(routes)` | Build a router from a `{ pattern: component }` map |
 | `router.view()` | Reactive content for the current page — place it once |
-| `router.link(path, text)` | An `<a>` that navigates without a page reload |
-| `router.go(path)` | Navigate from code |
+| `router.link(path, content)` | An `<a>` that navigates without a page reload (`content`: text or a template) |
+| `router.href(path)` / `router.onLinkClick(path)` / `router.isActive(path, { exact })` | Build your own `<a>` — classes, icons, attributes, extra handlers *(next release)* |
+| `router.go(path)` | Navigate from code — `go(path, { replace: true })` replaces the current entry *(next release)* |
 | `router.path()` | The current path, e.g. `"/users/42"` (reactive) |
 | `router.query()` | The query string as a plain object (reactive) |
 | `router.match(path?)` | Resolve a path to `{ component, params }` without rendering (for routed SSR) |
@@ -120,11 +121,15 @@ Patterns are matched segment by segment:
 Static routes always win over param routes, so you can have both `/users/new`
 and `/users/:id` and `/users/new` will match first.
 
+A component may return `null` to render nothing — the outlet is simply empty. So does an
+unmatched URL when there is no `"*"` route. *(next release; earlier versions threw.)*
+
 ## Links
 
-`router.link(path, text)` returns a normal `<a href>` — so middle-click,
+`router.link(path, content)` returns a normal `<a href>` — so middle-click,
 Ctrl/Cmd-click, and "open in new tab" all work. A plain left-click is
-intercepted and routed without a reload.
+intercepted and routed without a reload. `content` is text or any template
+content, so a link can hold markup: ``router.link("/inbox", html`<span aria-hidden="true">✉</span> Inbox`)``.
 
 The active link automatically gets `aria-current="page"`, so you can style it
 with plain CSS:
@@ -134,6 +139,29 @@ nav a[aria-current="page"] {
   font-weight: 600;
 }
 ```
+
+### Your own links: `href`, `onLinkClick`, `isActive` *(next release)*
+
+`html` can't spread attributes, so when a link needs its own class, `data-`/ARIA
+attributes or an extra handler, write the `<a>` yourself from three building blocks —
+the same ones `link()` uses:
+
+```js
+html`<a class="nav-item" data-tooltip="Reports"
+        href=${router.href("/reports")}
+        onclick=${router.onLinkClick("/reports")}
+        aria-current=${() => (router.isActive("/reports", { exact: false }) ? "page" : null)}
+      ><span class="icon" aria-hidden="true">📈</span> Reports</a>`;
+```
+
+- `href(path)` — the URL for the `href`: app paths get the `base`; external URLs are left alone.
+- `onLinkClick(path)` — navigates on a plain left-click (or Enter). Everything a user expects
+  to behave natively is left to the browser: Ctrl/Cmd/Shift/Alt and middle clicks, a `target`
+  other than `_self`, `download`, an event another handler already handled, and external URLs.
+  To run your own code too, call it from your handler: `onclick=${(e) => { track(); router.onLinkClick("/x")(e); }}`.
+- `isActive(path, options)` — reactive. Exact by default: the same path and, if `path` has a
+  query, the same query (the hash never counts). `{ exact: false }` also matches sub-paths
+  (`"/docs"` is active on `/docs/intro`) and ignores the query.
 
 ## Dynamic params
 
@@ -178,6 +206,21 @@ router.go(`/users/${id}`);    // build a path
 
 `go()` adds a history entry, so the back button returns to the previous page.
 
+**Replace instead of push** *(next release)*. `go(path, { replace: true })` swaps the current
+history entry for the new URL (`history.replaceState`) — use it for redirects, and for URL
+state that changes often, so Back skips the intermediate states:
+
+```js
+// search-as-you-type: one history entry for the whole search, not one per keystroke
+oninput=${(e) => router.go(`/search?q=${encodeURIComponent(e.target.value)}`, { replace: true })}
+
+// a guard redirect: Back shouldn't return to the page that redirected
+if (!signedIn()) router.go("/login", { replace: true });
+```
+
+A replace keeps the scroll position, except that it scrolls to a `#hash` target if there is
+one, or to the top when the route (the page) changed. A same-URL `go()` does nothing.
+
 It navigates **within the app**, so it takes app paths — `"/about"`, `"?tab=2"`, `"#top"`.
 An absolute URL, any other scheme (`javascript:`, `https:` …), or a protocol-relative
 `//host` throws a clear `TypeError` (`go() only navigates within the app …`) instead of the
@@ -193,6 +236,11 @@ router.query(); // → { q: "hello", page: "2" }
 `query()` is reactive — read it inside a binding (`${() => router.query().q}`)
 and it updates when the URL changes. Query values are decoded, attacker-controlled
 strings — treat them like params.
+
+`path()` and `query()` update independently: code that reads only `path()` doesn't re-run
+when just the query or hash changes, and an unchanged query keeps the same object (so it
+doesn't wake `query()` readers). A query- or hash-only change also keeps the same page
+mounted. *(Path/query independence: next release.)*
 
 ## Hosting under a sub-path (`base`)
 

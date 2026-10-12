@@ -2,6 +2,38 @@
 
 All notable changes to `@zoijs/router` are documented here.
 
+## Unreleased
+
+Found while building the Zoijs Insight reference app. Additive; no breaking changes.
+
+### Added
+- **`go(path, { replace: true })`** replaces the current history entry (`history.replaceState`)
+  instead of adding one — for redirects and frequently changing URL state (search-as-you-type,
+  filters, stepping through records), so Back skips the intermediate states. It scrolls only to a
+  `#hash` target, or to the top when the page changed. `go(path)` is unchanged.
+- **`href(path)`, `onLinkClick(path)`, `isActive(path, { exact })`** — build a link with your own
+  classes, icons, `data-`/ARIA attributes or extra handlers (`html` can't spread attributes, so
+  `link()` can't take them): `` html`<a class="nav" href=${router.href("/x")} onclick=${router.onLinkClick("/x")}>…</a>` ``.
+  `onLinkClick` leaves modified/middle clicks, `target` (other than `_self`), `download`,
+  already-handled events and external URLs to the browser. `isActive` is reactive: exact by
+  default (and a query in the target must match), `{ exact: false }` also matches sub-paths.
+  `link()` is now built from the same three.
+
+### Fixed
+- **`path()` readers no longer re-run on query- or hash-only navigation**, and an equal query
+  doesn't wake `query()` readers (it keeps the same object). Path and query were one reactive
+  cell replaced on every navigation.
+- **A route component that returns `null` renders an empty outlet** instead of throwing
+  "expected an html`…` template result" — as `RouteComponent`'s type always allowed. This also
+  fixes routers **without a `"*"` route**, whose default not-found component returns `null`:
+  an unmatched URL used to throw.
+- **`link()` content is typed as text or template content** (`LinkContent`); it was typed
+  `text: string` although templates always rendered.
+- **`link()` to an external URL keeps its `href` under a `base`** (`link("https://…")` with
+  `{ base: "/app" }` rendered `href="/apphttps://…"`).
+- **`link()`'s `aria-current` compares the query when the target has one**: `link("/search?q=a")`
+  is current on `/search?q=a` (it never was), not on `/search?q=b`.
+
 ## 0.6.0 — 2026-10-05
 
 ### Security

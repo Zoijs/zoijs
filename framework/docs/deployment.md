@@ -193,8 +193,11 @@ real-world traps are worth knowing. Each was hit by a production Zoijs app; all 
 
 Under `style-src 'self'` the browser blocks **inline `style="…"` attributes** (and they show up in
 pre-rendered HTML, so the block is visible on first load). Zoijs itself doesn't add inline styles,
-with two things to know: your own `style=${…}` bindings are set as `style` attributes, so they need
-`style-src-attr 'unsafe-inline'` (or use classes instead); and `@zoijs/router`'s `view()` outlet:
+with two things to know: your own `style=${…}` bindings are applied through the CSSOM, which the
+policy allows *(next release; on core ≤ 1.9.0 they are `style` attributes and need
+`style-src-attr 'unsafe-inline'` — or use classes)*, though server-rendered HTML carries them as
+attributes until hydration ([details](production-security.md#style-attributes)); and
+`@zoijs/router`'s `view()` outlet:
 
 - On **`@zoijs/router` ≥ 0.5.0** the outlet is a class (`<div class="zoijs-router-outlet">`), not an
   inline style. Add one CSS rule to keep it layout-transparent:

@@ -10,9 +10,40 @@ export type RouteParams = Record<string, string>;
 
 /**
  * A route component: a function that receives the matched params and returns an
- * `html` template (or `null` to render nothing).
+ * `html` template, or `null` to render nothing (an empty outlet).
  */
 export type RouteComponent = (params: RouteParams) => TemplateResult | null;
+
+/**
+ * What a link can show: text, a number, a template (icons, markup), a DOM node, or a function
+ * returning one of those (reactive) — anything a `${…}` child slot accepts.
+ */
+export type LinkContent =
+  | string
+  | number
+  | TemplateResult
+  | Node
+  | null
+  | (() => string | number | TemplateResult | Node | null);
+
+/** Options for {@link Router.go}. */
+export interface GoOptions {
+  /**
+   * Replace the current history entry instead of adding one (`history.replaceState`) — for
+   * redirects and frequently changing URL state, so Back skips the intermediate states.
+   * Scrolls only to a `#hash` target, or to the top when the page changed. Default `false`.
+   */
+  replace?: boolean;
+}
+
+/** Options for {@link Router.isActive}. */
+export interface ActiveOptions {
+  /**
+   * `true` (default): the same path and, when the target has a query, the same query.
+   * `false`: the path or any sub-path (`"/docs"` matches `"/docs/intro"`); the query is ignored.
+   */
+  exact?: boolean;
+}
 
 /** A `{ pattern: component }` map. Use `"*"` for the not-found route. */
 export type Routes = Record<string, RouteComponent>;
@@ -60,17 +91,35 @@ export interface RouterOptions {
 export interface Router {
   /** The outlet the current page renders into. Place it once: `${router.view()}`. */
   view(): Element;
-  /** An `<a>` that navigates without a full page reload. */
-  link(path: string, text: string): TemplateResult;
   /**
-   * Navigate programmatically (pushes a history entry). Takes an app path (`"/users/1"`,
-   * `"?tab=2"`, `"#top"`); an absolute URL, any scheme, or `//host` throws a `TypeError` —
-   * use `location.assign()` to leave the app.
+   * An `<a>` that navigates without a full page reload, with `aria-current="page"` while
+   * {@link Router.isActive}. `content` is text or any template content. For your own classes,
+   * attributes or handlers, build the `<a>` from {@link Router.href} and {@link Router.onLinkClick}.
    */
-  go(path: string): void;
-  /** The current path (reactive). */
+  link(path: string, content: LinkContent): TemplateResult;
+  /**
+   * The `href` for a link to `path`: an app path gets the `base` prepended; an external URL
+   * (`scheme:` or `//host`) is returned unchanged.
+   */
+  href(path: string): string;
+  /**
+   * A click handler that navigates to `path` client-side — `onclick=${router.onLinkClick(path)}`
+   * on your own `<a href=${router.href(path)}>`. Modified or non-primary clicks, a `target`
+   * other than `_self`, `download`, an already-handled event, and external URLs are left to the
+   * browser.
+   */
+  onLinkClick(path: string): (event: MouseEvent) => void;
+  /** Whether `path` is the current route (reactive) — e.g. for `aria-current` or a class. */
+  isActive(path: string, options?: ActiveOptions): boolean;
+  /**
+   * Navigate programmatically. Pushes a history entry, or replaces the current one with
+   * `{ replace: true }`. Takes an app path (`"/users/1"`, `"?tab=2"`, `"#top"`); an absolute URL,
+   * any scheme, or `//host` throws a `TypeError` — use `location.assign()` to leave the app.
+   */
+  go(path: string, options?: GoOptions): void;
+  /** The current path (reactive). Doesn't change — or wake readers — on query/hash-only navigation. */
   path(): string;
-  /** The current query string as a plain object (reactive). */
+  /** The current query string as a plain object (reactive; an equal query keeps the same object). */
   query(): RouteParams;
   /**
    * Resolve a path to its matched route **without rendering** — `{ component, params }`.

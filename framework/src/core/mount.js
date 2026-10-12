@@ -4,7 +4,7 @@
 // an unmount() that disposes that scope (every effect, computed, list item, and
 // event listener created under it) and detaches the DOM.
 
-import { render } from "./renderer.js";
+import { render, inSvg } from "./renderer.js";
 import { resolveTarget } from "../utils/dom.js";
 import { createOwner, runWithOwner, disposeOwner } from "../reactivity/owner.js";
 
@@ -27,7 +27,7 @@ export function mount(component, target, options) {
     const result = typeof component === "function" ? component() : component;
     // Hydration binds to el's existing children in place; a fresh mount builds a
     // detached fragment we then swap in.
-    node = render(result, hydrate ? el : undefined).node;
+    node = render(result, hydrate ? el : undefined, inSvg(el)).node;
   });
   if (!hydrate) el.replaceChildren(node);
 

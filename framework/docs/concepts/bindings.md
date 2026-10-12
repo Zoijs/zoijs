@@ -93,11 +93,31 @@ It runs once, isn't reactive, and can return a cleanup function. See
 
 ## SVG
 
-SVG works inside `html` as long as it's wrapped in `<svg>…</svg>`. Dynamic attributes (including `xlink:href`) are handled.
+SVG works inside `html`. Dynamic attributes (including `xlink:href`) are handled.
 
 ```js
 html`<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r=${() => radius.get()} /></svg>`;
 ```
+
+Anything you insert **inside** an `<svg>` — `each()` items, nested or conditional templates,
+components — is parsed as SVG, so lists of shapes and reusable chart parts just work
+*(next release; earlier versions needed every SVG element inside one `<svg>` literal)*:
+
+```js
+const Bar = (d) => html`<rect x=${d.x} y=${() => 100 - d.value} width="8" height=${() => d.value} />`;
+
+html`<svg viewBox="0 0 100 100" role="img" aria-label="Sales by month">
+  <defs>
+    <linearGradient id="fill">${each(() => stops.get(), (s) => s.offset, (s) => html`<stop offset=${s.offset} stop-color=${s.color} />`)}</linearGradient>
+  </defs>
+  <g fill="url(#fill)">${each(() => bars.get(), (d) => d.id, Bar)}</g>
+  ${() => (showAverage.get() ? html`<line x1="0" x2="100" y1=${average} y2=${average} stroke="currentColor" />` : null)}
+</svg>`;
+```
+
+Keyed updates (insert, reorder, remove), attributes — including case-sensitive ones like
+`viewBox` — and cleanup behave exactly as in HTML. Content inside `<foreignObject>` is HTML
+again, and `mount(App, svgElement)` parses `App` as SVG.
 
 ---
 

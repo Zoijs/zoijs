@@ -193,6 +193,13 @@ the SVG namespace and fix this.
 `docs/scope.md` §7 is updated to record `svg` as **deferred with a documented
 workaround**, and `effect` as **accepted**, so neither is relitigated.
 
+> **Update (next release).** The composition limitation above is fixed without an `svg` export:
+> the renderer parses content inserted under an SVG element (other than `<foreignObject>`) in SVG
+> context, inheriting that context at a fragment's root — so `each()` items, nested and
+> conditional templates, and components inside an `<svg>` draw. Found by the Zoijs Insight
+> reference app (L1); see `CHANGELOG.md` and `tests/svg-context.test.js`. The `svg` tag remains
+> unnecessary.
+
 ## 7. Alternatives considered
 
 - **Ship neither (status quo).** Rejected for `effect`: the binding-hack workaround

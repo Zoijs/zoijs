@@ -211,7 +211,7 @@ export function computed(fn, equals = Object.is) {
     state: DIRTY,
     isEffect: false,
     disposed: false,
-    equals,
+    equals: () => ((node.equals = equals), false), // first value = a change; then installs equals
     owner: getOwner(), // creating scope — each run's child scope nests under this
     runOwner: null, // the current run's scope (onCleanup + nested primitives), replaced per run
   };

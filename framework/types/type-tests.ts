@@ -31,6 +31,10 @@ const f: string = fullName.get();
 fullName.set("x");
 
 const isEven: Computed<boolean> = computed<boolean>(() => count.get() % 2 === 0);
+// a custom equals compares two computed values of T (L3: never called with undefined first)
+const box = computed(() => ({ n: count.get() }), (a, b) => a.n === b.n);
+const boxN: number = box.get().n;
+void boxN;
 const b: boolean = isEven.peek();
 
 // ---- each<T> ----------------------------------------------------------------

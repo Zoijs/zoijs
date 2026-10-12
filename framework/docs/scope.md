@@ -236,9 +236,9 @@ doesn't relitigate them:
   the `serialize` / `{ initial }` data pattern, not a framework that runs your loaders.
 - **An optional template compiler** — must be behavior-identical and never required.
 - **Public `effect`** export — **shipped in 1.2.0** (RFC 0003); the public
-  completion of the reactive trio. An optional **`svg`** helper — **deferred**
-  (RFC 0003 §6: rooted `<svg>` already renders; only dynamic-SVG composition is
-  affected; documented workaround). An **error-boundary** helper (`boundary`) —
+  completion of the reactive trio. An optional **`svg`** helper — **not needed**
+  (RFC 0003 §6 deferred it; the next release parses content inserted inside an
+  `<svg>` in SVG context, which fixes dynamic-SVG composition with no new export). An **error-boundary** helper (`boundary`) —
   **shipped in 1.3.0** (RFC 0004): catches a synchronous setup/render throw and
   renders a fallback.
 - **A generic guarded-route helper in `@zoijs/router`** — only if the auth-guard

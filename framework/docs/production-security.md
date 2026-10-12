@@ -143,7 +143,7 @@ Add only what your app actually uses, as exact origins (never `*`):
 | renders `data:image/*` URLs (Zoijs allows raster `data:` images in `src`) | `data:` to `img-src` |
 | submits a `<form>` to another origin | that exact origin to `form-action` |
 | uses web fonts from another origin | that origin to `font-src` |
-| binds `style` or writes static `style="…"` attributes | `style-src-attr 'unsafe-inline'` — see [style attributes](#style-attributes) |
+| writes static `style="…"` attributes, server-renders bound styles that must show before hydration, or binds `style` on core ≤ 1.9.0 | `style-src-attr 'unsafe-inline'` — see [style attributes](#style-attributes) |
 | server-renders inline data with an executable `<script>` | a per-request nonce — see [8](#8-embed-serialize-output-only-in-a-script-body) |
 
 ### CDN vs self-hosted
@@ -185,12 +185,22 @@ into a `Link` header — the map is discarded. See [Deployment](deployment.md#im
 
 ### Style attributes
 
-`style-src 'self'` also blocks inline `style="…"` **attributes**, including ones Zoijs sets:
-a `style=${…}` binding (string or object form) is applied with `setAttribute("style", …)`,
-and `@zoijs/ssr` emits `style="…"` in its HTML. If your templates use `style` attributes,
-add `style-src-attr 'unsafe-inline'` — it allows inline style attributes only, not `<style>`
-elements or stylesheets. Otherwise, use classes (and CSS custom properties set from a class)
-and keep `style-src 'self'`. The router outlet needs no exception on `@zoijs/router` ≥ 0.5.0
+`style-src 'self'` also blocks inline `style="…"` **attributes**. What that means for Zoijs:
+
+- **`style=${…}` bindings** (object, string or mixed form) are applied through the CSSOM
+  (`el.style.cssText`), which CSP doesn't govern — they work under `style-src 'self'` with no
+  exception *(next release; core ≤ 1.9.0 used `setAttribute("style", …)` and needed
+  `style-src-attr 'unsafe-inline'`)*. This changes how the value is applied, not what is
+  allowed: the object form still validates every declaration, and a string is still applied
+  verbatim — bind strings only from data you control.
+- **Static `style="…"` in your markup** is not reliable under a strict policy: engines differ
+  (Firefox drops it, Chromium applies it but reports a violation). Use classes, or a binding.
+- **Server-rendered HTML**: `@zoijs/ssr` emits bound styles as `style="…"` attributes, which the
+  browser blocks while parsing; the bindings re-apply them through the CSSOM when the page
+  hydrates. If those styles must be visible before hydration, add `style-src-attr 'unsafe-inline'`.
+
+`style-src-attr 'unsafe-inline'` allows inline style attributes only, not `<style>` elements or
+stylesheets. The router outlet needs no exception on `@zoijs/router` ≥ 0.5.0
 ([details](deployment.md#a-strict-style-src-self-and-the-router-outlet)).
 
 ### Trusted Types (optional hardening)

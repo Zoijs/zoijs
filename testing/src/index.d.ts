@@ -112,8 +112,15 @@ export const fireEvent: FireEvent;
 /** A controllable stand-in for an `@zoijs/router` instance. */
 export interface MockRouter {
   view(): Element;
-  link(to: string, text: string): unknown;
-  go(to: string): void;
+  link(to: string, content: unknown): unknown;
+  /** Returns `to` unchanged (the mock has no `base`). */
+  href(to: string): string;
+  /** A click handler that calls `go(to)` on a plain left-click. */
+  onLinkClick(to: string): (event: MouseEvent) => void;
+  /** Path comparison like the router's (the query is not compared). Reactive. */
+  isActive(to: string, options?: { exact?: boolean }): boolean;
+  /** Sets the mock's path; `{ replace }` is accepted (the mock keeps no history). */
+  go(to: string, options?: { replace?: boolean }): void;
   path(): string;
   query(): Record<string, string>;
   destroy(): void;

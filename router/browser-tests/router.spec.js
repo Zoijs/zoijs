@@ -67,3 +67,70 @@ test("interceptLinks: a PLAIN <a> navigates client-side with no full reload", as
   await expect(page).toHaveURL(/\/about$/);
   expect(await page.evaluate(() => window.__noReload)).toBe(true); // never reloaded
 });
+
+// ---- L4–L6, L8 (found by Zoijs Insight) ------------------------------------------------------
+const fixture = "/router/browser-tests/fixtures/links.html";
+
+test("custom link (href/onLinkClick/isActive) and rich link content navigate client-side", async ({ page }) => {
+  await page.goto(fixture);
+  await page.evaluate(() => (window.__noReload = true));
+  const custom = page.locator("a.custom");
+  await expect(custom).toHaveAttribute("href", fixture + "/reports");
+  await custom.click();
+  await expect(page.locator("main h1")).toHaveText("Reports");
+  await expect(custom).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "Report 7", exact: true }).click();
+  await expect(page.locator("main h1")).toHaveText("Report 7");
+  await expect(custom).toHaveAttribute("aria-current", "page"); // exact: false → sub-path
+  expect(await page.evaluate(() => window.__noReload)).toBe(true);
+});
+
+test("keyboard: Enter on a focused link navigates", async ({ page }) => {
+  await page.goto(fixture);
+  await page.locator("a.custom").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("main h1")).toHaveText("Reports");
+});
+
+test("go(path, { replace: true }) adds no history entry; Back skips replaced states", async ({ page }) => {
+  await page.goto(fixture);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page.locator("main h1")).toHaveText("Home");
+  const n = await page.evaluate(() => history.length);
+  await page.locator("a.custom").click(); // push
+  await expect(page.locator("main h1")).toHaveText("Reports");
+  await page.evaluate(() => {
+    window.__router.go("/reports?q=a", { replace: true });
+    window.__router.go("/reports?q=ab", { replace: true });
+  });
+  expect(await page.evaluate(() => history.length)).toBe(n + 1);
+  await expect(page).toHaveURL(/\/reports\?q=ab$/);
+  await page.goBack();
+  await expect(page.locator("main h1")).toHaveText("Home");
+  await page.goForward();
+  await expect(page).toHaveURL(/\/reports\?q=ab$/);
+  await expect(page.locator("main h1")).toHaveText("Reports");
+});
+
+test("path() readers don't re-run on query-only navigation (including Back/Forward)", async ({ page }) => {
+  await page.goto(fixture);
+  await page.locator("a.custom").click();
+  await expect(page.locator("main h1")).toHaveText("Reports");
+  const before = await page.evaluate(() => ({ ...window.__counts }));
+  await page.evaluate(() => window.__router.go("/reports?page=2"));
+  await page.goBack();
+  await expect(page).toHaveURL(/\/reports$/);
+  await expect.poll(() => page.evaluate(() => window.__counts.query)).toBe(before.query + 2);
+  expect(await page.evaluate(() => window.__counts.path)).toBe(before.path);
+});
+
+test("a route that returns null renders an empty outlet; navigation continues", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(fixture);
+  await page.getByRole("link", { name: "Empty", exact: true }).click();
+  await expect(page.locator("main h1")).toHaveCount(0);
+  await page.locator("a.custom").click();
+  await expect(page.locator("main h1")).toHaveText("Reports");
+  expect(errors).toEqual([]);
+});
