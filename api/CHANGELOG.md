@@ -4,8 +4,10 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
-Proposed as **0.5.0** (additive: new exported types; no runtime change). Existing JavaScript and
-TypeScript code keeps working unchanged.
+## 0.5.0 — 2026-10-12
+
+Additive: new exported types; no runtime change. Existing JavaScript and TypeScript code keeps
+working unchanged.
 
 ### Added — TypeScript: URLs type their params
 - A URL written as a string literal now types its `/:name` placeholders: `params` names are checked
