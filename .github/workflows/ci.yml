@@ -14,12 +14,16 @@ on:
 permissions:
   contents: read
 
+# Runners are pinned to an exact image (ubuntu-24.04), never the floating ubuntu-latest label:
+# that label moves to a new Ubuntu release on GitHub's schedule (26.04 from 2026-10-19), which
+# would change the OS under CI and releases without a commit. Move to a new image deliberately, in
+# a PR whose CI proves it (scripts/tests/ci-consistency.test.mjs enforces the pin).
 jobs:
   # Fast feedback: every package's unit/DOM tests + TypeScript checks, on a
   # small Node matrix. Uses the root scripts (npm --prefix under the hood).
   unit:
     name: Unit + Types (Node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +58,7 @@ jobs:
   # the digest pins it immutably (update both together when bumping Playwright).
   browser:
     name: Browser (Chromium / Firefox / WebKit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
     # GitHub sets HOME=/github/home (owned by pwuser) for container jobs, but the
@@ -90,7 +94,7 @@ jobs:
     name: CI passed
     if: ${{ always() }}
     needs: [unit, browser]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Unit and browser jobs both succeeded
         run: |
