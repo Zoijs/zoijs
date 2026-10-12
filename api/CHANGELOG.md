@@ -4,6 +4,10 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
+## 0.4.1 — 2026-10-12
+
+Patch: no API changes.
+
 ### Fixed — auth cancellation edges (Phase 12 audit)
 - A request cancelled in the few microtasks between its token arriving and its first attempt
   starting is no longer sent: a mutation `reset()` (or unmount) in that window could still send
