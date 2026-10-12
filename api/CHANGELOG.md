@@ -4,6 +4,22 @@ All notable changes to `@zoijs/api` are documented here.
 
 ## [Unreleased]
 
+### Fixed — auth cancellation edges (Phase 12 audit)
+- A request cancelled in the few microtasks between its token arriving and its first attempt
+  starting is no longer sent: a mutation `reset()` (or unmount) in that window could still send
+  the request, and a disposed or superseded GET still called `fetch()` (with an aborted signal).
+  Liveness is now re-checked right before sending.
+- The `auth` provider is no longer called for a request that was already cancelled before the
+  provider's turn came (e.g. a resource disposed, or a mutation `reset()`, in the same tick it
+  started) — so a token endpoint isn't hit for a request nobody wants.
+
+### Docs
+- The "Recovering from a 401" example could refresh forever against a server that kept answering
+  401 (each reload's 401 is a new error, so "once per error" never stopped). It now recovers at
+  most once until a load succeeds, and a test runs it.
+- Token redaction's limits are stated: only exact occurrences of the token are replaced, not
+  encoded, truncated, re-cased or split forms.
+
 ## 0.4.0 — 2026-10-12
 
 Additive: `api()` and clients without `auth` are unchanged.

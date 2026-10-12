@@ -605,6 +605,7 @@ function get(client, url, options) {
     const send = () => withRetries(attemptOnce, retry, retryDelay, alive, waits.sleep);
     const sent = client && client.auth
       ? authorize(client, req.path, req.entries, METHOD, alive, ac ? ac.signal : undefined).then((t) => {
+          if (!alive()) throw CANCELLED; // cancelled in the microtasks since the token arrived
           token = t;
           return send();
         })
@@ -903,11 +904,13 @@ function mutation(client, method, url, options) {
     // newer non-exclusive run doesn't — without auth, this run's first request would already be
     // on its way — it only stops this run's retries, as before.
     const epoch = resets;
+    const live = () => !torn && epoch === resets;
     const waiting = typeof AbortController === "function" ? new AbortController() : null;
     if (waiting) authWaits.add(waiting);
-    return authorize(client, path, entries, method, () => !torn && epoch === resets, waiting ? waiting.signal : undefined)
+    return authorize(client, path, entries, method, live, waiting ? waiting.signal : undefined)
       .finally(() => waiting && authWaits.delete(waiting))
       .then((t) => {
+        if (!live()) throw CANCELLED; // reset/unmounted in the microtasks since the token arrived
         token = t;
         return sendAll();
       });
@@ -1027,7 +1030,8 @@ async function authorize(client, path, entries, method, alive, cancelled) {
   const url = safeUrl(resolveTarget(client, path, entries, method));
   const ctl = typeof AbortController === "function" ? new AbortController() : null;
   let halt;
-  const halted = new Promise((resolve) => (halt = resolve)); // → "cancelled" | "timeout"
+  let stopped = null; // why the wait ended early: "cancelled" | "timeout" (the first one wins)
+  const halted = new Promise((resolve) => (halt = (why) => resolve((stopped = stopped || why))));
   const onCancel = () => {
     if (ctl) ctl.abort();
     halt("cancelled");
@@ -1048,7 +1052,7 @@ async function authorize(client, path, entries, method, alive, cancelled) {
   try {
     outcome = await Promise.race([
       Promise.resolve()
-        .then(() => client.auth(context))
+        .then(() => (stopped ? undefined : client.auth(context))) // cancelled before it was even asked: don't
         .then((value) => ({ value }), () => ({ failed: true })), // a late rejection is handled, never unhandled
       halted.then((why) => ({ why })),
     ]);
@@ -1056,8 +1060,8 @@ async function authorize(client, path, entries, method, alive, cancelled) {
     if (timer !== null) clearTimeout(timer);
     if (cancelled) cancelled.removeEventListener("abort", onCancel);
   }
-  if (outcome.why === "cancelled" || !alive()) throw CANCELLED;
-  if (outcome.why === "timeout") throw new ApiError(`${method} request not sent: the auth provider timed out`, { type: "auth", method, url });
+  if (stopped === "cancelled" || !alive()) throw CANCELLED;
+  if (stopped === "timeout") throw new ApiError(`${method} request not sent: the auth provider timed out`, { type: "auth", method, url });
   if (outcome.failed) throw new ApiError(`${method} request not sent: the auth provider failed`, { type: "auth", method, url });
   const value = outcome.value;
   if (value === null || value === undefined) return undefined; // anonymous, by design

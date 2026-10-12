@@ -296,7 +296,7 @@ api.post("/api/sync", { invalidate: invoice });
 
 // @ts-expect-error — baseURL is required
 createApi({});
-// @ts-expect-error — no headers (authentication is not part of createApi yet)
+// @ts-expect-error — no headers (a Bearer token goes through `auth`)
 createApi({ baseURL: "https://api.example.com", headers: { Authorization: "Bearer x" } });
 // @ts-expect-error — credentials can't be configured
 createApi({ baseURL: "https://api.example.com", credentials: "include" });
