@@ -39,6 +39,10 @@ html`<button disabled=${() => busy.get()}>Save</button>`; // boolean attribute
 - **Numbers** and other values are converted with `String()`. An **array or plain object**
   becomes `"a,b"` / `"[object Object]"` — almost always a mistake, so development mode warns.
   Use `style=${{ … }}` (the [object form](../security.md#a-note-on-style)) for styles.
+- **`class`** is set as written on the first render; after that a binding adds and removes only
+  the class names *it* set, so classes other code adds (a UI library's JS, `el.classList.add`)
+  survive updates *(next release; earlier versions rewrote the whole attribute)*. `false`/`null`
+  remove the binding's names, and the attribute once nothing is left.
 - Name attributes the HTML way. Lit-style prefixes (`.value=`, `?disabled=`, `@click=`) aren't
   supported and throw when the template compiles: `value`/`checked` already use the property,
   booleans use `true`/`false` as above, and events use `onclick=${handler}`.
@@ -118,6 +122,10 @@ html`<svg viewBox="0 0 100 100" role="img" aria-label="Sales by month">
 Keyed updates (insert, reorder, remove), attributes — including case-sensitive ones like
 `viewBox` — and cleanup behave exactly as in HTML. Content inside `<foreignObject>` is HTML
 again, and `mount(App, svgElement)` parses `App` as SVG.
+
+The same goes for **MathML**: content inserted inside `<math>` is MathML, while the text
+elements (`<mi>`, `<mo>`, `<mn>`, `<ms>`, `<mtext>`) hold HTML. And `unsafeHTML()` markup placed
+inside an `<svg>` or `<math>` is parsed in that namespace. *(next release)*
 
 ---
 

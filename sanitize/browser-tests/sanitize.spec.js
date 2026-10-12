@@ -73,3 +73,30 @@ test("sanitized content cannot clobber window globals", async ({ page }) => {
   expect(r.namespaced).toBe(true);
   expect(r.href).toBe("#user-content-__DATA__");
 });
+
+// Trusted Types: sanitize() parses through its own `zoijs-sanitize` policy, so it works on a page
+// enforcing `require-trusted-types-for 'script'` that lists the policy — and fails with a clear,
+// actionable error (never a silent bypass) on one that doesn't. Trusted Types is Chromium-only.
+test.describe("under enforced Trusted Types", () => {
+  test("works when the CSP allows zoijs-sanitize (no violations, nothing executes)", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "Trusted Types is implemented in Chromium only");
+    await page.goto("/sanitize/browser-tests/fixtures/tt-allowed.html");
+    await page.waitForFunction(() => window.__r && window.__r.done);
+    await page.waitForTimeout(60); // let any onerror fire, if something slipped through
+    const r = await page.evaluate(() => ({ ...window.__r, violations: window.__violations, xss: window.__xss === true }));
+    expect(r.error).toBeNull();
+    expect(r.html).toBe('<p id="user-content-x">ok <b>bold</b></p><img src="x">');
+    expect(r.violations).toEqual([]);
+    expect(r.xss).toBe(false);
+    await expect(page.locator("#app article b")).toHaveText("bold");
+  });
+
+  test("fails with a clear error when the CSP doesn't list zoijs-sanitize", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "Trusted Types is implemented in Chromium only");
+    await page.goto("/sanitize/browser-tests/fixtures/tt-missing.html");
+    await page.waitForFunction(() => window.__r && window.__r.done);
+    const r = await page.evaluate(() => window.__r);
+    expect(r.error).toMatch(/add it to your CSP: trusted-types zoijs zoijs-sanitize/);
+    expect(r.html).toBeNull();
+  });
+});

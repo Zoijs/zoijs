@@ -34,7 +34,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 |---|---|---|
 | Secure by default (no opt-in needed) | ✅ | Inert text, URL-scheme allowlist, function-only handlers; raw HTML only through the explicit, lint-flagged `unsafeHTML()` opt-in (`@zoijs/core/unsafe`) — [`docs/security.md`](security.md) |
 | XSS resistance is tested, not assumed | ✅ | [`tests/xss-corpus.test.js`](../tests/xss-corpus.test.js), [`tests/security.test.js`](../tests/security.test.js), [`browser-tests/security.spec.js`](../browser-tests/security.spec.js) |
-| Strict script CSP / Trusted Types | ✅ | [`browser-tests/csp.spec.js`](../browser-tests/csp.spec.js) (real-browser gate). Documented allowances: inline import-map hash/nonce; `style-src-attr 'unsafe-inline'` only for static `style="…"` (bindings use the CSSOM from the next release — [`csp.spec.js`](../browser-tests/csp.spec.js) enforces `style-src 'self'` in all three engines); `@zoijs/sanitize` fails under enforced Trusted Types — [production security](production-security.md) |
+| Strict script CSP / Trusted Types | ✅ | [`browser-tests/csp.spec.js`](../browser-tests/csp.spec.js) (real-browser gate). Documented allowances: inline import-map hash/nonce; `style-src-attr 'unsafe-inline'` only for static `style="…"` (bindings use the CSSOM from the next release — [`csp.spec.js`](../browser-tests/csp.spec.js) enforces `style-src 'self'` in all three engines); `@zoijs/sanitize` needs its `zoijs-sanitize` policy listed under enforced Trusted Types (next release; earlier versions fail) — [production security](production-security.md) |
 | One escaping implementation (server = client) | ✅ | `@zoijs/ssr` reuses core predicates — [`src/server.js`](../src/server.js), [RFC 0008](rfcs/0008-ssr.md) |
 | No `eval` / `new Function` / runtime compilation | ✅ | Greppable absence; CSP gate above proves it |
 | Disclosure policy + supported versions | ✅ | [`SECURITY.md`](../SECURITY.md) (private reporting, 72h ack) |
@@ -54,7 +54,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 |---|---|---|
 | Fine-grained updates, no Virtual DOM | ✅ | One value → one node; setup runs once — [`docs/concepts/`](concepts/) |
 | Minimal DOM moves on reorder | ✅ | LIS reconciliation — [`tests/lis.test.js`](../tests/lis.test.js) (move-count gate) |
-| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check` — a temporary Phase 1 budget on the gzipped, commented client source (27,136 B), enforced in CI; production/minified budgets come with PERF-2 |
+| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check` — a temporary Phase 1 budget on the gzipped, commented client source (29,184 B), enforced in CI; production/minified budgets come with PERF-2 |
 | Reproducible benchmarks | ✅ | [`bench/`](../../bench/) (size + DOM micro-benchmarks) |
 
 ### 5. Supply chain

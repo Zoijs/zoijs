@@ -74,6 +74,25 @@ object. *(Next release; earlier versions returned every function field re-bound,
 function without its properties.)* Call methods as `item.method()` rather than destructuring
 them off the item.
 
+The item also behaves like the object when you copy or inspect it: `{ ...todo, done: true }`,
+`Object.keys(todo)` and `JSON.stringify(todo)` see the current item's fields, an array item
+passes `Array.isArray`, and `instanceof` checks its class *(next release; earlier versions
+returned `{}` / `[]` for these — so a spread copy silently lost every field)*. It is still a
+proxy, so `structuredClone(todo)` throws; clone a copy instead: `structuredClone({ ...todo })`.
+
+### Items with several root nodes
+
+An item's template may have several top-level nodes and top-level bindings — a row plus a
+conditional detail row, or a nested list:
+
+```js
+(row) => html`<tr>…</tr>${() => (row.open ? html`<tr class="detail">…</tr>` : null)}`
+```
+
+The item's nodes are tracked as one range, so whatever a top-level binding currently shows
+moves and disappears together with its item *(next release; earlier versions could leave a
+detail row behind on reorder — wrapping each item in one element avoided it)*.
+
 ## Common mistakes
 
 - **Using the array index as the key** → breaks reuse on reorder. Use a stable id.

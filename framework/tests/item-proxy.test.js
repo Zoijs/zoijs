@@ -95,3 +95,72 @@ test("writes through a frozen item fail like a direct strict-mode write", () => 
     seen.get(1).n = 2;
   }, TypeError);
 });
+
+// ---- enumeration, arrays, instanceof (found while reviewing L2) ------------------------------
+// The proxy's target was an empty object, so {...item}, Object.keys(item) and JSON.stringify(item)
+// all saw nothing — `save({ ...todo, done: true })` silently sent { done: true }.
+
+test("spread, Object.keys/entries and JSON.stringify see the live item", () => {
+  const { seen, list } = capture([{ id: 1, text: "a", done: false }]);
+  const x = seen.get(1);
+  assert.deepEqual({ ...x, done: true }, { id: 1, text: "a", done: true });
+  assert.deepEqual(Object.keys(x), ["id", "text", "done"]);
+  assert.deepEqual(Object.entries(x), [["id", 1], ["text", "a"], ["done", false]]);
+  assert.equal(JSON.stringify(x), '{"id":1,"text":"a","done":false}');
+  assert.deepEqual(Object.assign({}, x), { id: 1, text: "a", done: false });
+  list.set([{ id: 1, text: "b", extra: 2 }]); // same key, new object
+  flush();
+  assert.deepEqual({ ...x }, { id: 1, text: "b", extra: 2 });
+});
+
+test("non-enumerable, symbol and frozen properties follow the item's own descriptors", () => {
+  const sym = Symbol("s");
+  const item = Object.freeze(Object.defineProperties({ id: 1, [sym]: 1 }, { hidden: { value: 1, enumerable: false } }));
+  const { seen } = capture([item]);
+  const x = seen.get(1);
+  assert.deepEqual(Object.keys(x), ["id"]);
+  assert.ok(Reflect.ownKeys(x).includes(sym));
+  assert.equal(Object.getOwnPropertyDescriptor(x, "hidden").enumerable, false);
+  assert.equal(x.hidden, 1);
+});
+
+test("array items are arrays (Array.isArray, length, iteration, spread, JSON)", () => {
+  let seen;
+  const list = createState([[1, 2]]);
+  mount(() => html`<ul>${each(() => list.get(), (a) => a[0], (a) => ((seen = a), html`<li></li>`))}</ul>`, host());
+  assert.equal(Array.isArray(seen), true);
+  assert.equal(seen.length, 2);
+  assert.deepEqual([...seen], [1, 2]);
+  assert.equal(JSON.stringify(seen), "[1,2]");
+  assert.deepEqual(seen.map((n) => n * 2), [2, 4]);
+  list.set([[1, 2, 3]]);
+  flush();
+  assert.equal(seen.length, 3);
+  assert.equal(JSON.stringify(seen), "[1,2,3]");
+  const frozen = createState([Object.freeze([7, 8])]);
+  let f;
+  mount(() => html`<ul>${each(() => frozen.get(), (a) => a[0], (a) => ((f = a), html`<li></li>`))}</ul>`, host());
+  assert.deepEqual([...f], [7, 8], "a frozen array item still satisfies the proxy invariants");
+});
+
+test("instanceof and the prototype follow the item", () => {
+  class Point {
+    constructor(id) {
+      this.id = id;
+    }
+  }
+  const { seen } = capture([new Point(1), { id: 2, when: new Date(0) }]);
+  assert.ok(seen.get(1) instanceof Point);
+  assert.equal(Object.getPrototypeOf(seen.get(1)), Point.prototype);
+  assert.ok(seen.get(2).when instanceof Date);
+});
+
+test("enumeration inside a binding is reactive", () => {
+  const el = host();
+  const list = createState([{ id: 1, a: 1 }]);
+  mount(() => html`<ul>${each(() => list.get(), (x) => x.id, (x) => html`<li>${() => Object.keys(x).join(",")}</li>`)}</ul>`, el);
+  assert.equal(el.querySelector("li").textContent, "id,a");
+  list.set([{ id: 1, a: 1, b: 2 }]);
+  flush();
+  assert.equal(el.querySelector("li").textContent, "id,a,b");
+});

@@ -19,14 +19,15 @@ import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivit
 import { isDev } from "../reactivity/env.js";
 import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
 import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
-import { svgTemplate } from "../utils/dom.js";
+import { foreignTemplate } from "../utils/dom.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
-const SVG_NS = "http://www.w3.org/2000/svg";
+const NS = { svg: "http://www.w3.org/2000/svg", math: "http://www.w3.org/1998/Math/MathML" };
 
-// Content inserted under SVG (not <foreignObject>) parses as SVG; a fragment root inherits it.
-export const inSvg = (parent, inherited) =>
-  parent.nodeType === 1 ? parent.namespaceURI === SVG_NS && parent.localName !== "foreignObject" : inherited;
+// Content inserted under SVG/MathML parses as SVG/MathML ("svg"/"math"; "" = HTML) — except in
+// the HTML integration points (<foreignObject>, <mi>, <mo>, …). A fragment root inherits it.
+export const nsOf = (parent, inherited) =>
+  parent.nodeType === 1 ? (/^(foreignObject|m[ions]|mtext)$/.test(parent.localName) ? "" : Object.keys(NS).find((k) => NS[k] === parent.namespaceURI) || "") : inherited;
 const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
 const noop = () => {};
 
@@ -40,6 +41,7 @@ const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
 // Arrays / plain objects on ordinary attributes stringify to "a,b" / "[object Object]":
 // warn once per element in dev. Rendering is unchanged; URL, Date, … have real toStrings.
 const objWarned = styleWarned && new WeakSet();
+const classTokens = new WeakMap(); // element → class tokens its binding last set
 function warnStringified(el, name, v) {
   if (isDev() && v && typeof v === "object" && (Array.isArray(v) || v.toString === Object.prototype.toString) && objWarned && !objWarned.has(el)) {
     objWarned.add(el);
@@ -51,10 +53,10 @@ function warnStringified(el, name, v) {
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
  * @param {Element} [hydrateRoot]  when given, bind to this EXISTING server-rendered
  *   subtree in place (no clone) instead of building fresh DOM — see hydration below.
- * @param {boolean} [svg]  parse in SVG context
+ * @param {string} [ns]  parse in "svg" or "math" context
  * @returns {{ node: Node, dispose: Function }}
  */
-export function render(result, hydrateRoot, svg) {
+export function render(result, hydrateRoot, ns) {
   // Only a genuine (Symbol-branded) html`…` result is instantiated — its markup is
   // author source. Anything else reaching here (data returned by a component or an
   // each() render function) is refused rather than having its fields trusted.
@@ -66,7 +68,7 @@ export function render(result, hydrateRoot, svg) {
   // reused, never re-created; each dynamic slot is cleared + re-rendered (same
   // values → no visible change). Otherwise build a fresh clone.
   const hydrating = hydrateRoot != null;
-  const fragment = hydrating ? hydrateRoot : (svg ? svgTemplate(result.__staticHTML) : result.template).content.cloneNode(true);
+  const fragment = hydrating ? hydrateRoot : (ns ? foreignTemplate(result.__staticHTML, ns) : result.template).content.cloneNode(true);
   const { parts, values } = result;
 
   // Collect every part's target node first (document order), so a binding that
@@ -81,7 +83,7 @@ export function render(result, hydrateRoot, svg) {
 
       if (part.type === "child") {
         if (hydrating) clearHydratedSlot(node); // drop this slot's server content
-        bindChild(node, values[part.hole], inSvg(node.parentNode, svg));
+        bindChild(node, values[part.hole], nsOf(node.parentNode, ns));
       } else {
         node.removeAttribute("data-zoijs-bind");
         for (const attr of part.attrs) bindAttribute(node, attr, values);
@@ -128,10 +130,10 @@ function collectNodes(fragment, parts, hasElements) {
   return nodes;
 }
 
-function bindChild(anchor, value, svg) {
-  if (isEachResult(value)) setupKeyedList(anchor, value, svg);
-  else if (typeof value === "function") bindReactiveContent(anchor, value, svg);
-  else insertStaticContent(anchor, value, svg);
+function bindChild(anchor, value, ns) {
+  if (isEachResult(value)) setupKeyedList(anchor, value, ns);
+  else if (typeof value === "function") bindReactiveContent(anchor, value, ns);
+  else insertStaticContent(anchor, value, ns);
 }
 
 // unsafeHTML() is content-only: refused in any attribute, before URL/name checks.
@@ -230,7 +232,7 @@ function bindRef(el, fn) {
 
 // ---- text / content bindings -------------------------------------------------
 
-function bindReactiveContent(anchor, getValue, svg) {
+function bindReactiveContent(anchor, getValue, ns) {
   let mode = null; // "text" | "nodes"
   let textNode = null;
   let items = []; // [{ nodes, dispose }]
@@ -272,7 +274,7 @@ function bindReactiveContent(anchor, getValue, svg) {
       if (mode === "text") clearText();
       else clearNodes();
       mode = "nodes";
-      insertItems(anchor, value, items, svg);
+      insertItems(anchor, value, items, ns);
     }
   }));
 
@@ -282,10 +284,10 @@ function bindReactiveContent(anchor, getValue, svg) {
   });
 }
 
-function insertStaticContent(anchor, value, svg) {
+function insertStaticContent(anchor, value, ns) {
   if (value == null) return;
   const items = [];
-  insertItems(anchor, value, items, svg);
+  insertItems(anchor, value, items, ns);
   onCleanup(() => {
     for (const it of items) {
       it.dispose();
@@ -294,37 +296,38 @@ function insertStaticContent(anchor, value, svg) {
   });
 }
 
-function insertItems(anchor, value, items, svg) {
+function insertItems(anchor, value, items, ns) {
   const parent = anchor.parentNode;
   const list = Array.isArray(value) ? value : [value];
   for (const v of list) {
-    const item = renderChild(v, svg);
+    const item = renderChild(v, ns);
     for (const n of item.nodes) parent.insertBefore(n, anchor);
     items.push(item);
   }
 }
 
-function renderChild(value, svg) {
+function renderChild(value, ns) {
   if (value == null || value === false || value === true) return { nodes: [], dispose: noop };
   if (value instanceof Node) return { nodes: [value], dispose: noop };
   if (isTemplateResult(value)) {
-    const r = render(value, undefined, svg);
+    const r = render(value, undefined, ns);
     return { nodes: [...r.node.childNodes], dispose: r.dispose };
   }
-  if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html), dispose: noop };
+  if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html, ns), dispose: noop };
   return { nodes: [document.createTextNode(toText(value))], dispose: noop };
 }
 
 // unsafeHTML(): the one raw-markup path. The value reaches the sink as given (never via
 // the zoijs policy), so enforced Trusted Types refuse a string and take the app's TrustedHTML.
-function rawNodes(markup) {
-  const t = document.createElement("template");
+// In SVG/MathML it is parsed inside an element of that namespace (the value is never concatenated).
+function rawNodes(markup, ns) {
+  const t = ns ? document.createElementNS(NS[ns], ns) : document.createElement("template");
   try {
     t.innerHTML = markup;
   } catch (cause) {
     throw new TypeError("Zoijs: Trusted Types are enforced — pass unsafeHTML() a TrustedHTML", { cause });
   }
-  return [...t.content.childNodes];
+  return [...(ns ? t : t.content).childNodes];
 }
 
 // ---- keyed list binding ------------------------------------------------------
@@ -357,7 +360,7 @@ function longestIncreasingSubsequence(arr) {
   return keep;
 }
 
-function setupKeyedList(anchor, marker, svg) {
+function setupKeyedList(anchor, marker, ns) {
   const { items, keyFn, renderFn } = marker;
   const listOwner = createOwner(); // item subtrees nest here
   let records = new Map();
@@ -374,18 +377,20 @@ function setupKeyedList(anchor, marker, svg) {
   const createRecord = (key, item) => {
     const isObj = item !== null && typeof item === "object";
     const itemCell = isObj ? createState(item) : null;
-    const arg = isObj ? makeItemProxy(itemCell) : item;
+    const arg = isObj ? makeItemProxy(itemCell, Array.isArray(item)) : item;
     // Run renderFn inside this item's own owner scope, so any onCleanup() it
     // registers fires when the item is removed (not only on full unmount).
     const itemOwner = createOwner();
-    let nodes;
+    let f;
     untrack(() =>
       runWithOwner(itemOwner, () => {
-        const r = render(renderFn(arg), undefined, svg);
-        nodes = [...r.node.childNodes];
+        const result = renderFn(arg);
+        f = render(result, undefined, ns).node;
+        // A leading root binding's content goes before its anchor: an empty head node keeps it in the span.
+        if (result.__staticHTML.startsWith("<!--zoijs-->")) f.prepend("");
       })
     );
-    return { key, item, itemCell, nodes, dispose: () => disposeOwner(itemOwner) };
+    return { key, item, itemCell, head: f.firstChild, tail: f.lastChild, dispose: () => disposeOwner(itemOwner) };
   };
 
   const reconcile = (newItems) => {
@@ -431,7 +436,7 @@ function setupKeyedList(anchor, marker, svg) {
     // Removed keys: dispose their owner scope (effects/listeners) + remove nodes.
     for (const rec of oldRecords.values()) {
       rec.dispose();
-      for (const n of rec.nodes) n.remove();
+      for (const n of span(rec)) n.remove();
     }
 
     // Moving the subtree that holds the focused element blurs it in some browsers,
@@ -461,13 +466,14 @@ function setupKeyedList(anchor, marker, svg) {
       const rec = ordered[i];
       if (sources[i] === -1 || !keep.has(i)) {
         let ref = cursor;
-        for (let j = rec.nodes.length - 1; j >= 0; j--) {
-          const node = rec.nodes[j];
+        const nodes = span(rec);
+        for (let j = nodes.length - 1; j >= 0; j--) {
+          const node = nodes[j];
           if (node.nextSibling !== ref) parent.insertBefore(node, ref);
           ref = node;
         }
       }
-      cursor = rec.nodes[0] || cursor;
+      cursor = rec.head || cursor;
     }
 
     if (refocus && doc.activeElement !== active) {
@@ -493,14 +499,24 @@ function setupKeyedList(anchor, marker, svg) {
   onCleanup(() => {
     for (const rec of currentList) {
       rec.dispose();
-      for (const n of rec.nodes) n.remove();
+      for (const n of span(rec)) n.remove();
     }
   });
 }
 
-function makeItemProxy(itemCell) {
+// An item's DOM is the LIVE span head…tail, not a snapshot: content a root-level binding adds
+// later (a conditional row, a nested list) lies inside it, so it moves and leaves with the item.
+function span(rec) {
+  const out = [];
+  for (let n = rec.head; n; n = n === rec.tail ? null : n.nextSibling) out.push(n);
+  return out;
+}
+
+function makeItemProxy(itemCell, isArray) {
+  const live = () => Object(itemCell.get());
+  // Array target → Array.isArray works; spread/Object.keys/JSON.stringify/instanceof see the live item.
   return new Proxy(
-    {},
+    isArray ? [] : {},
     {
       get(_, prop) {
         const item = itemCell.get();
@@ -517,6 +533,19 @@ function makeItemProxy(itemCell) {
         const item = itemCell.get();
         return item != null && prop in Object(item);
       },
+      ownKeys() {
+        const keys = Reflect.ownKeys(live());
+        return isArray && !keys.includes("length") ? [...keys, "length"] : keys;
+      },
+      getOwnPropertyDescriptor(_, prop) {
+        const item = live();
+        // Proxy invariants: an array target's own `length` stays writable + non-configurable;
+        // anything else is reported configurable (it isn't on the target).
+        if (isArray && prop === "length") return { value: item.length, writable: true, enumerable: false, configurable: false };
+        const d = Reflect.getOwnPropertyDescriptor(item, prop);
+        return d && { ...d, configurable: true };
+      },
+      getPrototypeOf: () => Object.getPrototypeOf(live()),
     }
   );
 }
@@ -570,6 +599,19 @@ function applyAttribute(el, name, value, check) {
   if (lname === "value" || lname === "checked") {
     el[lname] = value; // form-control state lives on the property
     return;
+  }
+  if (lname === "class") {
+    // After the first write, change only the tokens this binding set: classes added by other
+    // code (a plugin, classList.add) survive updates.
+    const next = typeof value === "boolean" || value == null ? [] : toText(value).split(/\s+/).filter(Boolean);
+    const prev = classTokens.get(el);
+    classTokens.set(el, next);
+    if (prev) {
+      for (const c of prev) if (!next.includes(c)) el.classList.remove(c);
+      el.classList.add(...next);
+      if (!el.classList.length) el.removeAttribute(name);
+      return;
+    }
   }
   if (lname.startsWith("xlink:")) {
     // SVG namespaced attribute (e.g. xlink:href).

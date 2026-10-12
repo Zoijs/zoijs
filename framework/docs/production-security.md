@@ -210,9 +210,11 @@ string assignments to HTML sinks (`innerHTML`, …) anywhere on the page. Zoijs'
 parsing goes through a policy named `zoijs`, which only ever receives HTML built from your
 static template strings — and `html()` refuses runtime arrays and data (`ZJS010`), so data can't reach it. Know the current limits before enabling it:
 
-- **`@zoijs/sanitize` doesn't support enforced Trusted Types yet.** It parses with
-  `DOMParser`, a Trusted Types sink, without a policy, so under enforcement `sanitize()`
-  will fail. Don't enable enforcement on pages that sanitize.
+- **`@zoijs/sanitize` uses its own policy, `zoijs-sanitize`** *(next release)*: list it too —
+  `trusted-types zoijs zoijs-sanitize`. It only passes the untrusted string to the parse into an
+  inert document, which is then pruned; `sanitize()` returns nodes, never markup, and the policy
+  object stays private to the package. Without the name, `sanitize()` fails with an error that
+  says so. (Earlier versions had no policy and couldn't run under enforcement.)
 - **Several copies of `@zoijs/core` are fine**: compatible copies share one
   runtime and therefore one `zoijs` policy — it's created once, so `trusted-types zoijs` needs no
   `'allow-duplicates'`. (Mapping every package to one core is still simplest.)

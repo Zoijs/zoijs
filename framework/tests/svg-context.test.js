@@ -127,3 +127,25 @@ test("ordinary HTML lists are unaffected", () => {
 function onCleanupFor(n, out) {
   onCleanup(() => out.push(n));
 }
+
+// ---- MathML and unsafeHTML (follow-ups to L1) --------------------------------------------------
+const MATHML = "http://www.w3.org/1998/Math/MathML";
+
+test("each() items and nested templates inside <math> are MathML; <mi>/<mtext> content is HTML", () => {
+  const el = host();
+  const terms = createState(["x", "y"]);
+  mount(() => html`<math><mrow>${each(() => terms.get(), (t) => t, (t) => html`<mi>${t}</mi><mo>+</mo>`)}</mrow><mtext>${html`<b>note</b>`}</mtext></math>`, el);
+  assert.deepEqual(ns(el, "mi, mo"), [MATHML, MATHML, MATHML, MATHML]);
+  assert.equal(el.querySelector("b").namespaceURI, XHTML, "text integration point → HTML");
+  terms.set(["x", "y", "z"]);
+  flush();
+  assert.deepEqual(ns(el, "mi"), [MATHML, MATHML, MATHML]);
+});
+
+test("unsafeHTML() inside <svg> parses as SVG; inside <foreignObject> as HTML", async () => {
+  const { unsafeHTML } = await import("../src/unsafe.js");
+  const el = host();
+  mount(() => html`<svg>${unsafeHTML('<circle r="1"/><g><rect/></g>')}<foreignObject>${unsafeHTML("<p>x</p>")}</foreignObject></svg>`, el);
+  assert.deepEqual(ns(el, "circle, g, rect"), [SVG, SVG, SVG]);
+  assert.equal(el.querySelector("p").namespaceURI, XHTML);
+});

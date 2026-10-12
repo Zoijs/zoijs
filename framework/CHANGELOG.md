@@ -24,6 +24,18 @@ Found while building the Zoijs Insight reference app. No API changes.
   compared against `undefined`, so a comparator reading its arguments
   (`(a, b) => a.page === b.page`) threw. The first value is now stored without a comparison —
   including after a failed first run — and `undefined` is an ordinary value afterwards.
+- **List items copy and enumerate like the object.** The `each()` item proxy had an empty target,
+  so `{ ...item }`, `Object.keys(item)` and `JSON.stringify(item)` returned `{}` / `[]` —
+  `save({ ...todo, done: true })` silently dropped every field. They now see the live item; an
+  array item passes `Array.isArray`, and `instanceof` follows the item's class.
+- **Items with several root nodes stay together.** A record tracked a snapshot of its root
+  nodes, so content a top-level binding added later (a conditional detail row, a nested list)
+  stayed behind on a reorder and could be orphaned — duplicate or misplaced rows. Records now
+  track their live range of nodes (the audit's deferred "Rn3").
+- **MathML context, and `unsafeHTML()` in SVG/MathML.** Content inserted inside `<math>` is
+  parsed as MathML (HTML again inside `<mi>`, `<mo>`, `<mn>`, `<ms>`, `<mtext>`), like SVG; and
+  `unsafeHTML()` markup inside an `<svg>`/`<math>` is parsed in that namespace (the value is
+  parsed in place, never concatenated, so a `TrustedHTML` stays intact).
 - **Style bindings work under a strict `style-src` CSP.** `style=${…}` (object, string and mixed
   forms) was applied with `setAttribute("style", …)`, which a policy without `'unsafe-inline'` /
   `style-src-attr` refuses. Bindings now write `el.style.cssText` (the CSSOM, which CSP doesn't
@@ -41,6 +53,13 @@ Found while building the Zoijs Insight reference app. No API changes.
   you can remove it after upgrading.
 - **Chromium and `style=""`.** Removing a style through a binding removes the attribute in
   every engine (Chromium needed an explicit check: it re-creates a lazily synced `style=""`).
+- **`class=${…}` keeps classes added by other code.** After the first render a class binding
+  adds and removes only the names it set, instead of rewriting the attribute — so classes a UI
+  library or `classList.add` put on the element survive updates. `false`/`null` remove the
+  binding's names (and the attribute once it's empty). If you relied on a binding wiping
+  classes added elsewhere, remove them where you add them.
+- **List items are proxies.** `structuredClone(item)` throws (it always did); clone
+  `{ ...item }` instead, which now works.
 
 ## [1.9.0] — 2026-10-05
 

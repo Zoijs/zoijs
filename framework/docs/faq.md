@@ -37,6 +37,8 @@ The arrow decides *whether* (and which) component shows; it's the only part that
 
 Don't call the component inside the arrow — `${() => show.get() ? Profile() : null}`. Then `Profile()` runs *during* the condition, so any `.get()` in its setup becomes part of the condition, and changing that state rebuilds `Profile` (losing its state). Zoijs can't tell those reads apart from the condition's own reads, so it can't fix this for you. Reads inside a props wrapper (`() => Profile({ id: userId.get() })`) are untracked too — that passes a one-time snapshot; use a getter (`id: () => userId.get()`) for a live prop.
 
+The same applies to a component placed directly in a slot, `${Profile}`: a function in a slot is a *reactive binding*, so `Profile` runs as one — its setup reads are tracked and a change rebuilds it. To render a component once, call it in place, `${Profile()}` (it's set up during the parent's render, which isn't reactive), or use the conditional form above.
+
 ## How do components share state?
 
 Create state in a module and import it where needed — it's the same `createState` primitive in a shared place. Zoijs has no separate global-store concept; you don't need one.

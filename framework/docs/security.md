@@ -210,8 +210,9 @@ Zoijs is friendly to a strict Content Security Policy:
   Trusted Types covers Zoijs's own parsing; it doesn't make your code's direct sinks safe.
   From core 1.9.0, compatible copies of the core share one runtime and so
   one `zoijs` policy (created once — no `'allow-duplicates'` needed); with core 1.8.0 and
-  older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. Current limit: `@zoijs/sanitize` parses with `DOMParser` without
-  a policy, so it fails under enforcement.
+  older, a second copy needs `trusted-types zoijs 'allow-duplicates'`. `@zoijs/sanitize` parses through its own
+  `zoijs-sanitize` policy — add that name to `trusted-types` on pages that sanitize *(next release;
+  earlier versions fail under enforcement)*.
 
 Two things a strict policy must allow explicitly: an inline **import map** (by its `sha256`
 hash, or a nonce) and, if your templates write static `style="…"` attributes,

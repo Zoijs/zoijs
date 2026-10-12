@@ -171,7 +171,13 @@ It is **not** a drop-in replacement for a dedicated, independently-audited sanit
 
 Never assign untrusted data to `innerHTML` yourself: that bypasses Zoijs (and this package) entirely.
 
-**Trusted Types.** `sanitize()` parses with `DOMParser`, which is a Trusted Types sink, and doesn't use a policy — so it fails on pages that enforce `require-trusted-types-for 'script'`. Don't enable that enforcement on pages that sanitize (yet).
+**Trusted Types** *(next release)*. `DOMParser` is a Trusted Types sink, so `sanitize()` parses through its own policy, **`zoijs-sanitize`**. On a page that enforces `require-trusted-types-for 'script'`, list it next to the core's policy:
+
+```
+Content-Security-Policy: require-trusted-types-for 'script'; trusted-types zoijs zoijs-sanitize
+```
+
+The policy hands the untrusted string only to the parse into an inert document, which is then pruned as described above; `sanitize()` returns nodes, never markup, and the policy object is private to the package, so no other code can create `TrustedHTML` with it. If the name isn't allowed, `sanitize()` throws a `TypeError` that says so. (Version 0.2.0 and earlier have no policy and fail under enforcement.)
 
 Deploying? See the [production security checklist](../framework/docs/production-security.md#9-sanitize-untrusted-html) — it covers sanitized content alongside CSP, `serialize()`, and DOM clobbering.
 

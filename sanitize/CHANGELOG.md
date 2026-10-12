@@ -2,6 +2,16 @@
 
 All notable changes to `@zoijs/sanitize` are documented here.
 
+## Unreleased
+
+### Added
+- **Works under enforced Trusted Types.** `DOMParser.parseFromString` is a Trusted Types sink, so
+  `sanitize()` failed on pages with `require-trusted-types-for 'script'`. It now parses through its
+  own policy, `zoijs-sanitize` (list it: `trusted-types zoijs zoijs-sanitize`), which only passes the
+  untrusted string to the inert parse that is then pruned; the policy object is private to the
+  package. Without the name in the CSP, `sanitize()` throws a `TypeError` that says what to add.
+  Pages without Trusted Types are unaffected.
+
 ## 0.2.0 — 2026-10-05
 
 ### Documentation

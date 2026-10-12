@@ -185,6 +185,26 @@ function cleanChildren(parent, prefix) {
  * @param {{ idPrefix?: string }} [options]
  * @returns {Node[]}       top-level sanitized nodes, adopted into `document`
  */
+// Trusted Types: DOMParser.parseFromString is a sink, so under `require-trusted-types-for 'script'`
+// the input must be TrustedHTML. A dedicated policy, `zoijs-sanitize`, passes the untrusted string
+// through to the parse ONLY: the result is an inert document (no scripts run, nothing loads) that is
+// pruned below, and sanitize() returns nodes, never markup. The policy object stays private to this
+// module, so no other code can mint TrustedHTML with it. Created lazily, once; no policy (no Trusted
+// Types, or a CSP that doesn't list the name) → the plain string, as before.
+let policy; // undefined = not tried yet, null = none
+function parseInput(text) {
+  if (policy === undefined) {
+    policy = null;
+    try {
+      const tt = typeof window !== "undefined" ? window.trustedTypes : undefined;
+      if (tt && tt.createPolicy) policy = tt.createPolicy("zoijs-sanitize", { createHTML: (s) => s });
+    } catch {
+      /* name not allowed by the page's CSP — parsing a plain string then fails loudly if enforced */
+    }
+  }
+  return policy ? policy.createHTML(text) : text;
+}
+
 export function sanitize(dirty, options) {
   if (options !== undefined && (options === null || typeof options !== "object")) {
     throw new TypeError("@zoijs/sanitize: options must be an object, e.g. { idPrefix: \"user-content-\" }");
@@ -200,7 +220,16 @@ export function sanitize(dirty, options) {
         "is client-only — sanitize on the client, or use a server sanitizer for SSR output."
     );
   }
-  const doc = new DOMParser().parseFromString(String(dirty), "text/html");
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(parseInput(String(dirty)), "text/html");
+  } catch (cause) {
+    throw new TypeError(
+      "@zoijs/sanitize: Trusted Types are enforced and the \"zoijs-sanitize\" policy isn't allowed — " +
+        "add it to your CSP: trusted-types zoijs zoijs-sanitize",
+      { cause }
+    );
+  }
   cleanChildren(doc.body, prefix);
   const out = [];
   for (const node of Array.from(doc.body.childNodes)) out.push(document.adoptNode(node));
