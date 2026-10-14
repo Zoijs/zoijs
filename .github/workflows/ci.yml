@@ -7,6 +7,10 @@ on:
     branches: [main]
   # Also run as the test gate of the release workflow (publish.yml), at the tagged commit.
   workflow_call:
+  # Weekly, so a newly published npm advisory against an existing lockfile surfaces even when
+  # nothing is being merged (the "Dependencies" job below).
+  schedule:
+    - cron: "23 6 * * 1"
 
 # Least privilege: CI only reads the repository. No job here can write to the repo,
 # packages, or releases, and none can mint an OIDC token (id-token) — only the
@@ -86,17 +90,33 @@ jobs:
           done
       - run: npm run test:browser
 
+  # Known vulnerabilities in every committed lockfile (direct and transitive), via npm audit against
+  # the registry: any advisory that isn't a reviewed, unexpired exception in
+  # scripts/dependency-policy.json fails, and the report lands in the job summary. Licenses are
+  # checked offline in the unit job (npm test → test:deps). Nothing is installed or upgraded here.
+  deps:
+    name: Dependencies (npm audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      - run: npm run audit:deps
+
   # ONE stable check for branch protection: "CI passed" succeeds only if every unit/type matrix
-  # leg AND the real-browser job succeeded (a skipped or cancelled job fails it too). Require
-  # this check in the main-branch ruleset (docs/releasing.md → "Merge gate") so a pull request
-  # can't merge with a red Browser job. The individual job names above stay unchanged.
+  # leg, the real-browser job AND the dependency audit succeeded (a skipped or cancelled job fails
+  # it too). Require this check in the main-branch ruleset (docs/releasing.md → "Merge gate") so a
+  # pull request can't merge with a red Browser job. The individual job names above stay unchanged.
   gate:
     name: CI passed
     if: ${{ always() }}
-    needs: [unit, browser]
+    needs: [unit, browser, deps]
     runs-on: ubuntu-24.04
     steps:
-      - name: Unit and browser jobs both succeeded
+      - name: Unit, browser and dependency jobs all succeeded
         run: |
-          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}"
-          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success"
+          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}  deps: ${{ needs.deps.result }}"
+          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success" && test "${{ needs.deps.result }}" = "success"

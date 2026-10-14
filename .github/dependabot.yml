@@ -1,6 +1,14 @@
-# Keeps the SHA-pinned GitHub Actions in .github/workflows current: Dependabot opens a
-# PR that moves each pin to the new release's commit SHA (keeping the `# vX.Y.Z`
-# comment in sync). Merging goes through normal review + CI.
+# Dependabot proposes updates as pull requests; nothing is merged or upgraded automatically —
+# every update goes through normal review + CI (including the dependency audit and license
+# check, scripts/dependency-policy.json).
+#
+# - github-actions: moves each SHA-pinned action in .github/workflows to the new release's commit
+#   SHA (keeping the `# vX.Y.Z` comment in sync).
+# - npm: every committed package-lock.json. Published @zoijs packages have zero runtime
+#   dependencies, so these are development tools (test runners, jsdom, TypeScript, Playwright).
+#   Version updates are grouped into one weekly PR per directory; security updates (Dependabot
+#   alerts) are raised as soon as an advisory lands, independent of this schedule.
+#   assets/ (private brand tooling, never installed in CI) is left out of version updates.
 #
 # Not covered: the Playwright container digest in ci.yml (Dependabot doesn't update
 # workflow `container:` images) — bump its tag + digest together with @playwright/test.
@@ -15,3 +23,35 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: ci
+
+  - package-ecosystem: npm
+    directories:
+      - /framework
+      - /router
+      - /resource
+      - /api
+      - /head
+      - /action
+      - /storage
+      - /forms
+      - /testing
+      - /devtools
+      - /i18n
+      - /ssr
+      - /sanitize
+      - /eslint-plugin
+      - /bench
+      - /examples/task-board
+      - /examples/admin
+      - /examples/contacts
+    schedule:
+      interval: weekly
+    # The monorepo's own packages are linked (file:../…), never fetched from npm.
+    ignore:
+      - dependency-name: "@zoijs/*"
+    groups:
+      npm-dev:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)

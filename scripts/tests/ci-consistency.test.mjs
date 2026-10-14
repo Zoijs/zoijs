@@ -48,7 +48,7 @@ test("publish.yml runs the full CI workflow, and publishing needs it", () => {
   assert.match(ci, /\n  workflow_call:/, "ci.yml is reusable by publish.yml");
 });
 
-test("ci.yml has the real-browser job and the aggregate 'CI passed' gate over unit + browser", () => {
+test("ci.yml has the real-browser job, the dependency audit, and the aggregate 'CI passed' gate over all three", () => {
   const browser = job(ci, "browser");
   assert.ok(browser, "browser job");
   assert.match(browser, /run: npm run test:browser/);
@@ -56,7 +56,9 @@ test("ci.yml has the real-browser job and the aggregate 'CI passed' gate over un
   assert.ok(gate, "gate job");
   assert.match(gate, /name: CI passed/);
   assert.match(gate, /if: \$\{\{ always\(\) \}\}/, "runs (and fails) even when a needed job failed");
-  assert.match(gate, /needs: \[unit, browser\]/);
+  assert.match(gate, /needs: \[unit, browser, deps\]/);
+  assert.match(gate, /needs\.deps\.result \}\}" = "success"/, "the dependency audit gates merging too");
+  assert.match(job(ci, "deps"), /npm run audit:deps/);
   assert.match(gate, /needs\.unit\.result \}\}" = "success"/);
   assert.match(gate, /needs\.browser\.result \}\}" = "success"/);
   assert.match(job(ci, "unit"), /name: Unit \+ Types/);

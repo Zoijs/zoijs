@@ -40,15 +40,18 @@ const rawInAttr = (name) => {
 const CHILD_MARKER = "<!--zoijs-->";
 const ELEMENT_MARKER = " data-zoijs-bind";
 const SLOT_START = "<!--zoijs:[-->"; // marks where a child slot's content begins
+// Nested templates, list items and array entries are marked too, so the client can adopt
+// them in place (typed values, focus and selection survive). They use their own marker
+// names: a core that only adopts the outermost template doesn't see them, and clears them
+// with the rest of the slot's content as before.
+const NESTED = { start: "<!--zoijs:(-->", end: "<!--zoijs:)-->", attr: " data-zoijs-h" };
+const OUTER = { start: SLOT_START, end: CHILD_MARKER, attr: ELEMENT_MARKER };
 
 // Set for the duration of a render. When true, the output keeps the markers a
 // client needs to hydrate (the slot start/anchor comments and `data-zoijs-bind`);
 // when false (the default), markers are stripped for clean static output.
 let hydratable = false;
-// Markers are only emitted for the OUTERMOST template. Hydration clears and
-// re-renders each dynamic slot's content, so nested markers would be discarded —
-// and worse, the client's node walk would mis-match them. renderDepth tracks the
-// outermost template so only its own slots/elements are marked.
+// The outermost template (depth 1) uses the original marker names; deeper ones use NESTED.
 let renderDepth = 0;
 
 /**
@@ -94,11 +97,16 @@ function renderValue(value) {
   return escapeText(toText(value)); // string / number / bigint → escaped text
 }
 
+const bracket = (v) => NESTED.start + renderValue(v) + NESTED.end;
+function renderSlot(value) {
+  if (isEachMarker(value)) value = itemsOf(value).map((item) => value.renderFn(item));
+  return Array.isArray(value) ? value.map(bracket).join("") : renderValue(value);
+}
+const itemsOf = (marker) => [...((typeof marker.items === "function" ? marker.items() : marker.items) ?? [])];
+
 function renderEach(marker) {
-  const items = typeof marker.items === "function" ? marker.items() : marker.items;
-  if (items == null) return "";
   let out = "";
-  for (const item of items) out += renderValue(marker.renderFn(item));
+  for (const item of itemsOf(marker)) out += renderValue(marker.renderFn(item));
   return out;
 }
 
@@ -107,7 +115,7 @@ function renderEach(marker) {
 // linear pass with a part cursor stays aligned.
 function renderTemplate(result) {
   renderDepth++;
-  const top = hydratable && renderDepth === 1; // only the outermost template is marked
+  const mark = hydratable && (renderDepth === 1 ? OUTER : NESTED);
   const skeleton = templateHTML(result);
   const { parts, values } = result;
   let out = "";
@@ -130,10 +138,9 @@ function renderTemplate(result) {
       // Mirror the client: a binding may return a component uncalled
       // (`${() => show.get() ? Child : null}`) — construct it once.
       if (typeof raw === "function" && typeof value === "function") value = value();
-      const content = renderValue(value);
-      // Hydratable (top level only): bracket the content with the slot start marker
-      // + keep the anchor, so the client can clear exactly this slot and re-render.
-      out += top ? SLOT_START + content + CHILD_MARKER : content;
+      // Hydratable: bracket the content with the slot's start + end markers, and each list
+      // item / array entry with its own, so the client can adopt exactly this region.
+      out += mark ? mark.start + renderSlot(value) + mark.end : renderValue(value);
       pos = childAt + CHILD_MARKER.length;
     } else {
       // Trailing whitespace here is the separator left where dynamic attributes
@@ -141,9 +148,9 @@ function renderTemplate(result) {
       // it so the emitted start tag is clean (e.g. `<input value="x"/>`).
       out += skeleton.slice(pos, elemAt).replace(/[ \t\n\r\f]+$/, "");
       const part = parts[p++]; // { type: "element", attrs }
-      // Hydratable (top level only): keep `data-zoijs-bind` so the client finds this
-      // element to adopt (attach its events / reactive attributes in place).
-      if (top) out += ELEMENT_MARKER;
+      // Hydratable: mark the element so the client finds it to adopt (attach its events /
+      // reactive attributes in place).
+      if (mark) out += mark.attr;
       out += renderAttributes(part.attrs, values);
       pos = elemAt + ELEMENT_MARKER.length;
       // Raw-text content binding (<textarea>/<title>): the value is the element's sole content, so

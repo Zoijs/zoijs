@@ -52,7 +52,18 @@ const SRC = join(root, "framework", "src");
 // tracking for multi-root each() items, enumerable item proxies, foreign-class-preserving class
 // bindings, MathML context, unsafeHTML in SVG/MathML) plus their explanatory comments (~28.1 KB
 // total). Same terms as above: a temporary commented-source budget until PERF-2.
-const BUDGET_GZIP = 28.5 * 1024; // 28.5 KB (29,184 B) — temporary source budget, see above
+// Raised to 30.5 KB (31,232 B) on 2026-10-14, approved by the maintainer as an exception for the
+// hydration correctness fixes only (framework CHANGELOG [Unreleased]). The extra bytes are
+// core/hydrate.js (structural validation of server HTML before anything is bound) plus nested DOM
+// adoption and form-state preservation in renderer.js/mount.js: ~1.85 KB minified+gzip of code,
+// ~3.0 KB of commented source. That fixed a crash on mismatched server HTML, pages left silently
+// non-interactive without markers, and inputs losing value/focus on hydrate (and hydration got
+// ~68% faster on a 200-row form list). It exceeded the old budget even with every comment removed.
+// Conditions: this is a CEILING, not a target (~150 B left); no further raise without measured
+// justification; this gate measures commented SOURCE, not what a browser downloads after
+// minification — PERF-2 is to add a production minified/gzip budget beside it, and to look at
+// moving hydration behind an optional import so apps without SSR don't ship it.
+const BUDGET_GZIP = 30.5 * 1024; // 30.5 KB (31,232 B) — temporary source budget, see above
 
 // Server-only entry modules: shipped in the package, but never reachable from the
 // client entry (index.js), so a browser using @zoijs/core never fetches them. They
@@ -74,7 +85,7 @@ const buffers = files.map((f) => readFileSync(f));
 const raw = buffers.reduce((n, b) => n + b.length, 0);
 const gz = gzipSync(Buffer.concat(buffers), { level: 9 }).length;
 
-console.log(`@zoijs/core — shipped source (${files.length} files)`);
+console.log(`@zoijs/core — shipped source (${files.length} files; commented source as published, not the minified payload a bundler or CDN minifier would produce)`);
 console.log(`  raw:      ${(raw / 1024).toFixed(1)} KB (${raw} B)`);
 console.log(`  gzipped:  ${(gz / 1024).toFixed(2)} KB (${gz} B)`);
 console.log(`  per file:`);

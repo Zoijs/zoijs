@@ -4,7 +4,8 @@
   "description": "Zoijs monorepo — convenience scripts to test every package from the root. Not published; not an npm workspace.",
   "scripts": {
     "test": "npm run test:deps && npm run test:docs && npm run test:compat && npm run bench:size && npm run test:core && npm run test:router && npm run test:resource && npm run test:api && npm run test:head && npm run test:action && npm run test:storage && npm run test:forms && npm run test:testing && npm run test:devtools && npm run test:i18n && npm run test:ssr && npm run test:sanitize && npm run test:eslint-plugin && npm run test:create",
-    "test:deps": "node scripts/check-deps.mjs",
+    "test:deps": "node scripts/check-deps.mjs && node scripts/check-licenses.mjs && node --test scripts/tests/dependency-policy.test.mjs",
+    "audit:deps": "node scripts/audit-deps.mjs",
     "test:docs": "node scripts/check-docs.mjs && node --test scripts/tests/security-docs.test.mjs scripts/tests/docs-consistency.test.mjs scripts/tests/doc-pins.test.mjs",
     "bench": "node bench/size.mjs && node bench/dom.mjs",
     "bench:size": "node bench/size.mjs --check",

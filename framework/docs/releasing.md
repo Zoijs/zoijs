@@ -48,6 +48,8 @@ skip the npm-registry checks) or `npm run release:check -- --all --offline`.
 - **Immutable dependencies.** Actions are pinned to full commit SHAs (with a `# vX.Y.Z`
   comment) and the Playwright image by `sha256` digest. Dependabot proposes action-pin
   updates; bump the Playwright image tag + digest together with `@playwright/test`.
+- **Dependency checks** (see [below](#dependency-checks)): every lockfile is audited for known
+  vulnerabilities and checked against a license policy on every pull request and weekly.
 - **Reproducible installs.** CI installs with `npm ci --ignore-scripts` (`npm run ci:all`):
   exactly the committed lockfiles, and no dependency install scripts. (None are needed —
   the only ones in the tree are `fsevents`, macOS-only, and `sharp` in the private,
@@ -124,8 +126,8 @@ another), so apart from core they're independent and can publish in any order. T
 ## Merge gate (required status check)
 
 `ci.yml` reports one aggregate check, **`CI passed`**, which succeeds only when every
-`Unit + Types (Node 20/22/24)` leg **and** `Browser (Chromium / Firefox / WebKit)` succeeded
-(the individual job names are kept stable too). `publish.yml` already runs the whole CI
+`Unit + Types (Node 20/22/24)` leg, `Browser (Chromium / Firefox / WebKit)` **and**
+`Dependencies (npm audit)` succeeded (the individual job names are kept stable too). `publish.yml` already runs the whole CI
 workflow and its publish job `needs: [ci, verify]`, so nothing publishes past a red browser run.
 **Merging** is gated only if the `main` ruleset requires the check — this is GitHub
 configuration, outside the repository:
@@ -136,6 +138,30 @@ configuration, outside the repository:
 
 `scripts/tests/ci-consistency.test.mjs` keeps the repository side honest (publish needs CI, CI
 has the browser job and the gate, every Playwright suite runs in CI); it can't see the ruleset.
+
+## Dependency checks
+
+Published packages have **no runtime dependencies** (`scripts/check-deps.mjs`), so every
+dependency in the repository is development tooling — but it runs on developer machines and in
+CI, so it is checked too, direct and transitive, across all committed lockfiles:
+
+| Check | Where | Fails on |
+|---|---|---|
+| Licenses — `scripts/check-licenses.mjs` (offline, reads each lockfile's declared licenses) | `npm test` → `test:deps`, in the **Unit** job | A license (or SPDX expression) outside the allow list, a package with no license, or an exception that no longer matches anything |
+| Vulnerabilities — `scripts/audit-deps.mjs` (`npm audit --package-lock-only` per lockfile) | the **Dependencies (npm audit)** job, part of `CI passed`; also weekly (Monday) | Any advisory, of any severity, that isn't an accepted exception; an expired or unused exception; an audit that couldn't run (retried, then failed — never a silent pass) |
+| Updates — Dependabot (`.github/dependabot.yml`) | weekly PRs per lockfile (plus security PRs as advisories land) | — it proposes; nothing is merged or upgraded automatically |
+
+The policy lives in **`scripts/dependency-policy.json`**: the allowed licenses (permissive only),
+reviewed license exceptions (today: LGPL libvips binaries and the OFL-licensed Poppins font, both
+used only by the private, never-shipped `assets/` scripts), and accepted vulnerabilities (none).
+`npm run audit:deps` runs the audit locally; the job summary in CI has the same table: lockfile,
+package, severity, direct/transitive, advisory link and available fix.
+
+**When the audit fails:** read the advisory, then either upgrade the dependency in a pull request
+(after checking compatibility — `npm audit fix` is never run by CI) or, if the vulnerable code
+can't be reached from how the tool is used, add an exception with the advisory URL, the lockfile,
+a specific reason and an `expires` date (weeks, not years). Expired exceptions fail the build so
+they get reviewed again.
 
 ## Browser tests
 
