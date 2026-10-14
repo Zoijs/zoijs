@@ -67,9 +67,9 @@ hydrate(App, "#app"); // reuses the server elements; attaches events + reactivit
 
 `hydrate()` runs the component and **adopts** the existing elements inside the target:
 they're reused exactly (same nodes, never re-created), and their event handlers and
-reactive attributes are attached in place. Each dynamic content region is re-rendered
-into that existing structure — and because the values match the server, there's **no
-visible change and no flash**. It returns an `unmount()`, like `mount`.
+reactive attributes are attached in place — including inside conditionals, nested
+templates and `each()` lists *(next release)*, so a field the user already typed in, ticked
+or focused keeps its value, focus and selection. It returns an `unmount()`, like `mount`.
 
 > Not hydrating (pure static output / SSG)? Omit `{ hydratable: true }` for clean,
 > marker-free HTML, and take over with a plain `mount(App, "#app")`.
@@ -167,16 +167,59 @@ templates, and reactive values — i.e. the normal Zoijs view. It does **not** s
 a raw DOM `Node` returned from a component (there's no DOM on the server; it throws with
 a clear message — return `html\`…\`` instead).
 
-### How hydration works (and its one trade-off)
+### How hydration works
 
-`hydrate()` adopts the server DOM **in place** — the page's element structure (the
-expensive, layout-affecting part) is reused exactly, and events + reactive attributes
-attach to those live nodes. Dynamic *content* regions (a text slot, an `each` list, a
-nested template) are cleared and re-rendered into that structure; since the values match
-the server, this is invisible (no flash). So the static shell is adopted byte-for-byte,
-and only dynamic leaves re-render. If the server markup doesn't match what the component
-produces, hydration degrades gracefully (that region just isn't made reactive) rather
-than corrupting the page. See
+`hydrate()` adopts the server DOM **in place**: every template — the outermost one, nested
+and conditional templates, each `each()` item and each array entry — is matched against the
+server HTML and, if it matches, its nodes are reused and its events and reactive bindings
+attach to them. Nothing is re-created, so there's no flash, and what the user did before the
+script arrived survives: typed text, ticked boxes, the selected option, focus and the text
+selection. *(next release; earlier cores adopt only the outermost template and re-render
+everything dynamic inside it.)*
+
+A form control the user already changed keeps the user's value: its bound `value` / `checked`
+is not written on hydration. **Caveat:** the app's state still holds the server value until the
+next `input` event, and if that state changes for another reason first, the binding writes it and
+replaces the user's edit. If that can happen in your app, read the field's value into state after
+`hydrate()` returns. (Reconciling edited controls into state automatically is planned.)
+
+#### When the server HTML doesn't match *(next release)*
+
+Hydration never crashes on a mismatch and never leaves the page silently static. Each template
+is checked **before** anything is bound to it, so the parts that don't match are rendered on the
+client in place, once, with no duplicate nodes or listeners, while everything else stays adopted:
+
+| What differs | What happens |
+|---|---|
+| Nothing | Adopted; `status: "hydrated"` |
+| Text inside a `${…}` slot | The same text node is kept and takes the client's text |
+| A bound attribute (`title=${…}`) | The element is adopted; the binding writes the client's value (not counted as a mismatch) |
+| Static structure of a template: a missing, extra or different element, different static text or a static attribute | That template (and only it) is rendered on the client |
+| A list's item count, or anything between its items | That list is rendered on the client; items that match on their own are still adopted when the count matches |
+| Hydration markers missing, incomplete or malformed (e.g. HTML rendered without `{ hydratable: true }`) | Rendered on the client — the whole target if the outermost template has none |
+| `unsafeHTML()` content or a raw DOM node | Always the client's own nodes (it can't be compared) |
+
+Whitespace-only text and plain comments are not compared, so indentation around the server
+HTML never forces a re-render. Errors thrown by your components still propagate as usual —
+only *mismatches* are recovered.
+
+The returned `unmount()` carries the outcome, so you can log or alert on it:
+
+```js
+const unmount = hydrate(App, "#app");
+// { status: "hydrated" | "recovered" | "client-rendered", mismatches: number }
+if (unmount.hydration.status !== "hydrated") report(unmount.hydration);
+```
+
+In development, each recovery also logs one console warning naming the kind of difference and
+the parent element (never the values). In production nothing is logged.
+
+**Compatibility.** The markers for nested templates and list items use their own names, so
+HTML from this release still hydrates with an older `@zoijs/core` (which adopts the outermost
+template and re-renders the rest, as before), and HTML from an older `@zoijs/ssr` hydrates
+with the new core (nested parts are reported as missing markers and rendered on the client).
+Hydratable HTML is larger before compression (every dynamic region is bracketed by comments);
+gzipped, a 200-row list grew about 6%. See
 [RFC 0008](https://github.com/Zoijs/zoijs/blob/main/framework/docs/rfcs/0008-ssr.md).
 
 ## License

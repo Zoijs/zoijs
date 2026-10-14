@@ -23,13 +23,23 @@ export interface RenderOptions {
  */
 export function renderToString(component: Component, options?: RenderOptions): string;
 
+/** How a {@link hydrate} call went (same shape as `@zoijs/core`'s `HydrationResult`). */
+export interface HydrationResult {
+  /** "hydrated": all adopted · "recovered": some parts re-rendered · "client-rendered": the whole target re-rendered. */
+  readonly status: "hydrated" | "recovered" | "client-rendered";
+  /** How many parts were rendered on the client instead of adopted. */
+  readonly mismatches: number;
+}
+
 /**
  * Hydrate a server-rendered page on the client: run `component` and adopt the
  * existing DOM inside `target` (produced by `renderToString(c, { hydratable: true })`)
  * instead of re-creating it — elements are reused and events/reactivity are attached
- * in place, with no full re-render and no flash. Returns an `unmount()`.
+ * in place, with no full re-render and no flash. A part that doesn't match the server HTML
+ * is rendered on the client instead (never a crash); `unmount.hydration` says what happened.
+ * (`hydration` needs the core release that adds hydration recovery — *(next release)*.)
  */
-export function hydrate(component: Component, target: Element | string): () => void;
+export function hydrate(component: Component, target: Element | string): (() => void) & { readonly hydration?: HydrationResult };
 
 /**
  * Serialize a value to a JSON string that is SAFE to embed inside a `<script>` tag

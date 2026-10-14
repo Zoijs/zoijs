@@ -142,14 +142,18 @@ test("hydratable: dynamic elements keep data-zoijs-bind for adoption", () => {
   assert.match(out, /<button data-zoijs-bind title="t">Go<\/button>/);
 });
 
-test("hydratable: each items render inside the slot brackets", () => {
+test("hydratable: each items are bracketed one by one inside the slot", () => {
   const out = renderToString(
     () => html`<ul>${each(() => [1, 2], (x) => x, (x) => html`<li>${() => x}</li>`)}</ul>`,
     { hydratable: true }
   );
-  // Only the OUTERMOST template is marked; the nested <li> content is clean (it's
-  // cleared + re-rendered on hydrate, so its markers would be useless).
-  assert.equal(out, "<ul><!--zoijs:[--><li>1</li><li>2</li><!--zoijs--></ul>");
+  // Nested templates and items are marked too (so the client adopts them in place), with the
+  // NESTED marker names — a core that only adopts the outermost template ignores those.
+  assert.equal(
+    out,
+    "<ul><!--zoijs:[--><!--zoijs:(--><li><!--zoijs:(-->1<!--zoijs:)--></li><!--zoijs:)-->" +
+      "<!--zoijs:(--><li><!--zoijs:(-->2<!--zoijs:)--></li><!--zoijs:)--><!--zoijs--></ul>"
+  );
 });
 
 test("default (non-hydratable) output has no markers", () => {

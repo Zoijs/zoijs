@@ -2,6 +2,19 @@
 
 All notable changes to `@zoijs/ssr` are documented here.
 
+## Unreleased
+
+### Changed
+- **Hydratable output marks nested templates, list items and array entries**, not only the
+  outermost template, so the client can adopt them in place and keep form state and focus. They use
+  new marker names (`<!--zoijs:(-->…<!--zoijs:)-->`, `data-zoijs-h`), so this HTML still hydrates
+  with an older `@zoijs/core` (which re-renders those regions, as before): no peer-floor change.
+  Hydratable HTML is larger before compression (about 6% after gzip on a 200-row list).
+
+### Added
+- `hydrate()` returns an `unmount()` that carries `hydration: { status, mismatches }` (with the
+  core release that adds hydration recovery), and the README documents which mismatches recover.
+
 ## 0.5.0 — 2026-10-05
 
 ### Security

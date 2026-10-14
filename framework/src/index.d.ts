@@ -72,20 +72,37 @@ export interface MountOptions {
    * Adopt the server-rendered DOM already inside `target` (from `@zoijs/ssr`'s
    * `renderToString(..., { hydratable: true })`) instead of replacing it: elements,
    * attributes, and events are reused in place. Used by `@zoijs/ssr`'s `hydrate()`.
+   * A part that doesn't match is rendered on the client instead (see {@link HydrationResult}).
    */
   hydrate?: boolean;
 }
 
+/** How a `mount(…, { hydrate: true })` went. */
+export interface HydrationResult {
+  /**
+   * `"hydrated"`: every part was adopted. `"recovered"`: some parts didn't match the server
+   * HTML and were rendered on the client in place. `"client-rendered"`: nothing usable (no
+   * markers, or the outermost template differs) — the whole target was rendered fresh.
+   */
+  readonly status: "hydrated" | "recovered" | "client-rendered";
+  /** How many parts were rendered on the client instead of adopted. */
+  readonly mismatches: number;
+}
+
+/** Detaches the DOM and disposes all reactivity. After a hydrating mount, also says how it went. */
+export type Unmount = (() => void) & { readonly hydration?: HydrationResult };
+
 /**
  * Render a component (or a template) into a DOM element or CSS selector.
  * Returns an `unmount()` that detaches the DOM and disposes all reactivity.
- * With `{ hydrate: true }`, binds to the existing server-rendered DOM in place.
+ * With `{ hydrate: true }`, binds to the existing server-rendered DOM in place, and
+ * `unmount.hydration` reports whether any part had to be rendered on the client.
  */
 export function mount(
   component: Component | TemplateResult,
   target: Element | string,
   options?: MountOptions
-): () => void;
+): Unmount;
 
 /**
  * Create a reactive value.

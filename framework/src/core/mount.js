@@ -7,6 +7,7 @@
 import { render, nsOf } from "./renderer.js";
 import { resolveTarget } from "../utils/dom.js";
 import { createOwner, runWithOwner, disposeOwner } from "../reactivity/owner.js";
+import { beginHydration, endHydration } from "./hydrate.js";
 
 /**
  * @param {Function|object} component  a component function, or an html() result
@@ -14,7 +15,10 @@ import { createOwner, runWithOwner, disposeOwner } from "../reactivity/owner.js"
  * @param {{ hydrate?: boolean }} [options]  with `hydrate: true`, adopt the
  *   server-rendered DOM already inside `target` instead of replacing it — the
  *   elements/attributes/events are reused in place (used by @zoijs/ssr's
- *   `hydrate()`). The returned unmount() disposes everything either way.
+ *   `hydrate()`). Parts that don't match are rendered on the client instead; the
+ *   returned unmount() then carries `hydration: { status, mismatches }` where status is
+ *   "hydrated" (all adopted), "recovered" (some parts re-rendered) or "client-rendered"
+ *   (nothing usable: the whole target was rendered fresh). unmount() disposes everything.
  * @returns {Function} unmount
  */
 export function mount(component, target, options) {
@@ -23,16 +27,24 @@ export function mount(component, target, options) {
   const hydrate = !!(options && options.hydrate);
 
   let node;
-  runWithOwner(owner, () => {
-    const result = typeof component === "function" ? component() : component;
-    // Hydration binds to el's existing children in place; a fresh mount builds a
-    // detached fragment we then swap in.
-    node = render(result, hydrate ? el : undefined, nsOf(el)).node;
-  });
+  let hydration;
+  if (hydrate) beginHydration();
+  try {
+    runWithOwner(owner, () => {
+      const result = typeof component === "function" ? component() : component;
+      // Hydration binds to el's existing children in place; a fresh mount builds a
+      // detached fragment we then swap in.
+      node = render(result, hydrate ? { parent: el, before: null, end: null } : undefined, nsOf(el)).node;
+    });
+  } finally {
+    if (hydrate) hydration = endHydration();
+  }
   if (!hydrate) el.replaceChildren(node);
 
-  return () => {
+  const unmount = () => {
     disposeOwner(owner);
     el.replaceChildren();
   };
+  if (hydration) unmount.hydration = hydration;
+  return unmount;
 }

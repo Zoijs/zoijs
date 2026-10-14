@@ -20,6 +20,7 @@ import { isDev } from "../reactivity/env.js";
 import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
 import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
 import { foreignTemplate } from "../utils/dom.js";
+import { matchTemplate, regionNodes, slotItems, mismatch } from "./hydrate.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const NS = { svg: "http://www.w3.org/2000/svg", math: "http://www.w3.org/1998/Math/MathML" };
@@ -51,29 +52,36 @@ function warnStringified(el, name, v) {
 
 /**
  * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
- * @param {Element} [hydrateRoot]  when given, bind to this EXISTING server-rendered
- *   subtree in place (no clone) instead of building fresh DOM — see hydration below.
+ * @param {{ parent: Node, before: Node | null, end: Node | null }} [hyd]  when given, ADOPT the
+ *   server-rendered nodes between `before` and `end` in place (no clone). If they don't match
+ *   the template, they are replaced by a fresh client render of this template (see hydrate.js).
  * @param {string} [ns]  parse in "svg" or "math" context
- * @returns {{ node: Node, dispose: Function }}
+ * @returns {{ node: Node | null, dispose: Function }}  node is null when hydrating (already in place)
  */
-export function render(result, hydrateRoot, ns) {
+export function render(result, hyd, ns) {
   // Only a genuine (Symbol-branded) html`…` result is instantiated — its markup is
   // author source. Anything else reaching here (data returned by a component or an
   // each() render function) is refused rather than having its fields trusted.
   if (!isTemplateResult(result)) {
     throw new TypeError("Zoijs: expected an html`…` template result (a component or each() render function returned something else)");
   }
-  const owner = createOwner(); // nested under the active owner
-  // Hydration adopts the server DOM in place — elements, attributes, and events are
-  // reused, never re-created; each dynamic slot is cleared + re-rendered (same
-  // values → no visible change). Otherwise build a fresh clone.
-  const hydrating = hydrateRoot != null;
-  const fragment = hydrating ? hydrateRoot : (ns ? foreignTemplate(result.__staticHTML, ns) : result.template).content.cloneNode(true);
+  const tpl = (ns ? foreignTemplate(result.__staticHTML, ns) : result.template).content;
   const { parts, values } = result;
-
+  // Hydration validates the whole boundary BEFORE binding anything, so a mismatch leaves no
+  // listener or effect on the server nodes it then discards.
+  const m = hyd && matchTemplate(tpl, hyd.parent, hyd.before, hyd.end);
+  if (hyd && !m) {
+    mismatch(hyd.parent, !hyd.before && !hyd.end);
+    for (const n of regionNodes(hyd.parent, hyd.before, hyd.end)) n.remove();
+    const r = render(result, undefined, ns);
+    hyd.parent.insertBefore(r.node, hyd.end);
+    return { node: null, dispose: r.dispose };
+  }
+  const owner = createOwner(); // nested under the active owner
+  const fragment = m ? null : tpl.cloneNode(true);
   // Collect every part's target node first (document order), so a binding that
   // inserts children can't shadow a later part.
-  const nodes = collectNodes(fragment, parts, result.hasElements);
+  const nodes = m ? m.nodes : collectNodes(fragment, parts, result.hasElements);
 
   runWithOwner(owner, () => {
     for (let i = 0; i < parts.length; i++) {
@@ -82,11 +90,12 @@ export function render(result, hydrateRoot, ns) {
       if (!node) continue;
 
       if (part.type === "child") {
-        if (hydrating) clearHydratedSlot(node); // drop this slot's server content
-        bindChild(node, values[part.hole], nsOf(node.parentNode, ns));
+        if (m) adoptChild(m.starts[i], node, values[part.hole], nsOf(node.parentNode, ns));
+        else bindChild(node, values[part.hole], nsOf(node.parentNode, ns));
       } else {
         node.removeAttribute("data-zoijs-bind");
-        for (const attr of part.attrs) bindAttribute(node, attr, values);
+        if (m) node.removeAttribute("data-zoijs-h");
+        for (const attr of part.attrs) bindAttribute(node, attr, values, !!m);
       }
     }
   });
@@ -94,18 +103,77 @@ export function render(result, hydrateRoot, ns) {
   return { node: fragment, dispose: () => disposeOwner(owner) };
 }
 
-// Remove a hydrated slot's server content: the nodes before its anchor, back
-// through the slot's `<!--zoijs:[-->` start marker (emitted by @zoijs/ssr). Static
-// text outside the slot is preserved; the normal binding then renders fresh content
-// in the same place. No start marker → leave the DOM as-is (not a hydratable slot).
-const isSlotStart = (n) => n && n.nodeType === 8 && n.data === "zoijs:[";
-function clearHydratedSlot(anchor) {
-  let start = anchor.previousSibling;
-  while (start && !isSlotStart(start)) start = start.previousSibling;
-  if (!start) return;
-  let n;
-  while ((n = anchor.previousSibling) !== start) n.remove();
-  start.remove();
+// ---- hydration: adopting server content in a slot -----------------------------
+//
+// `start`…`anchor` brackets the slot's server content. Matching content is adopted (same
+// nodes, so typed values, focus and selection survive); anything that doesn't match is
+// replaced by a client render of just that value. Markers are removed / normalized so the
+// DOM ends up exactly as a fresh mount would build it.
+function adoptChild(start, anchor, value, ns) {
+  anchor.data = "zoijs";
+  try {
+    if (isEachResult(value)) setupKeyedList(anchor, value, ns, start);
+    else if (typeof value === "function") bindReactiveContent(anchor, value, ns, start);
+    else ownItems(adoptItems(start, anchor, value, ns));
+  } finally {
+    start.remove();
+  }
+}
+
+const isTextValue = (v) => v == null || (typeof v !== "object" && typeof v !== "function");
+const textOf = (v) => (v == null || typeof v === "boolean" ? "" : toText(v));
+
+// Adopt one value between `before` and `end`; returns its item ({ nodes, dispose }).
+function adoptOne(before, end, value, ns) {
+  const parent = end.parentNode;
+  if (isTemplateResult(value)) {
+    const r = render(value, { parent, before, end }, ns);
+    return { nodes: regionNodes(parent, before, end), dispose: r.dispose };
+  }
+  const region = regionNodes(parent, before, end);
+  if (isTextValue(value)) {
+    const text = textOf(value);
+    let t = region.length === 1 && region[0].nodeType === 3 ? region[0] : null;
+    if (t ? t.data !== text : region.length || text) mismatch(parent, false, "different text");
+    if (!t) {
+      for (const n of region) n.remove();
+      t = parent.insertBefore(document.createTextNode(""), end);
+    }
+    t.data = text; // the client's value wins (in place: same node)
+    return { nodes: [t], dispose: noop };
+  }
+  // A raw DOM node or unsafeHTML can't be compared: always the client's own nodes.
+  for (const n of region) n.remove();
+  const item = renderChild(value, ns);
+  for (const n of item.nodes) parent.insertBefore(n, end);
+  return item;
+}
+
+// A slot's value: one region, or one bracketed region per array entry.
+function adoptItems(start, anchor, value, ns) {
+  if (!Array.isArray(value)) return [adoptOne(start, anchor, value, ns)];
+  const regions = slotItems(start, anchor, value.length);
+  const items = [];
+  if (!regions) insertItems(anchor, value, items, ns);
+  else for (let i = 0; i < value.length; i++) items.push(unbracket(regions[i], (s, e) => adoptOne(s, e, value[i], ns)));
+  return items;
+}
+
+// Run `fn` over an item's bracketed region, then drop the bracket.
+const unbracket = ([s, e], fn) => {
+  const r = fn(s, e);
+  s.remove();
+  e.remove();
+  return r;
+};
+
+function ownItems(items) {
+  onCleanup(() => {
+    for (const it of items) {
+      it.dispose();
+      for (const n of it.nodes) n.remove();
+    }
+  });
 }
 
 // Match parts to nodes by document order: a child part ↔ the next marker comment,
@@ -141,8 +209,11 @@ const rawInAttr = (name) => {
   throw new TypeError(`Zoijs: unsafeHTML() can't be bound to attribute "${name}"`);
 };
 
-function bindAttribute(el, attr, values) {
+function bindAttribute(el, attr, values, hydrating) {
   for (const h of attr.holes) if (isUnsafeHTML(values[h])) rawInAttr(attr.name);
+  // Hydrating a form control the user already changed: its first write is skipped, so what
+  // they typed or ticked before the app loaded is kept (later updates write as usual).
+  let keep = hydrating && edited(el, attr.content || attr.name.toLowerCase());
   if (attr.name === "ref") {
     // A callback ref. Only a single ${fn} is meaningful; anything else (a string,
     // a number, a multi-part value) is rejected by bindRef without touching the DOM.
@@ -155,9 +226,13 @@ function bindAttribute(el, attr, values) {
     // compiler routed here (no comment marker can live in raw text). Set the PROPERTY.
     const prop = attr.content;
     const raw = values[attr.holes[0]];
-    if (typeof raw === "function")
-      labelNext({ kind: "attr", el, name: prop }, () => effect(() => (el[prop] = toText(raw()))));
-    else el[prop] = toText(raw);
+    const set = () => {
+      const v = toText(typeof raw === "function" ? raw() : raw);
+      if (keep) keep = false;
+      else el[prop] = v;
+    };
+    if (typeof raw === "function") labelNext({ kind: "attr", el, name: prop }, () => effect(set));
+    else set();
     return;
   }
 
@@ -182,10 +257,18 @@ function bindAttribute(el, attr, values) {
         applyAttribute(el, "target", t);
         applyAttribute(el, "rel", openerRel(t, attr.rel && partValue(el, attr.rel, values)));
       }
-    : () => applyAttribute(el, attr.name, partValue(el, attr, values), attr.check);
+    : () => {
+        const v = partValue(el, attr, values); // read even when skipped: stays reactive
+        if (keep) keep = false;
+        else applyAttribute(el, attr.name, v, attr.check);
+      };
   if (attr.holes.some((h) => typeof values[h] === "function")) labelNext({ kind: "attr", el, name: attr.name }, () => effect(write));
   else write();
 }
+
+// Has the user changed this server-rendered control's value / checked state?
+const edited = (el, name) =>
+  name === "value" ? "defaultValue" in el && el.value !== el.defaultValue : name === "checked" && el.checked !== el.defaultChecked;
 
 // A part's current value: a whole ${} passes the raw value (booleans, numbers, property types
 // for value/checked); static text + holes is always a joined string.
@@ -232,7 +315,7 @@ function bindRef(el, fn) {
 
 // ---- text / content bindings -------------------------------------------------
 
-function bindReactiveContent(anchor, getValue, ns) {
+function bindReactiveContent(anchor, getValue, ns, start) {
   let mode = null; // "text" | "nodes"
   let textNode = null;
   let items = []; // [{ nodes, dispose }]
@@ -262,7 +345,17 @@ function bindReactiveContent(anchor, getValue, ns) {
     // null/undefined/booleans render NOTHING (matches the `cond && html\`...\``
     // idiom); numbers/strings render as text; everything else is node content.
     const asText = value == null || t === "boolean" || t === "number" || t === "string" || t === "bigint";
-    if (asText) {
+    // First run of a hydrated slot: adopt the server content instead of creating it.
+    const from = start;
+    start = null;
+    if (from) {
+      items = adoptItems(from, anchor, value, ns);
+      if (asText) {
+        textNode = items[0].nodes[0];
+        items = [];
+      }
+      mode = asText ? "text" : "nodes";
+    } else if (asText) {
       if (mode !== "text") {
         clearNodes();
         textNode = document.createTextNode("");
@@ -360,7 +453,7 @@ function longestIncreasingSubsequence(arr) {
   return keep;
 }
 
-function setupKeyedList(anchor, marker, ns) {
+function setupKeyedList(anchor, marker, ns, start) {
   const { items, keyFn, renderFn } = marker;
   const listOwner = createOwner(); // item subtrees nest here
   let records = new Map();
@@ -374,7 +467,7 @@ function setupKeyedList(anchor, marker, ns) {
   // Build one item. The item is a reactive proxy over a state cell, so reusing a
   // node later (itemCell.set) refreshes only its own bindings. render() opens a
   // child owner (nested in listOwner) so the whole item subtree disposes together.
-  const createRecord = (key, item) => {
+  const createRecord = (key, item, region) => {
     const isObj = item !== null && typeof item === "object";
     const itemCell = isObj ? createState(item) : null;
     const arg = isObj ? makeItemProxy(itemCell, Array.isArray(item)) : item;
@@ -385,9 +478,18 @@ function setupKeyedList(anchor, marker, ns) {
     untrack(() =>
       runWithOwner(itemOwner, () => {
         const result = renderFn(arg);
-        f = render(result, undefined, ns).node;
+        // Hydrating: adopt the item's bracketed server region; its nodes become the span.
+        f = region
+          ? unbracket(region, (s, e) => {
+              render(result, { parent: e.parentNode, before: s, end: e }, ns);
+              return { firstChild: s.nextSibling === e ? null : s.nextSibling, lastChild: e.previousSibling === s ? null : e.previousSibling };
+            })
+          : render(result, undefined, ns).node;
         // A leading root binding's content goes before its anchor: an empty head node keeps it in the span.
-        if (result.__staticHTML.startsWith("<!--zoijs-->")) f.prepend("");
+        if (result.__staticHTML.startsWith("<!--zoijs-->")) {
+          if (region) f.firstChild.before((f.firstChild = document.createTextNode("")));
+          else f.prepend("");
+        }
       })
     );
     return { key, item, itemCell, head: f.firstChild, tail: f.lastChild, dispose: () => disposeOwner(itemOwner) };
@@ -491,9 +593,20 @@ function setupKeyedList(anchor, marker, ns) {
     currentList = ordered;
   };
 
+  // First run of a hydrated list: adopt one bracketed server region per item, in order. A
+  // different item count (or duplicate keys) re-renders the whole list on the client.
+  const adopt = (newItems, start) => {
+    const regions = slotItems(start, anchor, new Set(newItems.map(keyFn)).size === newItems.length ? newItems.length : -1);
+    if (!regions) return reconcile(newItems);
+    currentList = newItems.map((item, i) => createRecord(keyFn(item), item, regions[i]));
+    for (const rec of currentList) records.set(rec.key, rec);
+  };
+
   labelNext({ kind: "list", el: anchor }, () => effect(() => {
     const newItems = readItems(); // tracked: subscribe to the list state
-    runWithOwner(listOwner, () => reconcile(newItems));
+    const from = start;
+    start = null;
+    runWithOwner(listOwner, () => (from ? adopt(newItems, from) : reconcile(newItems)));
   }));
 
   onCleanup(() => {

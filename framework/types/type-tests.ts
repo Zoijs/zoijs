@@ -73,6 +73,13 @@ each(
 const App: Component = () => html`<div>${() => count.get()}</div>`;
 const unmount: () => void = mount(App, "#app");
 unmount();
+const hydrated = mount(App, "#app", { hydrate: true });
+const status: "hydrated" | "recovered" | "client-rendered" | undefined = hydrated.hydration?.status;
+const mismatches: number | undefined = hydrated.hydration?.mismatches;
+void status;
+void mismatches;
+// @ts-expect-error — the result is read-only
+hydrated.hydration = { status: "hydrated", mismatches: 0 };
 mount(html`<p>hi</p>`, document.body);
 // @ts-expect-error — mount needs a target
 mount(App);

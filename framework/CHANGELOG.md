@@ -6,6 +6,46 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Hydration no longer crashes on a mismatch.** When the server HTML differed in structure from
+  what the component renders, `mount(…, { hydrate: true })` threw
+  (`node.removeAttribute is not a function`) after binding part of the page, contrary to the
+  documented graceful degradation. Each template is now checked against the server HTML *before*
+  anything is bound to it; a template that doesn't match is rendered on the client in place —
+  only that template, once, with no duplicate nodes or listeners — and the rest stays adopted.
+- **Missing hydration markers no longer leave the page silently static.** HTML rendered without
+  `{ hydratable: true }` (or with incomplete or malformed markers) used to hydrate as a no-op: no
+  error, and no event handler or binding was ever attached. It is now rendered on the client,
+  with a development warning that says how to fix the server render.
+- **Form controls keep their state through hydration.** Hydration cleared and re-rendered every
+  dynamic region (conditionals, nested templates, `each()` items), so inputs inside them lost
+  what the user had typed, ticked or selected, and lost focus. Matching regions are now adopted
+  node for node (needs `@zoijs/ssr` from the same release for nested markers), and a control the
+  user already changed keeps the user's value — its bound `value` / `checked` isn't written on
+  hydration.
+
+### Added
+- **`unmount.hydration`** after a hydrating mount: `{ status: "hydrated" | "recovered" |
+  "client-rendered", mismatches }`, so an app can tell a full adoption from a recovery. Each
+  recovery also logs one development warning naming the kind of difference and the parent element
+  (never values); production logs nothing.
+
+### Known limitation
+- **An edited field and the app's state can disagree after hydration.** The field keeps what the
+  user typed, but the bound state still holds the server value until the next `input` event, and
+  if that state changes for another reason first, the binding writes it and replaces the user's
+  edit. Reconciling user-edited controls back into state is planned SSR follow-up work.
+
+### Size
+- **Core source-size budget raised from 28.5 KB to 30.5 KB (31,232 B)**, approved as an exception
+  for these hydration fixes only: structural validation of server HTML before binding
+  (`core/hydrate.js`), nested DOM adoption and form-state preservation — about 1.85 KB of code
+  minified and gzipped, 3.0 KB of commented source (31,080 B now, ~150 B left). The gate measures
+  commented source, not the minified payload. Apps that don't hydrate run none of this code (DOM
+  benchmarks unchanged) but still download it; moving hydration behind an optional import and
+  adding a minified-size budget (PERF-2) are follow-ups. No further raise without measured
+  justification.
+
 ## [1.10.0] — 2026-10-12
 
 ### Fixed
