@@ -6,8 +6,12 @@
 #   SHA (keeping the `# vX.Y.Z` comment in sync).
 # - npm: every committed package-lock.json. Published @zoijs packages have zero runtime
 #   dependencies, so these are development tools (test runners, jsdom, TypeScript, Playwright).
-#   Version updates are grouped into one weekly PR per directory; security updates (Dependabot
-#   alerts) are raised as soon as an advisory lands, independent of this schedule.
+#   Minor and patch updates are grouped into one weekly PR; each MAJOR update gets a PR of its
+#   own, because majors can change requirements (jsdom 30 dropped Node 20) and must be reviewed
+#   one at a time. Playwright always gets its own PR, even for a minor: its browsers must match
+#   the pinned CI container image, so that PR needs the image tag + digest bumped by hand (see
+#   below). Security updates (Dependabot alerts) are raised as soon as an advisory lands,
+#   independent of this schedule.
 #   assets/ (private brand tooling, never installed in CI) is left out of version updates.
 #
 # Not covered: the Playwright container digest in ci.yml (Dependabot doesn't update
@@ -50,8 +54,13 @@ updates:
     ignore:
       - dependency-name: "@zoijs/*"
     groups:
+      # First match wins: Playwright is pulled out before the catch-all group.
+      playwright:
+        patterns: ["@playwright/test", "playwright", "playwright-core"]
       npm-dev:
         patterns: ["*"]
-    open-pull-requests-limit: 5
+        exclude-patterns: ["@playwright/test", "playwright", "playwright-core"]
+        update-types: [minor, patch] # majors are left out of the group → one PR each
+    open-pull-requests-limit: 10
     commit-message:
       prefix: chore(deps)
