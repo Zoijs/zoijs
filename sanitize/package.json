@@ -53,9 +53,9 @@
     "dev": "node ../scripts/test-server.mjs .. 3800"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.64.0",
     "@zoijs/core": "file:../framework",
-    "jsdom": "^29.1.1",
-    "typescript": "^5.9.3"
+    "jsdom": "^30.1.2",
+    "typescript": "^7.0.2"
   }
 }
