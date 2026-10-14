@@ -60,7 +60,7 @@
     "@zoijs/action": "file:../action",
     "@zoijs/core": "file:../framework",
     "@zoijs/resource": "file:../resource",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.1.2",
     "typescript": "^5.9.3"
   }
 }
