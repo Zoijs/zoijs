@@ -56,7 +56,7 @@
     "dev": "node ../scripts/test-server.mjs .. 3900 3901"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.64.0",
     "@zoijs/action": "file:../action",
     "@zoijs/core": "file:../framework",
     "@zoijs/resource": "file:../resource",
