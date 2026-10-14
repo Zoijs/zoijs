@@ -28,7 +28,7 @@ a PR. We say no to most additions on purpose.
 
 ## Project setup
 
-No build step. You need Node 20+ (the test toolchain — jsdom — requires it).
+No build step. You need Node 22.22+ or 24.15+ (the test toolchain — jsdom 30 — requires it).
 
 ```bash
 git clone https://github.com/Zoijs/zoijs && cd zoijs/framework
@@ -74,7 +74,7 @@ maintainers. Every change lands through a pull request:
 
 - A pull request is **required**; direct pushes to `main` are rejected.
 - At least **one approving maintainer review** is required (via CODEOWNERS).
-- **CI must pass** — unit + type checks (Node 20/22/24) and the browser tests.
+- **CI must pass** — unit + type checks (Node 22/24) and the browser tests.
 - All **review conversations must be resolved** before merge.
 - New commits **dismiss stale approvals**, so changes get re-reviewed.
 - **Force-pushes and branch deletion are disabled.**

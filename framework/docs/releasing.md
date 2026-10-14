@@ -21,7 +21,7 @@ publishes the same way — after its first version exists on npm (see
    ```
 
 3. **CI does the rest** — only a tag matching `*-v<digit>…` triggers it:
-   - the **full CI suite** (unit + types on Node 20/22/24, real browsers, tarball checks)
+   - the **full CI suite** (unit + types on Node 22/24, real browsers, tarball checks)
      runs at the tagged commit — the same workflow pull requests run;
    - **verify**: the tagged commit must be on `main`; `scripts/release-check.mjs` checks the
      tag matches the package's `name`/`version`, that the package has no npm lifecycle
@@ -126,7 +126,7 @@ another), so apart from core they're independent and can publish in any order. T
 ## Merge gate (required status check)
 
 `ci.yml` reports one aggregate check, **`CI passed`**, which succeeds only when every
-`Unit + Types (Node 20/22/24)` leg, `Browser (Chromium / Firefox / WebKit)` **and**
+`Unit + Types (Node 22/24)` leg, `Browser (Chromium / Firefox / WebKit)` **and**
 `Dependencies (npm audit)` succeeded (the individual job names are kept stable too). `publish.yml` already runs the whole CI
 workflow and its publish job `needs: [ci, verify]`, so nothing publishes past a red browser run.
 **Merging** is gated only if the `main` ruleset requires the check — this is GitHub

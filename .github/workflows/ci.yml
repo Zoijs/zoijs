@@ -31,9 +31,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 18 is EOL (2025-04) and modern jsdom needs require(ESM), which
-        # only exists in Node 20.19+/22.12+ — so we test 20, 22, and current 24.
-        node: [20, 22, 24]
+        # The TEST toolchain sets the floor: jsdom 30 (and its undici 8) requires Node
+        # ^22.22.2 || ^24.15.0 || >=26, and Node 20 has been EOL since 2026-04-30 — so we test the
+        # two supported LTS lines, 22 and 24. (Published packages have no dependencies; their
+        # `engines` field is about where they run, not about this matrix.)
+        node: [22, 24]
     steps:
       # Third-party actions are pinned to full commit SHAs (immutable); Dependabot
       # (.github/dependabot.yml) proposes updates. The comment is the human version.

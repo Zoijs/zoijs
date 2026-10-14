@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The full CI suite (unit + types on Node 20/22/24, browsers, tarball checks) at the
+  # The full CI suite (unit + types on Node 22/24, browsers, tarball checks) at the
   # tagged commit — the same workflow pull requests run, not a separate copy.
   ci:
     uses: ./.github/workflows/ci.yml

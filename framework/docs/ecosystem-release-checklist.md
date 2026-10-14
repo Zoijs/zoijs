@@ -74,7 +74,7 @@ LICENSE + CHANGELOG, and is `type: module` with `sideEffects: false`.
 
 `.github/workflows/ci.yml` runs the root scripts (`install:all`, `test`,
 `test:types`, `test:browser`), which enumerate all seven packages plus the
-Task Board demo, on a Node 20/22/24 matrix and a Playwright (Chromium/Firefox/
+Task Board demo, on a Node 22/24 matrix and a Playwright (Chromium/Firefox/
 WebKit) container job. `publish.yml` auto-publishes **core only**; the optional
 packages are published manually (npm 2FA), by design.
 
