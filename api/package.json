@@ -61,6 +61,6 @@
     "@zoijs/core": "file:../framework",
     "@zoijs/resource": "file:../resource",
     "jsdom": "^29.1.1",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }
