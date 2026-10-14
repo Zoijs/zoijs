@@ -40,7 +40,7 @@ marked **Latest**.
 
 ## CI — ✅ green
 
-The Actions workflow passes on `main`: Node 20/22/24 matrix (unit + types) and
+The Actions workflow passes on `main`: Node 22/24 matrix (unit + types) and
 the browser job (Chromium / Firefox / WebKit in the Playwright container). The
 publish workflow correctly skips (versions already on npm).
 
