@@ -46,8 +46,8 @@ skip the npm-registry checks) or `npm run release:check -- --all --offline`.
 - **Least privilege.** Every workflow defaults to `contents: read`; checkouts don't
   persist credentials; no job uses `pull_request_target`.
 - **Immutable dependencies.** Actions are pinned to full commit SHAs (with a `# vX.Y.Z`
-  comment) and the Playwright image by `sha256` digest. Dependabot proposes action-pin
-  updates; bump the Playwright image tag + digest together with `@playwright/test`.
+  comment) and the Playwright image by `sha256` digest. Updates are made by hand: move the
+  SHA and its comment together, and bump the Playwright image tag + digest with `@playwright/test`.
 - **Dependency checks** (see [below](#dependency-checks)): every lockfile is audited for known
   vulnerabilities and checked against a license policy on every pull request and weekly.
 - **Reproducible installs.** CI installs with `npm ci --ignore-scripts` (`npm run ci:all`):
@@ -149,7 +149,7 @@ CI, so it is checked too, direct and transitive, across all committed lockfiles:
 |---|---|---|
 | Licenses — `scripts/check-licenses.mjs` (offline, reads each lockfile's declared licenses) | `npm test` → `test:deps`, in the **Unit** job | A license (or SPDX expression) outside the allow list, a package with no license, or an exception that no longer matches anything |
 | Vulnerabilities — `scripts/audit-deps.mjs` (`npm audit --package-lock-only` per lockfile) | the **Dependencies (npm audit)** job, part of `CI passed`; also weekly (Monday) | Any advisory, of any severity, that isn't an accepted exception; an expired or unused exception; an audit that couldn't run (retried, then failed — never a silent pass) |
-| Updates — Dependabot (`.github/dependabot.yml`) | weekly PRs per lockfile (plus security PRs as advisories land) | — it proposes; nothing is merged or upgraded automatically |
+| Updates | by hand, one reviewed PR at a time (no automated update PRs) | — the audit above flags anything that needs upgrading |
 
 The policy lives in **`scripts/dependency-policy.json`**: the allowed licenses (permissive only),
 reviewed license exceptions (today: LGPL libvips binaries and the OFL-licensed Poppins font, both

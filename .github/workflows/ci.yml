@@ -37,8 +37,8 @@ jobs:
         # `engines` field is about where they run, not about this matrix.)
         node: [22, 24]
     steps:
-      # Third-party actions are pinned to full commit SHAs (immutable); Dependabot
-      # (.github/dependabot.yml) proposes updates. The comment is the human version.
+      # Third-party actions are pinned to full commit SHAs (immutable), updated by hand.
+      # The comment is the human version.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

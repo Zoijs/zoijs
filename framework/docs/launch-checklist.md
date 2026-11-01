@@ -66,7 +66,7 @@ Zoijs uses a single canonical domain, **[zoijs.dev](https://zoijs.dev)**, for bo
 `https://github.com/Zoijs/zoijs` is public. `main` is protected by a ruleset
 (PR + 1 approving Code-Owner review, required CI checks, conversations resolved,
 no force-push/deletion; admins bypass for their own PRs). Squash-only merges with
-auto-deleted head branches; Dependabot, secret scanning + push protection, and
+auto-deleted head branches; secret scanning + push protection, and
 private vulnerability reporting are enabled.
 
 ## Examples — ✅ working

@@ -97,13 +97,3 @@ test("audit: only an exact, unexpired exception accepts a finding; expired and s
   r = judge(f, [{ ...ok, lockfile: "router" }], "2026-10-13");
   assert.equal(r.accepted.length, 0, "exceptions are per lockfile");
 });
-
-test("Dependabot covers every committed lockfile (except the private assets/ tooling) and GitHub Actions", async () => {
-  const { readFileSync } = await import("node:fs");
-  const yml = readFileSync(new URL("../../.github/dependabot.yml", import.meta.url), "utf8");
-  assert.match(yml, /package-ecosystem: github-actions/);
-  assert.match(yml, /package-ecosystem: npm/);
-  const listed = [...yml.matchAll(/^ {6}- \/(\S+)/gm)].map((m) => m[1]);
-  assert.deepEqual(lockfileDirs().filter((d) => d !== "assets" && !listed.includes(d)), [], "lockfiles missing from dependabot.yml");
-  assert.deepEqual(listed.filter((d) => !lockfileDirs().includes(d)), [], "dependabot.yml lists directories without a lockfile");
-});
