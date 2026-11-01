@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Benchmarks for @zoijs/core (not published). Run from the repo root via `npm run bench`.",
   "devDependencies": {
+    "esbuild": "0.28.2",
     "jsdom": "^30.1.2"
   }
 }

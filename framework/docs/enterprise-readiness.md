@@ -54,7 +54,7 @@ Everything marked "enforced in CI" runs on every push and pull request via
 |---|---|---|
 | Fine-grained updates, no Virtual DOM | ✅ | One value → one node; setup runs once — [`docs/concepts/`](concepts/) |
 | Minimal DOM moves on reorder | ✅ | LIS reconciliation — [`tests/lis.test.js`](../tests/lis.test.js) (move-count gate) |
-| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check` — a temporary Phase 1 budget on the gzipped, commented client source (29,184 B), enforced in CI; production/minified budgets come with PERF-2 |
+| Size budget enforced | ✅ | [`bench/size.mjs`](../../bench/size.mjs) `--check`, in CI — budgets on what apps ship (PERF-2E): the bundled, minified production core — whole API and a minimal app — and the unbundled production entry (every module a no-build app loads), gzipped; numbers in [`bench/README.md`](../../bench/README.md) |
 | Reproducible benchmarks | ✅ | [`bench/`](../../bench/) (size + DOM micro-benchmarks) |
 
 ### 5. Supply chain

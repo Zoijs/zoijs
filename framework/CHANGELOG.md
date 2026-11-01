@@ -6,6 +6,14 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Size budgets now measure what apps ship** (`bench/size.mjs`, PERF-2E). Instead of one temporary
+  budget on all commented source files concatenated, `npm test` checks three: the core bundled with
+  the `production` condition, minified and gzipped, for the whole API (11,242 B; budget 11.5 KB) and
+  for a minimal app (10,936 B; 11 KB), and the unbundled production entry — every module a no-build
+  app loads, each gzipped (35,894 B; 36 KB). The old figure (31,080 B) is still printed, unbudgeted.
+  No change to the package.
+
 ### Fixed
 - **Hydration no longer crashes on a mismatch.** When the server HTML differed in structure from
   what the component renders, `mount(…, { hydrate: true })` threw

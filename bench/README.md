@@ -4,26 +4,30 @@ Reproducible performance numbers for `@zoijs/core`. Tooling only — not publish
 
 ```bash
 npm run bench        # size + DOM micro-benchmarks (from the repo root)
-npm run bench:size   # gzipped-size budget check (also runs inside `npm test`)
+npm run bench:size   # size budgets (also run inside `npm test`)
 ```
 
-## Shipped size
+## Size: what apps ship
 
-Zoijs has **no build step** — the published package *is* its source, so the gzipped
-size of `framework/src/**/*.js` (client-reachable files, including opt-in entries like
-`unsafe.js`; the server-only `server.js` is excluded) is what a browser can fetch from a
-gzip/brotli CDN. `npm run bench:size` prints the current numbers.
+`npm run bench:size` measures `@zoijs/core` the two ways an app ships it (PERF-2E), each against its own
+budget (`bench/size.mjs --check`, enforced by `npm test` in CI):
 
-Phase 1 currently tracks **commented source size**: about **27.4 KB gzipped
-(28,066 B as of this writing) against a temporary 28.5 KB (29,184 B) budget**, enforced by `npm test`
-(`bench/size.mjs --check`). That is **not** a production payload figure — the source
-ships with its comments, and a page only loads the modules it imports. The budget was
-raised deliberately through Phase 1 for reviewed security and correctness fixes (the
-history is in `bench/size.mjs`); it is not license for unchecked growth.
-Production/minified distribution budgets are defined in PERF-2, which has not run yet,
-so there is no final minified production size to quote.
+| Measure | What it is | Size (2026-11-01) | Budget |
+|---|---|---|---|
+| **Bundled · whole API** | The core bundled with the `production` export condition (esbuild, as `@zoijs/build` uses), minified, gzipped | 11,242 B | 11.5 KB |
+| **Bundled · minimal app** | The same for an app using only `html`, `mount` and `createState` | 10,936 B | 11 KB |
+| **Unbundled · production entry** | A no-build app (import map): every module reachable from `src/prod.js`, each gzipped on its own, as a CDN sends them | 35,894 B (19 files) | 36 KB |
 
-> Historical: before the Phase 1 hardening the core measured ~13.3 KB gzipped (1.0) and ~18.1 KB (August 2026), against budgets of 16–20 KB.
+The budgets are ceilings, not targets. Raising one needs a reviewed change, with the measurement
+and the reason recorded at the top of `bench/size.mjs`.
+
+Also printed, but not budgeted: every client source file (opt-in entries such as `unsafe.js`
+included) concatenated and gzipped — **31,080 B**. That was the old, temporary budget (raised step
+by step through Phase 1, history in `bench/size.mjs`); it counts commented source files rather than
+what an app loads, so splitting a module or adding an opt-in entry grew it even when apps shipped
+less.
+
+> Historical: before the Phase 1 hardening the core measured ~13.3 KB gzipped as commented source (1.0) and ~18.1 KB (August 2026).
 
 ## DOM micro-benchmarks (jsdom)
 
@@ -46,5 +50,5 @@ list — only the changed text node is touched. `swap` and single-item moves do 
 minimal DOM moves via the `each()` longest-increasing-subsequence pass.
 
 > Absolute numbers are machine-dependent; regenerate with `npm run bench`. The
-> deterministic gates are the size budget (above) and the move-count assertions in
+> deterministic gates are the size budgets (above) and the move-count assertions in
 > `framework/tests/lis.test.js`.
