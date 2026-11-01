@@ -1,0 +1,55 @@
+{
+  "name": "@zoijs/build",
+  "version": "0.1.0",
+  "description": "Optional production build for Zoijs apps (experimental): esbuild bundling with content-hashed assets, a manifest, and fail-closed security checks. Your app still runs unbuilt.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "author": "Zoijs contributors (https://zoijs.dev)",
+  "license": "MIT",
+  "homepage": "https://zoijs.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zoijs/zoijs.git",
+    "directory": "build"
+  },
+  "bugs": {
+    "url": "https://github.com/Zoijs/zoijs/issues"
+  },
+  "keywords": [
+    "zoijs",
+    "build",
+    "esbuild",
+    "bundle",
+    "production",
+    "csp",
+    "content-hash"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

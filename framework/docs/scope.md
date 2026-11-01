@@ -25,7 +25,9 @@ starter CLI. Verified facts behind that claim:
 - The core is a closed set: `html`, `mount`, `createState`, `computed`, `each`,
   `configure`, `onCleanup` — plus the `ref` binding (1.1.0, **no new export**).
 - There is no provider, context, global store, dependency injection, event bus,
-  hook system, or build step anywhere in the ecosystem.
+  hook system, or *required* build step anywhere in the ecosystem. (`@zoijs/build`, an
+  optional production bundle — [RFC 0010](rfcs/0010-build.md), experimental — changes nothing
+  for apps that don't use it.)
 
 The single thing to keep watching: `@zoijs/forms` exposes its `values` / `errors` /
 `touched` as raw state objects while every other package exposes reader functions —
@@ -48,6 +50,7 @@ throughout.
 | **@zoijs/head** | Set document metadata from a component | `title`/`description`/`meta`, restore-on-cleanup | SSR, SEO engines, head reconciliation/dedup, a document-manager abstraction |
 | **@zoijs/testing** | Drive the real DOM in tests | `render` into a container, scoped queries (text/role/test-id/label), `fireEvent`, `waitFor`/`tick`, `cleanup`, `mockRouter` | A custom renderer, a virtual snapshot format, a test runner, assertion matchers, network mocking, a real browser |
 | **create-zoijs** | Copy a starter template | Copy a template, substitute the app name, validate the name, refuse a non-empty dir | Code generation, framework config, build setup, plugins, upgrades/migrations, interactive wizards |
+| **@zoijs/build** (experimental) | Optional production bundle | Drive esbuild: hashed chunks, manifest, fail-closed CSP/source-map/integrity checks, HTML tag + CSP hash helpers | A dev server, transforms (TS/JSX), plugins, config files, HTML templating, host adapters, being required |
 
 ## 3. Responsibility boundaries
 
@@ -202,7 +205,8 @@ maintainer checklist:
 Before accepting any addition, a maintainer should be able to answer **yes** to all:
 
 1. **No build step.** It works with a `<script type="module">` and an import map;
-   no bundler, compiler, or JSX transform is required.
+   no bundler, compiler, or JSX transform is required. (An *optional* production bundle is
+   allowed — [RFC 0010](rfcs/0010-build.md): the unbundled app must keep working unchanged.)
 2. **No core API growth by default.** It does not add to the public exports; any core
    change goes through an RFC and must be additive (the `ref` binding is the bar:
    real capability, zero new exports).

@@ -23,7 +23,10 @@ const OPTIONAL = ["router", "resource", "head", "action", "storage", "forms", "t
 // may import and must peer-depend on, in addition to @zoijs/core. Keep this list short — each entry
 // is a deliberate design decision, never a convenience. A layered package can't itself be a base.
 const LAYERED = { api: ["resource", "action"] }; // @zoijs/api: resource() for reads, action() for writes, over one secure request layer
-const TOOLING = ["create", "eslint-plugin"]; // create-zoijs, @zoijs/eslint-plugin — zero deps, no peers
+const TOOLING = ["create", "eslint-plugin", "build"]; // create-zoijs, @zoijs/eslint-plugin, @zoijs/build — zero deps
+// Reviewed tooling peers (framework/docs/rfcs/0010-build.md): a Node-side tool may peer-depend on the
+// one engine it drives, which the app installs and pins itself. Never shipped to a browser.
+const TOOLING_PEERS = { build: ["esbuild"] }; // @zoijs/build drives esbuild; it isn't a bundler of its own
 const ALL = [CORE, ...OPTIONAL, ...TOOLING];
 
 const failures = [];
@@ -42,8 +45,9 @@ for (const pkg of ALL) {
     if (peers.slice().sort().join() !== expected.join()) {
       fail(`${pkg}: peerDependencies must be exactly {${expected.join(", ")}}, got {${peers.join(", ") || "none"}}`);
     }
-  } else if (peers.length) {
-    fail(`${pkg}: must have no peerDependencies, got {${peers.join(", ")}}`);
+  } else if (peers.slice().sort().join() !== (TOOLING_PEERS[pkg] || []).slice().sort().join()) {
+    const want = TOOLING_PEERS[pkg] ? `exactly {${TOOLING_PEERS[pkg].join(", ")}}` : "none";
+    fail(`${pkg}: peerDependencies must be ${want}, got {${peers.join(", ") || "none"}}`);
   }
 }
 

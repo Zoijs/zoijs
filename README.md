@@ -194,6 +194,7 @@ The core has no router, store, or SSR — those are **optional** packages you ad
 | [`@zoijs/testing`](testing) | First-party DOM testing helpers — `render`, role/text/label queries, `fireEvent`, `waitFor`, a `mockRouter`. |
 | [`@zoijs/devtools`](devtools) | A dev-only reactive-graph inspector — every state, computed, and effect, and the DOM node each binding updates. |
 | [`@zoijs/eslint-plugin`](eslint-plugin) | A lint rule that enforces Zoijs's reactive-binding rule (auto-fixable). Dev-only, zero deps. |
+| [`@zoijs/build`](build) | *Experimental, not yet on npm.* An **optional** production bundle (esbuild): content-hashed files, a manifest, and fail-closed CSP / source-map / integrity checks. Your app still runs unbuilt. |
 
 Install only the ones you need — each runtime package peer-depends on `@zoijs/core` (and
 `@zoijs/api`, the one layered package, also on `@zoijs/resource` and `@zoijs/action`):
@@ -264,6 +265,7 @@ sanitize/         @zoijs/sanitize — optional untrusted-HTML sanitizer (same la
 testing/          @zoijs/testing — optional DOM testing helpers (same layout)
 devtools/         @zoijs/devtools — optional reactive-graph inspector (same layout)
 eslint-plugin/    @zoijs/eslint-plugin — optional lint rule (dev-only, zero deps)
+build/            @zoijs/build — optional production bundle (experimental; esbuild peer)
 create/           create-zoijs — the starter CLI (npm create zoijs@latest)
 examples/
   task-board/     ecosystem demo — one app using several packages
