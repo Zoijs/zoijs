@@ -12,6 +12,8 @@ coverage/
 *.tsbuildinfo
 dist/
 build/
+# …except the @zoijs/build package directory itself (a source package, not build output).
+!/build/
 .cache/
 
 # npm pack output

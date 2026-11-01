@@ -26,10 +26,15 @@ const job = (yaml, name) => {
 };
 
 test("every job runs on a pinned runner image, never a floating *-latest label", () => {
+  const PINNED = /^(ubuntu-\d+\.\d+|windows-\d{4}|macos-\d+)$/;
   for (const [name, yaml] of [["ci.yml", ci], ["publish.yml", publish]]) {
-    const labels = [...yaml.matchAll(/^\s*runs-on:\s*(\S+)/gm)].map((m) => m[1]);
+    const labels = [...yaml.matchAll(/^\s*runs-on:\s*(.+)$/gm)].map((m) => m[1].trim());
     assert.ok(labels.length > 0, `${name} has jobs`);
-    for (const label of labels) assert.match(label, /^ubuntu-\d+\.\d+$/, `${name}: runs-on ${label} — pin an exact image such as ubuntu-24.04`);
+    for (const label of labels) {
+      // A matrix label: every OS in the matrix must be pinned.
+      const values = label === "${{ matrix.os }}" ? JSON.parse(yaml.match(/^\s*os:\s*(\[.*\])\s*$/m)[1].replace(/([\w.-]+)/g, '"$1"')) : [label];
+      for (const v of values) assert.match(v, PINNED, `${name}: runs-on ${v} — pin an exact image such as ubuntu-24.04, windows-2025 or macos-15`);
+    }
   }
 });
 
@@ -56,7 +61,10 @@ test("ci.yml has the real-browser job, the dependency audit, and the aggregate '
   assert.ok(gate, "gate job");
   assert.match(gate, /name: CI passed/);
   assert.match(gate, /if: \$\{\{ always\(\) \}\}/, "runs (and fails) even when a needed job failed");
-  assert.match(gate, /needs: \[unit, browser, deps\]/);
+  assert.match(gate, /needs: \[unit, browser, deps, platforms\]/);
+  assert.match(gate, /needs\.platforms\.result \}\}" = "success"/, "@zoijs/build's Windows/macOS run gates merging too");
+  assert.match(job(ci, "platforms"), /os: \[windows-\d{4}, macos-\d+\]/);
+  assert.match(job(ci, "platforms"), /npm --prefix build test/);
   assert.match(gate, /needs\.deps\.result \}\}" = "success"/, "the dependency audit gates merging too");
   assert.match(job(ci, "deps"), /npm run audit:deps/);
   assert.match(gate, /needs\.unit\.result \}\}" = "success"/);

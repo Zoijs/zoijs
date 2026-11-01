@@ -112,13 +112,36 @@ jobs:
   # leg, the real-browser job AND the dependency audit succeeded (a skipped or cancelled job fails
   # it too). Require this check in the main-branch ruleset (docs/releasing.md → "Merge gate") so a
   # pull request can't merge with a red Browser job. The individual job names above stay unchanged.
+
+  # @zoijs/build works on the filesystem — paths, renames during promotion, private source maps —
+  # so its tests also run on Windows and macOS. Every other package is pure JavaScript or runs in
+  # a browser, which the Linux jobs cover. Pinned images, like every other runner here.
+  platforms:
+    name: "@zoijs/build (${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: build/package-lock.json
+      - run: npm ci --ignore-scripts --prefix build
+      - run: npm --prefix build test
+      - run: npm --prefix build run test:types
   gate:
     name: CI passed
     if: ${{ always() }}
-    needs: [unit, browser, deps]
+    needs: [unit, browser, deps, platforms]
     runs-on: ubuntu-24.04
     steps:
-      - name: Unit, browser and dependency jobs all succeeded
+      - name: Unit, browser, dependency and platform jobs all succeeded
         run: |
-          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}  deps: ${{ needs.deps.result }}"
-          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success" && test "${{ needs.deps.result }}" = "success"
+          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}  deps: ${{ needs.deps.result }}  platforms: ${{ needs.platforms.result }}"
+          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success" && test "${{ needs.deps.result }}" = "success" && test "${{ needs.platforms.result }}" = "success"
