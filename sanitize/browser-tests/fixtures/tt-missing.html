@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      sanitize() under ENFORCED Trusted Types. The import map is allowed by its hash; the page
+      does NOT list zoijs-sanitize, so sanitize() must fail with a clear error.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-FkeqoYI1m98VvN5v6cvw5dDTmQbjAChGW8ARbnajbDs='; require-trusted-types-for 'script'; trusted-types zoijs;" />
+    <title>@zoijs/sanitize — Trusted Types (missing)</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "/framework/src/index.js",
+          "@zoijs/core/server": "/framework/src/server.js",
+          "@zoijs/sanitize": "/sanitize/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./tt-app.js"></script>
+  </body>
+</html>

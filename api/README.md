@@ -1,0 +1,1472 @@
+<div align="center">
+
+# @zoijs/api
+
+**Same-origin data access for [Zoijs](https://zoijs.dev).** Reads as a resource, writes as an action — safe URL building, reactive queries, JSON bodies, invalidation, HTTP errors and a same-origin policy built in — plus explicit, single-origin clients for external APIs.
+
+[![npm](https://img.shields.io/npm/v/@zoijs/api.svg)](https://www.npmjs.com/package/@zoijs/api)
+[![license](https://img.shields.io/npm/l/@zoijs/api.svg)](LICENSE)
+
+[Documentation](https://zoijs.dev) · [Core package](https://www.npmjs.com/package/@zoijs/core) · [@zoijs/resource](../resource/README.md) · [@zoijs/action](../action/README.md)
+
+</div>
+
+---
+
+`@zoijs/api` is an **optional** package. It is a thin layer over
+[`@zoijs/resource`](../resource/README.md) for reads and [`@zoijs/action`](../action/README.md)
+for writes:
+
+```js
+const tasks = api("/api/tasks");                                   // a resource
+const addTask = api.post("/api/tasks", { invalidate: tasks });     // an action
+await addTask.run({ title: "Learn Zoijs" });                       // POST JSON, then tasks refreshes
+```
+
+with no `fetch`, `res.ok` check, `JSON.stringify`, `Content-Type` header or `refresh()` call
+of your own.
+
+`api()` only talks to the page's own origin. For an external API you create an explicit client,
+locked to that one origin — see [External APIs](#external-apis-createapi):
+
+```js
+const github = createApi({ baseURL: "https://api.github.com" });
+const repos = github("/users/:user/repos", { params: { user: "zoijs" } });
+```
+
+## Install
+
+```bash
+npm install @zoijs/core @zoijs/resource @zoijs/action @zoijs/api
+```
+
+`@zoijs/core`, `@zoijs/resource` and `@zoijs/action` are peer dependencies. With no install, from
+a CDN: in an import map, point "@zoijs/core", "@zoijs/resource", "@zoijs/action" and "@zoijs/api"
+at **exact-version**
+jsDelivr file URLs with integrity hashes, then import by name (so every package shares one
+core). See the [CDN guide](https://zoijs.dev/installation#from-a-cdn).
+
+```js
+import { api } from "@zoijs/api";
+```
+
+## Quick start
+
+Four steps, each building on the last. Steps 1 and 2 need nothing but your own server, and none
+needs a build step. The main examples on this page are run by this package's test suite
+(`tests/readme.test.js`), so they match the real API.
+
+### 1. Read data
+
+<!-- doctest: quick-read -->
+```js
+import { html, mount, each } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function Tasks() {
+  const tasks = api("/api/tasks"); // GET, as a reactive resource
+
+  return html`
+    ${() => {
+      if (tasks.loading() && tasks.data() === undefined) return html`<p role="status">Loading tasks…</p>`;
+      if (tasks.error())
+        return html`<div role="alert">
+          <p>Couldn't load tasks: ${tasks.error().message}</p>
+          <button onclick=${() => tasks.refresh()}>Try again</button>
+        </div>`;
+      if (tasks.data().length === 0) return html`<p>No tasks yet.</p>`;
+      return html`<ul>
+        ${each(() => tasks.data(), (task) => task.id, (task) => html`<li>${task.title}</li>`)}
+      </ul>`;
+    }}
+  `;
+}
+
+mount(Tasks, "#app");
+```
+
+That's the four states every view needs — loading, error (with a way out), empty and data — from
+three reactive reads. No `fetch`, `res.ok` check, JSON parsing, abort controller or cleanup of
+your own.
+
+`api(url)` returns the same object `resource()` does, with the same behavior:
+
+```js
+const users = api("/api/users");
+
+users.data();    // the parsed response, or undefined before the first success (reactive)
+users.loading(); // true while a request is in flight (reactive)
+users.error();   // an ApiError, or null (reactive)
+users.refresh(); // request again; keeps the current data until the new response settles
+```
+
+It loads once immediately, only the latest request can update it, it stops when its component
+unmounts, and failures are reported to `configure({ onError })` as `kind: "resource"` — all of
+that is `resource()`. A request superseded by `refresh()`, or still in flight when the component
+unmounts, is also aborted.
+
+### 2. Write data
+
+<!-- doctest: quick-write -->
+```js
+import { html } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function NewTask({ tasks }) {
+  const addTask = api.post("/api/tasks", { invalidate: tasks, exclusive: true });
+
+  async function submit(event) {
+    event.preventDefault();
+    const form = event.currentTarget; // read it now: it's null once the handler has awaited
+    await addTask.run({ title: new FormData(form).get("title") }); // never rejects
+    if (addTask.done()) form.reset(); // `tasks` reloads by itself (invalidate)
+  }
+
+  return html`
+    <form onsubmit=${submit}>
+      <label for="new-task">New task</label>
+      <input id="new-task" name="title" required />
+      <button disabled=${() => addTask.pending()}>${() => (addTask.pending() ? "Adding…" : "Add")}</button>
+      <p role="alert">${() => addTask.error()?.message ?? ""}</p>
+    </form>
+  `;
+}
+```
+
+A mutation sends nothing until `run()`, and `run()` never throws or rejects: the outcome is in
+`pending()`, `done()`, `result()` and `error()`. `exclusive` makes a double submit send once;
+`invalidate` refreshes the list after the server succeeds. More in
+[Mutations](#mutations-apipost-apiput-apipatch-apidelete).
+
+### 3. Call another origin
+
+`api()` only talks to your page's own origin. An external API gets an explicit client, locked to
+that one origin — requests use CORS, send no cookies and never follow redirects:
+
+<!-- doctest: quick-external -->
+```js
+import { createApi } from "@zoijs/api";
+
+const github = createApi({ baseURL: "https://api.github.com" });
+const repos = github("/users/:user/repos", { params: { user: "zoijs" } }); // same resource API
+```
+
+The API must allow your page's origin (CORS). See [External APIs](#external-apis-createapi).
+
+### 4. Add authentication
+
+Give the client an `auth` provider that returns the current access token — Zoijs sends it as
+`Authorization: Bearer <token>`, only to that origin:
+
+<!-- doctest: quick-auth -->
+```js
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: async ({ signal }) => getAccessToken({ signal }), // your session code; pass the signal on
+  authTimeout: 5000, // optional: give up on a slow provider after 5 s
+});
+
+const profile = backend("/profile");
+const save = backend.post("/orders", { idempotencyKey: true, retry: 2 });
+```
+
+The provider runs once per request (never per retry), may be async, and can return `null` for an
+anonymous request. Zoijs never stores or refreshes tokens. See
+[Authenticated API clients](#authenticated-api-clients) and
+[Recovering from a 401](#recovering-from-a-401).
+
+**Next:** [Handling errors](#handling-errors) · [Request lifecycle](#request-lifecycle) ·
+[Options at a glance](#options-at-a-glance) · [Debugging](#debugging) · [Testing](#testing) ·
+[Example app](#example-app)
+
+## Dynamic URLs: `params` and `query`
+
+`api(url, options)` accepts exactly three options: `params`, `query` and `debounce`. Any other
+option (`method`, `headers`, `body`, …) throws a `TypeError` — `api()` is always a GET. You never
+call `encodeURIComponent`, build a query string, or wire up `refresh()` timers yourself.
+
+### Path parameters
+
+```js
+const task = api("/api/tasks/:id", { params: { id: taskId } });
+// taskId = "abc/123"  →  GET /api/tasks/abc%2F123
+```
+
+- A placeholder is a whole path segment: `/:name`, where `name` is letters, digits and `_`
+  (`:id`, `:userId`, `:task_id`). Anything else — `:id?`, `:id*`, `:{id}`, `:id.json` — throws.
+  A colon elsewhere (`/time/12:30`, `host:8443`, the query string) is ordinary text.
+- Each value becomes **exactly one segment**, encoded once: `/`, `\`, `?`, `#`, `%`, `:` and
+  `@` are encoded, so `"../../admin"` is the single segment `..%2F..%2Fadmin`, and `"%2e%2e"` is the
+  literal text `%2e%2e` (sent as `%252e%252e`). Don't pre-encode values.
+- `""`, `"."` and `".."` throw — the URL standard treats `.`/`..` (even encoded as `%2e`) as
+  "this/parent directory", so they can't be one data segment.
+- Values may be a string, number (finite), bigint or boolean. Objects, arrays, functions,
+  symbols, `null` and `undefined` throw, so `[object Object]` can't end up in a URL.
+- **Strict:** a placeholder with no param throws, and so does a param the URL doesn't use —
+  `params: { userId }` for `:id` is caught immediately instead of requesting `/users/:id`.
+- A plain-object `params` is read once, when `api()` is called. For a param that changes, pass a
+  function — see [Reactive params and queries](#reactive-params-and-queries).
+
+### Query parameters
+
+```js
+const users = api("/api/users", { query: { active: true, page: 2 } });
+// GET /api/users?active=true&page=2
+```
+
+| Value | Sent as |
+|---|---|
+| `"zoijs"` | `q=zoijs` (encoded by `URLSearchParams`) |
+| `2`, `10n` | `page=2`, `big=10` (finite numbers only) |
+| `true` / `false` | `exact=true` / `exact=false` |
+| `""` | `empty=` |
+| `null` / `undefined` | left out |
+| `["new", "featured"]` | `tag=new&tag=featured` — repeated keys, each value encoded on its own |
+| `["a", null, "b"]` | `tag=a&tag=b` — `null`/`undefined` elements are skipped |
+| `[]` | no `tag` at all (and removes any `tag` the URL had) |
+| objects, nested arrays, functions, symbols, `NaN` (also as array elements) | throw a `TypeError` |
+
+```js
+const products = api("/api/products", { query: { tag: ["new", "featured"] } });
+// GET /api/products?tag=new&tag=featured
+```
+
+Arrays are one level deep, never JSON-encoded or comma-joined. Caller arrays and objects are only
+read — frozen ones work.
+
+The query is applied with the platform `URLSearchParams` after the URL is resolved. A query
+already in the URL is kept, and a `query` key **replaces every value** the URL had for that key
+(`delete`, then `append` each value — so it moves to the end):
+`api("/api/products?tag=old&page=1", { query: { tag: ["a", "b"] } })` requests
+`/api/products?page=1&tag=a&tag=b`. A `null`/`undefined` value leaves the URL's own value alone.
+Fragments (`#…`) are never sent.
+
+### Reactive params and queries
+
+Pass a **function** as `params` or `query` to make it reactive. Read state inside it with
+`.get()`; when that state changes, the URL is rebuilt and the request is sent again automatically:
+
+```js
+import { html, createState, each } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function Search() {
+  const q = createState("");
+  const results = api("/api/search", { query: () => ({ q: q.get() }) });
+
+  return html`
+    <input type="search" oninput=${(e) => q.set(e.target.value)} />
+    <ul>${each(() => results.data() ?? [], (r) => r.id, (r) => html`<li>${r.name}</li>`)}</ul>
+  `;
+}
+```
+
+```js
+const id = createState("1");
+const user = api("/api/users/:id", { params: () => ({ id: id.get() }) });
+// GET /api/users/1 — then id.set("2") → GET /api/users/2
+```
+
+Both can be reactive at once, and every Phase 2 rule still applies to what the functions return:
+
+```js
+const results = api("/api/search/:scope", {
+  params: () => ({ scope: scope.get() }),
+  query: () => ({ q: q.get(), tag: selectedTags.get() }),
+  debounce: 250,
+});
+```
+
+- The functions run inside one core `computed()`; an `effect()` calls `refresh()` when the URL
+  they build changes. It's the same tracking as everywhere else in Zoijs — no polling, no
+  subscriptions of its own. A change that builds the same URL (e.g. `q.get().trim()`, or a new
+  array with the same values) sends nothing.
+- Changes in the same synchronous block are batched: `id.set("43"); page.set(2)` sends **one**
+  request with both values.
+- Only the latest request can update the data; earlier ones are aborted.
+- `refresh()` always uses the current values, and isn't repeated by the automatic refetch.
+- A plain-object `params` or `query` is static: no `computed`, `effect` or timer is created for it.
+  Passing state itself (`query: { q }`) throws — use the function form.
+- If a function throws, or returns something `api()` can't send (a missing, unused or `".."`
+  param, an object, a secret-looking key), no request is sent and `error()` is an `ApiError` of
+  type `"config"` (a throw is kept as its `cause`). The message names the param or key, never the
+  value. The next valid change recovers.
+
+Values are read as ordinary property accesses: static `params`/`query` once, when `api()` is
+called; a function's result each time it runs. Getters work and run once per read; nothing is
+copied, merged or mutated.
+
+### Debounce
+
+```js
+const q = createState("");
+const results = api("/api/search", { query: () => ({ q: q.get() }), debounce: 250 });
+```
+
+Typing `a`, `ab`, `abc`, `abcd` quickly sends **one** request, for `abcd`, 250 ms after the last
+change — no timer code in your component.
+
+- `debounce` is milliseconds, a finite number from `0` to `2147483647` (the browser timer limit).
+  Negative numbers, `NaN`, `Infinity`, strings and anything else throw a `TypeError`. `0` (the
+  default) refetches as soon as the batched change runs, with no timer.
+- The **first load is immediate**; only reactive changes wait. Changes to `params` and `query`
+  share one window: each change restarts it, and one request goes out with the latest values.
+  Changing back to what was last requested cancels the pending refetch.
+- **`refresh()` is never debounced**: it loads now with the current values and cancels a pending
+  automatic refetch, so nothing is sent twice.
+- With no reactive `params`/`query`, `debounce` does nothing and costs nothing.
+
+### Lifetime and `dispose()`
+
+An `api()` called while a component renders belongs to that component. When it unmounts, its
+request is aborted, its tracking and any pending debounce are dropped — **you don't need to call
+anything**.
+
+For an `api()` created **outside** a component (at module level, in a store, in a test), nothing
+owns it, so its reactive tracking would last as long as the state it reads. Stop it yourself:
+
+```js
+const events = api("/api/events", { query: () => ({ topic: topic.get() }) });
+
+// later
+events.dispose();
+```
+
+`dispose()` aborts the in-flight request (the resource keeps the data it had and stops loading —
+nothing is reported to `onError`), cancels a pending debounce, and removes the `computed`/`effect`
+from the reactive graph, so later state changes send nothing. It is idempotent and safe inside a
+component too (the unmount that follows is a no-op). After it — including after the owning
+component unmounts — `refresh()` throws an `ApiError` of type `"config"` rather than quietly
+starting again.
+
+### Secrets don't belong in URLs
+
+URLs are stored in browser history, server and proxy logs, analytics and monitoring. `api()`
+refuses query **keys** that name a credential — in `query` and in the URL itself — with a
+`TypeError` (or a `"config"` `ApiError` from a reactive query). It never looks at values.
+
+A key is refused when, lowercased with everything but letters and digits removed, it is exactly
+one of: `token`, `accesstoken`, `refreshtoken`, `idtoken`, `authtoken`, `sessiontoken`,
+`bearer`, `jwt`, `password`, `passwd`, `pwd`, `secret`, `clientsecret`, `apisecret`, `apikey`,
+`xapikey`, `authorization`, `auth`, `session`, `sessionid`, `credential`, `credentials`,
+`privatekey`. So `token`, `TOKEN`, `access_token`, `accessToken`, `api-key` and `Authorization`
+are refused, while `pageToken`, `next_page_token`, `tokenizer` and `author` are not. Send
+credentials in a header or a request body — and authorize on the server.
+
+## Mutations: `api.post`, `api.put`, `api.patch`, `api.delete`
+
+```js
+import { html, each } from "@zoijs/core";
+import { api } from "@zoijs/api";
+
+function Tasks() {
+  const tasks = api("/api/tasks");
+  const addTask = api.post("/api/tasks", { invalidate: tasks, exclusive: true });
+  const removeTask = api.delete("/api/tasks/:id", { invalidate: tasks });
+
+  async function submit(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    await addTask.run({ title: new FormData(form).get("title") });
+    if (addTask.done()) form.reset();
+  }
+
+  return html`
+    <form onsubmit=${submit}>
+      <label for="task-title">Title</label>
+      <input id="task-title" name="title" required />
+      <button disabled=${() => addTask.pending()}>${() => (addTask.pending() ? "Adding..." : "Add")}</button>
+      ${() => (addTask.error() ? html`<p role="alert">${addTask.error().message}</p>` : null)}
+    </form>
+    <ul>
+      ${each(() => tasks.data() ?? [], (task) => task.id, (task) => html`
+        <li>${task.title}
+          <button aria-label=${`Delete ${task.title}`} onclick=${() => removeTask.run({ params: { id: task.id } })}>Delete</button></li>`)}
+    </ul>
+  `;
+}
+```
+
+Each factory returns an [`@zoijs/action`](../action/README.md): `run()`, and reactive
+`pending()`, `error()`, `done()`, `result()`, plus `reset()`. Nothing is sent until `run()`.
+`run()` **never rejects** — it resolves with the parsed response, or `undefined` on failure, and
+the failure is in `error()` (an `ApiError`, reported to `configure({ onError })` as
+`kind: "action"`). No `try`/`catch` needed for normal error handling.
+
+### What `run()` takes
+
+The URL decides — never the shape of the argument:
+
+| Method | URL without `/:name` | URL with `/:name` placeholders |
+|---|---|---|
+| `api.post` / `api.put` / `api.patch` | `run(body)` — the argument **is** the JSON body; `run()` sends none | `run({ params, body })` — `body` optional; any other key throws |
+| `api.delete` | `run()` — any argument is refused | `run({ params })` — a `body` is refused |
+
+```js
+const updateTask = api.put("/api/tasks/:id");
+await updateTask.run({ params: { id: task.id }, body: { title: "Updated" } });
+
+const patchTask = api.patch("/api/tasks/:id");
+await patchTask.run({ params: { id: task.id }, body: { completed: true } });
+
+const removeTask = api.delete("/api/tasks/:id", { query: { hard: true } });
+await removeTask.run({ params: { id: task.id } }); // DELETE /api/tasks/42?hard=true
+```
+
+So with `api.post("/api/raw")`, `run({ params: …, body: … })` sends that whole object as the
+body; with `/:name` in the URL, params and body are always separate, so form data can't leak into
+the path or vice versa. `params` follow every `api()` path rule (one encoded segment each, strict
+missing/unused checks, `"."`/`".."` refused). Mistakes in `run()`'s input don't throw: no request
+is sent and `error()` is a `"config"` `ApiError`.
+
+### JSON bodies
+
+The body is sent with `JSON.stringify` and `Content-Type: application/json` (plus the same
+`Accept` header as GETs). You can't set or override headers.
+
+- Sent: `null`, strings, finite numbers, booleans, arrays and plain objects (also
+  `Object.create(null)` ones), nested freely. Objects with `toJSON` (e.g. `Date`) send their
+  `toJSON()`. An `undefined` property is left out, as in JSON.
+- **Refused** — no request is sent, `error()` is a `"config"` `ApiError`: `bigint` (never
+  coerced), functions and symbols (JSON would silently drop them), `NaN`/`Infinity` (JSON would
+  send `null`), `Map`, `Set` and class instances (JSON would send `{}`), cycles, and getters or
+  `toJSON` that throw.
+- Getters run once, as plain `JSON.stringify` would run them; the body is never cloned, merged
+  or mutated. `__proto__`, `constructor` and `prototype` are ordinary JSON keys.
+- Error messages never contain the body — not a value, not a key, not the platform's own
+  serialization message.
+- No body (`run()`) means no body **and** no `Content-Type` — never the text `"undefined"`.
+- A `FormData` body is sent as multipart instead — see [File uploads](#file-uploads-formdata).
+  Other body types (`Blob`, `ArrayBuffer`, `URLSearchParams`, streams) are refused.
+
+Responses are parsed exactly like GETs (JSON, `204`/`205` → `null`, text as a string,
+non-2xx → `"http"`, invalid JSON → `"parse"`), and every URL gets the same same-origin checks.
+
+### Options
+
+`api.post/put/patch/delete(url, options)` accepts only:
+
+- **`query`** — a static object, with the same rules and secret-key refusal as `api()`. Per-call
+  values go in `params`.
+- **`invalidate`** — an `api()` resource, or an array of them, to refresh after success.
+- **`exclusive`** — `true` makes a double submit send once: while a run is pending, `run()` returns
+  that run's promise instead of sending again. Default `false`, exactly as in `@zoijs/action`.
+- **`timeout`** and **`problemDetails`** — as for `api()`; see [Timeouts](#timeouts) and
+  [Problem details](#problem-details).
+- **`idempotencyKey`**, **`retry`** and **`retryDelay`** — see
+  [Idempotency keys and retries](#idempotency-keys-and-retries). Mutation-only.
+
+Anything else — `headers`, `method`, `credentials`, `mode`, `redirect`, `cache`, `initial`, … —
+throws.
+
+### Invalidation
+
+```js
+const tasks = api("/api/tasks");
+const dashboard = api("/api/dashboard");
+const save = api.post("/api/tasks", { invalidate: [tasks, dashboard] });
+```
+
+- Only after the server **succeeds**: never after an HTTP, network, parse or config failure.
+- After the mutation's success state is set. **`run()` doesn't wait** for the refreshes — they
+  continue on their own, so a slow list doesn't make the save slow.
+- A refresh that then fails is **the resource's** failure: it shows in that resource's `error()`
+  (and `onError` as `kind: "resource"`) and never marks the mutation as failed.
+- Each resource refreshes once per successful run (listed twice → once; a call that joined an
+  `exclusive` run doesn't refresh again). It refreshes with its current params/query and skips a
+  pending debounce.
+- A disposed or unmounted resource is skipped quietly — a stale view can't turn a successful
+  save into an error. If the mutation's own component unmounted while the request was in
+  flight, the action ignores the late result (as `@zoijs/action` does) but live resources are
+  still refreshed: the server did change.
+- Only real `api()` resources are accepted. An object with a `refresh()` method, a copy of a
+  resource or a mutation throws a `TypeError`: resources are tracked privately, so they can't
+  be spoofed. Nothing is invalidated by guessing from URLs.
+
+### No implicit retries, no cancellation, no optimism
+
+- **Mutations are never retried unless you opt in** with `idempotencyKey: true` and `retry` — see
+  [Idempotency keys and retries](#idempotency-keys-and-retries). Repeating a POST can create a
+  second order, payment or email.
+- **Unmounting doesn't abort a mutation.** An in-flight request runs to completion even if its
+  component unmounts. Only an explicit `timeout` aborts one — and that only stops the browser
+  *waiting*: it never undoes the server operation.
+- Updates aren't optimistic: the UI changes when the server answers and the invalidated
+  resources reload.
+
+Cookies are sent same-origin, as for any `fetch`. Protect state-changing endpoints against
+[CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf) on the
+server, and authorize and validate every request there — client-side checks are not access
+control.
+
+### File uploads (`FormData`)
+
+```js
+const upload = api.post("/api/users/:id/photo", { invalidate: profile, exclusive: true });
+
+const form = new FormData();
+form.append("file", file);
+form.append("description", "Profile photo");
+await upload.run({ params: { id }, body: form }); // or upload.run(form) for a URL without /:name
+```
+
+- A `FormData` body goes to `fetch` as-is: no `JSON.stringify` and **no `Content-Type`** — the
+  browser writes `multipart/form-data` with its own boundary. (JSON bodies get
+  `application/json`; no body gets no `Content-Type`.)
+- It's recognized by the platform's own FormData brand check, so a FormData from another realm
+  (an iframe) works, while an object that only looks like one — `append()`/`entries()`, or
+  `Object.create(FormData.prototype)` — is refused. A FormData nested inside a JSON object, and
+  a DELETE body, are refused.
+- Invalidation, `exclusive`, `timeout`, `problemDetails` and retries work as for JSON (retries replay
+  the same FormData — see [One logical run](#one-logical-run)). The form is never
+  cloned, read or enumerated, and its field names and values never appear in errors.
+- Nothing about the file is checked in the browser. The **server** must authenticate, authorize,
+  and enforce file type and size, scan where appropriate, and control where files are stored.
+
+## Timeouts
+
+```js
+const users = api("/api/users", { timeout: 10_000 });
+const save = api.post("/api/orders", { timeout: 15_000 });
+```
+
+- Milliseconds, a finite number from `0` to `2147483647`; anything else throws a `TypeError`.
+  **`0` (the default) means no timeout.** Not reactive.
+- The clock starts when the request starts — **after** any `debounce` — and covers the whole
+  response. When it runs out, the request is really aborted (nothing is left running) and the
+  error is an `ApiError` of **type `"timeout"`**, `status` `null`, message
+  `"GET request timed out"` (no duration, no platform `AbortError` text).
+- `refresh()` uses the same timeout; a request replaced by `refresh()`, a reactive change,
+  `dispose()` or unmount is aborted quietly and is never reported as a timeout. Timers are
+  cleared when the request ends, however it ends.
+- **A mutation timeout doesn't mean the server didn't act.** The order may have been placed; the
+  browser just stopped waiting. A timed-out mutation is only retried if you opted in with an
+  idempotency key and `retry`; otherwise reload the data (or check with the server) before
+  letting the user try again.
+- With `retry`, **each attempt gets its own `timeout` window**; the backoff waits between
+  attempts aren't counted.
+
+## Idempotency keys and retries
+
+```js
+const createOrder = api.post("/api/orders", {
+  idempotencyKey: true,
+  retry: 2,
+  timeout: 10_000,
+});
+
+await createOrder.run({ sku: "ABC-123", quantity: 1 });
+```
+
+> **The server contract.** Sending an `Idempotency-Key` header does **not** make an endpoint
+> idempotent. Your server must store each key and, when it sees a key again, return the original
+> outcome instead of performing the operation a second time — according to its own idempotency
+> policy (how long keys are kept, what a key reused with a different body means). Zoijs can't
+> prevent duplicates without that cooperation.
+
+**Retries are off by default** — a mutation makes exactly one attempt. To retry, you opt in
+twice: `idempotencyKey: true` *and* `retry`. `retry` without `idempotencyKey: true` throws, for
+**every** method: PUT, PATCH and DELETE aren't assumed to be idempotent either. So: if Zoijs
+retries a mutation, it always sends an idempotency key.
+
+### Idempotency keys
+
+- `idempotencyKey: true` sends `Idempotency-Key: <uuid>` — a v4 UUID from
+  `crypto.randomUUID()` (or built from `crypto.getRandomValues()` where `randomUUID` isn't
+  available). Never `Math.random`; with no cryptographic source the run fails with a `"config"`
+  error and nothing is sent.
+- **One key per logical `run()`**: every retry of that run reuses it, and the next `run()` gets a
+  new one. A call that joins an `exclusive` run shares that run's key and attempts.
+- The key goes only in that header — never in the URL, query, body, `error.message`,
+  `error.url`, problem details, the console or monitoring. Treat it like a credential.
+- It works without `retry` too (a single attempt with a key).
+
+### Your own keys
+
+When the operation already has an identity — a checkout session, a draft, a client-side
+operation id — pass a **function** that returns the key for the operation being run:
+
+```js
+const save = api.post("/api/orders", {
+  idempotencyKey: () => currentOperationId(),
+  retry: 2,
+});
+```
+
+- The function is called **once per logical `run()`** — not per retry, and only once for
+  `exclusive` calls that join a run. The next independent `run()` calls it again.
+- It must return **1–255 visible ASCII characters** (`!` to `~`): no spaces, no control
+  characters (so no CR, LF or NUL — a key can never inject a header), no non-ASCII. Nothing is
+  trimmed or normalized: what's accepted is sent byte for byte. Anything else — or a function
+  that throws — fails the run with a `"config"` error before any request; neither the value nor
+  the thrown message is echoed.
+- A **fixed string** (`idempotencyKey: "checkout-abc"`) is refused with a `TypeError`: the same
+  key would be sent by *every* `run()` of that mutation, so the server would treat a second,
+  different order as a repeat of the first.
+- **Each key must stand for exactly one logical server operation.** Don't return a key that was
+  already used for a different operation — the server will (correctly) treat it as a repeat.
+- Your keys get the same privacy as generated ones: only in the header, never in URLs, bodies,
+  errors or monitoring.
+
+### What's retried
+
+`retry: n` means **up to n extra attempts** after the first — `retry: 2` is at most 3 requests.
+`n` is a whole number from 0 to 5.
+
+| Failure | Retried? |
+|---|---|
+| network error (offline, connection reset, DNS) | yes |
+| `"timeout"` (the `timeout` option ran out) | yes |
+| HTTP 408, 425, 429, 500, 502, 503, 504 | yes |
+| any other HTTP status — e.g. 400, 401, 403, 404, 405, 409, 410, 412, 422 | no |
+| `"parse"`, `"config"`, `"security"` | never |
+
+409 Conflict isn't retried: it isn't assumed to mean "idempotency key in use".
+
+### Backoff and `Retry-After`
+
+- Retry *n* waits about `retryDelay × 2^(n-1)`, with **±20 % jitter** (a factor between 0.8 and
+  1.2) so clients that failed at the same moment don't all retry at the same moment. With the
+  default `retryDelay: 250`: 200–300 ms, 400–600 ms, 0.8–1.2 s, 1.6–2.4 s, 3.2–4.8 s. Every wait —
+  jitter included — is capped at 30 s. `retryDelay` is milliseconds (validated like `timeout`)
+  and needs `retry`.
+- On 429 and 503, a `Retry-After` header — seconds (`Retry-After: 5`) or an HTTP-date — makes the
+  wait at least that long, and is **not jittered**: never shorter than the server asked. If it
+  asks for **more than 30 s**, the request stops retrying and
+  fails with that response instead of retrying early — deliberately: respecting the server's
+  `Retry-After` matters more than one more attempt. An unparseable value is ignored.
+
+### One logical run
+
+- `pending()` stays `true` through every attempt and wait; `done()` becomes `true` only when an
+  attempt succeeds, and `result()` is that response.
+- Failed attempts that are retried never show in `error()` and are never reported to
+  `configure({ onError })`: a mutation that recovers reports nothing. If every attempt fails,
+  `error()` is the **last** attempt's error and it is reported once.
+- `invalidate` refreshes its resources **once**, after the run finally succeeds — never after a
+  failed attempt, never after exhaustion.
+- The request is built **once per run** and replayed exactly: same method, URL, query, key and
+  body bytes. A JSON body is serialized once — getters and `toJSON` run once, not per attempt.
+- With `problemDetails: true`, only the final error's problem body is read; retried responses are
+  discarded unread.
+- **When the component unmounts**, an attempt already sent may finish (its result is ignored, as
+  `@zoijs/action` does), but a scheduled retry is cancelled and no new attempt starts. The same
+  goes for `reset()`, and for a run superseded by a newer (non-`exclusive`) `run()`: nobody is
+  waiting for its result, so it isn't retried.
+- **FormData bodies are retried by replaying the same FormData object** — not cloned, not
+  re-serialized, no `Content-Type` set by `api()`. The browser builds the multipart body again for
+  each attempt, so the **boundary may differ** between attempts; the fields, file names, MIME types
+  and bytes are the same (verified in Chromium, Firefox and WebKit). As for any mutation, a retry
+  doesn't mean the first attempt failed to execute on the server — the idempotency key is what
+  lets the server recognize the repeat, and only if it enforces it.
+- GET resources retry too — see [GET retries](#get-retries).
+
+### Showing retries in the UI
+
+```js
+${() => (save.retrying() ? html`<p>Retrying request…</p>` : null)}
+```
+
+Two reactive readers sit next to the action's `pending()`, `done()`, `error()` and `result()`:
+
+| | idle | 1st attempt | waiting after a failure | 2nd attempt | succeeded | gave up |
+|---|---|---|---|---|---|---|
+| `attempt()` | 0 | 1 | 1 | 2 | 2 (kept) | last attempt (kept) |
+| `retrying()` | `false` | `false` | `true` | `true` | `false` | `false` |
+| `pending()` | `false` | `true` | `true` | `true` | `false` | `false` |
+
+- `attempt()` is the attempt in flight, or the last one finished; it's kept after the run ends
+  until the next `run()` (which starts again at 1) or `reset()` (back to 0).
+- Without `retry`, `attempt()` goes 0 → 1 and `retrying()` stays `false`; both methods exist on
+  every mutation.
+- `exclusive` joiners share one run, so they see the same values. Only the newest run writes them.
+- They are ordinary state: changing them never reports anything to `onError`, and they keep no
+  timers, bodies or keys.
+
+## GET retries
+
+```js
+const users = api("/api/users", { retry: 2 });
+```
+
+- **Off by default.** `retry: n` (0–5) allows up to n extra attempts — `retry: 2` is at most 3
+  requests — with the same table as mutations: network errors, timeouts and HTTP 408, 425, 429,
+  500, 502, 503, 504; never other statuses, `"parse"`, `"config"` or `"security"`.
+- No idempotency key is needed: Zoijs treats GET as read-only. **Don't attach side effects to
+  GET endpoints** — a retried GET runs again on the server.
+- The same backoff, jitter, `retryDelay`, 30 s cap and `Retry-After` rules apply.
+  `retryDelay` without `retry` throws. `idempotencyKey`, `exclusive` and `invalidate` are
+  mutation-only and refused here.
+- **One logical load.** `loading()` stays `true` through every attempt and wait; retried failures
+  never show in `error()` and aren't reported to `onError`. A load that recovers ends with
+  `error()` `null` and the new `data()`; one that runs out reports its last error once (as
+  `kind: "resource"`).
+- Every attempt replays **the same URL**: params and query are read once per load. A reactive
+  change or `refresh()` cancels a scheduled retry and starts a **new** load (with a fresh retry
+  count) for the current URL — the old URL is never retried again. `dispose()` and unmount cancel
+  it too.
+- `debounce` runs once, before the first attempt; between attempts there's backoff, not debounce.
+  Each attempt gets its own `timeout`; backoff isn't counted.
+- `initial` isn't an attempt: no request until `refresh()` or a reactive change, which may then
+  retry.
+- With `problemDetails: true`, only the final error's problem body is read.
+- GET resources don't have `attempt()` / `retrying()`: a resource stays one plain
+  `data`/`loading`/`error` shape. Use `loading()` to show progress.
+
+## Problem details
+
+Error bodies are private by default: an `ApiError` never contains the response body. With
+`problemDetails: true` (on `api()` or a mutation), an error response whose type is
+`application/problem+json` ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) is read and
+normalized into `error.problem`:
+
+```js
+const save = api.post("/api/users", { problemDetails: true });
+await save.run({ email: "" });
+save.error()?.message;         // "POST request failed: 422 Unprocessable Content" — still generic
+save.error()?.problem?.detail; // "email is required"
+```
+
+- Only `type`, `title`, `detail`, `instance` (strings) and `status` (an integer) are kept, and
+  only with those types; extension members are ignored. `error.problem` is a frozen plain
+  object, or `null` — always `null` without the option, for other media types (even
+  `application/json`), and for 2xx responses (those are data, as always).
+- At most **64 KB** is read: a body declared or found to be larger is dropped, and a body that
+  isn't a JSON object is ignored. Either way the error stays the ordinary `"http"` error — a bad
+  problem body never turns it into a `"parse"` error.
+- The values come from the server and are **untrusted**: they are never put in `error.message`
+  (so they don't flow into logs by default). Render them as text, as Zoijs bindings do; don't
+  treat `instance` or `type` as a link to follow.
+
+## Server rendering: `initial`
+
+```js
+const users = api("/api/users", { initial: serverUsers });
+users.data();    // serverUsers — the same value, not a copy
+users.loading(); // false
+users.error();   // null
+```
+
+- `initial` seeds the resource and **skips the first request**. `refresh()` fetches normally, and
+  so do later reactive `params`/`query` changes — the seed stands for the URL as it was when the
+  resource was created. A change that builds the same URL sends nothing.
+- The key's **presence** counts: `{ initial: undefined }` and `{ initial: null }` seed too;
+  leaving the key out loads normally.
+- The value is kept exactly as given — never cloned, sanitized or merged — and renders with the
+  usual escaping.
+- **On the server**, `api(url, { initial })` creates the resource without any request, so a
+  component can render with server data. `api()` still has no server networking model: without
+  `initial` — or on `refresh()` — a request on the server fails with a `"security"` error, as
+  there is no page origin. Fetch on the server with your own code, pass the result as
+  `initial`, and serialize it for the client (see `@zoijs/ssr`'s `serialize`).
+- Mutations don't take `initial`.
+
+## Responses
+
+| Response | `data()` | `error()` |
+|---|---|---|
+| 2xx with a JSON type (`application/json`, `application/json; charset=utf-8`, `application/problem+json`, any `…+json`) | the parsed value | `null` |
+| 204 / 205, or a JSON type with an empty body | `null` | `null` |
+| 2xx with any other type (or none) | the body as a string | `null` |
+| 2xx JSON type with an invalid body | unchanged | `ApiError`, `type: "parse"` |
+| any status outside 200–299 (400, 401, 403, 404, 409, 500, 503, …) | unchanged | `ApiError`, `type: "http"` |
+| the request couldn't be made (offline, DNS, refused, a cross-origin redirect) | unchanged | `ApiError`, `type: "network"` |
+| the URL isn't allowed (see below) — no request is sent | unchanged | `ApiError`, `type: "security"` |
+| reactive params/query produced something `api()` can't send — no request is sent | unchanged | `ApiError`, `type: "config"` |
+| the `timeout` ran out — the request is aborted | unchanged | `ApiError`, `type: "timeout"` |
+
+A string body is plain data. Zoijs renders it as text — it is never parsed as HTML or run as
+script. To render trusted HTML you must opt in yourself (see
+[`@zoijs/sanitize`](../sanitize/README.md)).
+
+## `ApiError`
+
+Every failure — from `api()` and from mutations — is an `ApiError` (it extends `Error`):
+
+```js
+import { api, ApiError } from "@zoijs/api";
+
+const users = api("/api/users");
+
+users.error()?.type;   // "http" | "network" | "security" | "parse" | "config" | "timeout" | "auth"
+users.error()?.status; // 404 — the HTTP status ("http"/"parse"), otherwise null
+```
+
+| Field | Value |
+|---|---|
+| `name` | `"ApiError"` |
+| `type` | `"http"`, `"network"`, `"security"`, `"parse"`, `"config"`, `"timeout"` or `"auth"` (a client's `auth` provider failed — see [Authenticated API clients](#authenticated-api-clients)) |
+| `status` | the HTTP status, or `null` |
+| `statusText` | the HTTP status text, or `""` (HTTP/2 has none) |
+| `method` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"` |
+| `url` | origin + path, e.g. `"https://app.example.com/api/users"` — no query string or fragment; `null` for an unparseable URL |
+| `message` | e.g. `"GET request failed: 404 Not Found"`, `"POST request not sent: …"` — no URL path |
+| `problem` | normalized problem details with `problemDetails: true`, otherwise `null` (see [Problem details](#problem-details)) |
+
+The message is built to be **safe to log**: it never contains the URL path, query string or
+fragment, URL credentials, request or response headers, cookies, the request body, or the
+response body — paths
+can carry identifiers or tokens (`/reset/<token>`). Only a blocked cross-origin request names
+the target origin. If you need the endpoint, read `error.url` (origin + path, never the query
+string or fragment) and decide yourself whether to log it — with `params`, the path includes
+the param values.
+
+## Handling errors
+
+Every failure is an [`ApiError`](#apierror) in `error()`, never a thrown exception or a rejected
+promise. Its `type` tells you what happened; `status` (for `"http"`) and, with
+`problemDetails: true`, `problem` add detail. One function that turns it into words for people
+is usually all an app needs:
+
+<!-- doctest: errors-describe -->
+```js
+function describe(error) {
+  switch (error.type) {
+    case "http":
+      if (error.status === 404) return "We couldn't find that.";
+      if (error.status === 401) return "Your session has expired. Please sign in again.";
+      if (error.status === 403) return "You don't have access to this.";
+      if (error.status === 422) return error.problem?.detail ?? "Please check what you entered.";
+      if (error.status >= 500) return "The server had a problem. Try again in a moment.";
+      return `The request was refused (${error.status}).`;
+    case "timeout":
+      return "The server took too long to answer.";
+    case "network":
+      return "Can't reach the server. Check your connection and try again.";
+    case "auth":
+      return "We couldn't get your sign-in token. Please sign in again.";
+    default: // "security", "parse", "config": a bug or a misbehaving server — log it, show something generic
+      return "Something went wrong.";
+  }
+}
+```
+
+| `type` | What happened | Was anything sent? | Retried with `retry`? | What to do |
+|---|---|---|---|---|
+| `"http"` | The server answered outside 2xx | yes | 408, 425, 429, 500, 502–504 | depends on `status` — below |
+| `"network"` | No answer: offline, DNS, CORS refusal, dropped connection | maybe | yes | offer a retry |
+| `"timeout"` | Your `timeout` elapsed (per attempt) | yes — a mutation may have succeeded | yes | offer a retry; reload data before re-running a mutation |
+| `"auth"` | The `auth` provider threw, rejected, returned an invalid token or exceeded `authTimeout` | **no** | no | sign in again, or retry |
+| `"security"` | A refused URL or redirect, or no page (SSR) | no | no | a bug in the app — fix the URL |
+| `"parse"` | A 2xx response that says JSON but isn't | yes | no | a server bug — log it |
+| `"config"` | Your code passed something unsendable (a bad body, param or query) | no | no | a bug in the app — fix the call |
+
+**Not found (404).** Show a not-found state rather than a generic error:
+
+<!-- doctest: errors-404 -->
+```js
+function UserPage({ id }) {
+  const user = api("/api/users/:id", { params: { id } });
+  return html`${() => {
+    const e = user.error();
+    if (e?.type === "http" && e.status === 404) return html`<h1>No such user</h1><a href="/users">All users</a>`;
+    if (e) return html`<p role="alert">${describe(e)}</p>`;
+    return user.data() ? html`<h1>${user.data().name}</h1>` : html`<p role="status">Loading…</p>`;
+  }}`;
+}
+```
+
+**Validation (422).** If your API answers with [problem details](#problem-details), opt in with
+`problemDetails: true` and show `problem.detail` (or `title`) — as text, it's server-supplied.
+Only the standard members are kept, so a field-by-field error list in an extension member isn't
+available: put the message people should read in `detail`, and validate in the browser too.
+
+<!-- doctest: errors-422 -->
+```js
+const signUp = api.post("/api/users", { problemDetails: true });
+
+await signUp.run({ name: "Ada", email: "not-an-email" });
+const e = signUp.error();
+if (e?.type === "http" && e.status === 422) {
+  showFormError(e.problem?.detail ?? "Please check what you entered."); // e.g. "Enter a valid email address."
+}
+```
+
+**Server errors (5xx) and network failures.** Show a generic message and a way to try again —
+`refresh()` for a resource, another `run()` for a mutation. For GETs, `retry` absorbs brief
+outages first (see [GET retries](#get-retries)); mutations retry only
+[with an idempotency key](#idempotency-keys-and-retries).
+
+```js
+const orders = api("/api/orders", { retry: 2 }); // up to 3 attempts for network errors, timeouts, 5xx
+
+html`${() => orders.error() && html`<div role="alert">
+  <p>${describe(orders.error())}</p>
+  <button onclick=${() => orders.refresh()}>Try again</button>
+</div>`}`;
+```
+
+**Authentication.** `"auth"` means *your provider* failed — threw, rejected, timed out or returned
+something that isn't a token — and **nothing was sent**. The error never contains the provider's
+own error or the value it returned, so log what you need *inside* your provider. A **401** is
+different: the request reached the server, which refused the token — recover explicitly and only
+once, as shown in [Recovering from a 401](#recovering-from-a-401). Never refresh on a 403.
+
+**Timeouts.** A network timeout (the `timeout` option) is type `"timeout"`; an auth-provider
+timeout (`authTimeout`) is type `"auth"` — they can't be confused. An `"auth"` error that came
+from `authTimeout` has the message `"… the auth provider timed out"`, but the reaction is the same
+as for any provider failure: let the person retry or sign in again.
+
+**Cancellation is not an error.** A request superseded by `refresh()` or a reactive change, a
+resource disposed or unmounted, and a mutation `reset()` while waiting for its token all end
+**silently**: `error()` stays `null`, `loading()`/`pending()` end, and nothing reaches
+`configure({ onError })`. Don't show a message for them. (What cancellation can and can't stop is
+in [Request lifecycle](#request-lifecycle).)
+
+## Request lifecycle
+
+**A resource** (`api(url)`, `client(url)`) loads once when created — unless seeded with
+[`initial`](#server-rendering-initial) — and again on `refresh()` or when a reactive
+`params`/`query` function produces a different URL (after `debounce`). Each of those is one
+*logical load*:
+
+```
+create / refresh() / params or query change
+  └─▶ build + check the URL ─▶ [auth provider] ─▶ attempt 1 ─▶ (retryable failure, retries left?) ─▶ wait ─▶ attempt 2 … ─▶ data() or error()
+       │                          │                    │
+       │                          └ aborts at once when the load is superseded, disposed or unmounted —
+       │                            or fails as "auth" after authTimeout; nothing is sent
+       └ a newer load supersedes this one: its provider and request are aborted, its result is ignored
+dispose() / unmount ─▶ the in-flight load is aborted, loading() ends, data() keeps its last value, nothing is reported
+```
+
+**A mutation** sends nothing until `run()`. Each `run()` is one *logical run*:
+
+```
+run(input)
+  └─▶ build the URL + body (+ idempotency key) ─▶ [auth provider] ─▶ attempt 1 ─▶ wait ─▶ attempt 2 … ─▶ done() or error()
+                                                   │                      │
+                                                   │                      └ reset() / unmount: no NEW attempt starts —
+                                                   │                        an attempt already sent runs to completion
+                                                   └ reset() / unmount: the provider is aborted, nothing is sent
+```
+
+| Event | GET resource | Mutation |
+|---|---|---|
+| params/query change, `refresh()` | new load; the old one is aborted and ignored | — |
+| `dispose()` / component unmount | in-flight load aborted, silently | (unmount — mutations have no `dispose()`) waiting provider and backoff cancelled; a sent attempt completes, its result ignored |
+| `reset()` | — | state cleared; waiting provider and backoff cancelled; a sent attempt completes, its result ignored |
+| a second `run()` while one is pending | — | `exclusive: true`: joins the pending run (no second request, no second token). Otherwise: a new run is sent; the older one keeps its first request but stops retrying, and only the newest updates the state |
+| retryable failure | retried within `retry`, same URL and token | retried within `retry` only with an idempotency key — same URL, body, key and token |
+| `timeout` elapses | that attempt fails (`"timeout"`), may be retried | the same — and the server may still have acted |
+
+**Cancelled is not the same as not received.** Aborting stops the *browser* from waiting and
+guarantees Zoijs won't start anything new for that operation. It can't recall a request that has
+already left: the server may have received it, and may already have acted on it. That's why
+mutations aren't aborted on unmount, why a timed-out mutation is only retried with an
+idempotency key, and why the server must make repeated or abandoned requests safe.
+
+## Options at a glance
+
+The canonical rules are in each linked section; this table is for finding them.
+
+| Option | On | Default | Accepts | See |
+|---|---|---|---|---|
+| `params` | `api()`, `run({ params })` | — | object or function of one; values `string`/`number`/`bigint`/`boolean`, one path segment each | [Path parameters](#path-parameters) |
+| `query` | `api()` (object or function), mutations (object) | — | scalars or one-level arrays; secret-looking keys refused | [Query parameters](#query-parameters) |
+| `debounce` | `api()` | `0` | ms, 0–2147483647; only with reactive params/query | [Debounce](#debounce) |
+| `timeout` | `api()`, mutations | `0` (none) | ms, 0–2147483647, per attempt | [Timeouts](#timeouts) |
+| `retry` | `api()`, mutations | `0` | 0–5 extra attempts; mutations need `idempotencyKey` | [GET retries](#get-retries), [retries](#idempotency-keys-and-retries) |
+| `retryDelay` | `api()`, mutations | `250` | ms base backoff; needs `retry` | [Backoff](#backoff-and-retry-after) |
+| `problemDetails` | `api()`, mutations | `false` | boolean | [Problem details](#problem-details) |
+| `initial` | `api()` | — (absent) | any value; skips the first request | [Server rendering](#server-rendering-initial) |
+| `invalidate` | mutations | — | an `api()` resource or an array of them | [Invalidation](#invalidation) |
+| `exclusive` | mutations | `false` | boolean | [Options](#options) |
+| `idempotencyKey` | mutations | `false` | `true` (random UUID per run) or a function returning one | [Idempotency keys](#idempotency-keys) |
+| `baseURL` | `createApi()` | required | absolute `https:` URL (`http:` only for loopback), optional base path | [External APIs](#external-apis-createapi) |
+| `auth` | `createApi()` | — | a function `({ signal }) => token \| null \| undefined` (or a promise of one) | [Authenticated API clients](#authenticated-api-clients) |
+| `authTimeout` | `createApi()` | `0` (none) | ms, 0–2147483647; needs `auth` | [Authenticated API clients](#authenticated-api-clients) |
+
+There are no global settings, no headers option and no credentials option. An unknown or
+misplaced option throws a `TypeError` naming the accepted ones — for example `retry` on a
+mutation without `idempotencyKey`, or `initial` on a mutation. With TypeScript, a URL written as a
+string literal also checks `params` names: `api("/users/:id", { params: { userId } })` is a type
+error.
+
+## Debugging
+
+What you can inspect, all of it safe to show or log:
+
+- **State:** `loading()`, `data()`, `error()` on a resource; `pending()`, `done()`, `result()`,
+  `error()`, `attempt()` (which attempt is in flight) and `retrying()` on a mutation.
+- **The error:** `type`, `status`, `statusText`, `method`, `url` (origin + path, no query string)
+  and, with `problemDetails`, `problem`. `message` never contains the URL path, query, headers,
+  bodies or tokens. With `params`, `url` contains their values — decide whether those are fine to
+  log.
+- **Monitoring:** `configure({ onError })` receives every final failure — `kind: "resource"` or
+  `"action"` — once per logical request. Intermediate failures that a retry recovered from, and
+  cancellations, are never reported.
+
+<!-- doctest: debug-monitoring -->
+```js
+import { configure } from "@zoijs/core";
+import { ApiError } from "@zoijs/api";
+
+configure({
+  onError(error, info) {
+    if (!(error instanceof ApiError)) return;
+    monitoring.capture({ kind: info.kind, type: error.type, status: error.status, method: error.method, message: error.message });
+  },
+});
+```
+
+- **The network itself:** your browser's developer tools show every request — including its
+  `Authorization` header, on your machine. Zoijs adds no request logger and never logs tokens;
+  don't add one that does.
+
+## Testing
+
+Components that use `@zoijs/api` are tested against **stubbed responses** — no real server, no
+real credentials. Stub `globalThis.fetch` in unit tests, or route requests in a browser test.
+
+**Unit tests** (`node:test` + jsdom, with [`@zoijs/testing`](../testing/README.md)). The DOM needs
+a page URL so `api()` has an origin, e.g. `new JSDOM("", { url: "https://app.example.com/" })`.
+
+<!-- doctest: testing-unit -->
+```js
+import test from "node:test";
+import assert from "node:assert/strict";
+import { html } from "@zoijs/core";
+import { api, createApi } from "@zoijs/api";
+import { render, waitFor, cleanup } from "@zoijs/testing";
+
+const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const realFetch = globalThis.fetch;
+let requests = [];
+function respond(handler) {
+  requests = [];
+  globalThis.fetch = async (url, init) => (requests.push({ url: String(url), method: init.method }), handler(new URL(url), init));
+}
+test.afterEach(() => {
+  cleanup();
+  globalThis.fetch = realFetch;
+});
+
+function Tasks() {
+  const tasks = api("/api/tasks");
+  return html`${() => (tasks.error() ? html`<p role="alert">Failed</p>` : html`<p>${tasks.data()?.length ?? "…"} tasks</p>`)}`;
+}
+
+test("renders the response", async () => {
+  respond(() => json([{ id: 1 }, { id: 2 }]));
+  const { getByText } = render(Tasks);
+  await waitFor(() => getByText("2 tasks"));
+});
+
+test("an HTTP error and a network failure both show the alert", async () => {
+  respond(() => json({}, 500));
+  const failed = render(Tasks);
+  await waitFor(() => failed.getByRole("alert"));
+  cleanup();
+  respond(() => Promise.reject(new TypeError("Failed to fetch"))); // what a browser does offline
+  const offline = render(Tasks);
+  await waitFor(() => offline.getByRole("alert"));
+});
+
+test("a delayed response: loading, then data", async () => {
+  let answer;
+  respond(() => new Promise((resolve) => (answer = () => resolve(json([{ id: 1 }])))));
+  const tasks = api("/api/tasks");
+  assert.equal(tasks.loading(), true);
+  await waitFor(() => assert.ok(answer));
+  answer();
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.deepEqual(tasks.data(), [{ id: 1 }]);
+  tasks.dispose();
+});
+
+test("retries are bounded and deterministic with retryDelay: 0", async () => {
+  respond(() => json({}, 503));
+  const save = api.post("/api/orders", { idempotencyKey: true, retry: 2, retryDelay: 0 });
+  await save.run({ total: 1 });
+  assert.equal(requests.length, 3);
+  assert.equal(save.error().status, 503);
+});
+
+test("a mutation's result, and invalidation", async () => {
+  respond((url, init) => (init.method === "POST" ? json({ id: 3 }, 201) : json([])));
+  const tasks = api("/api/tasks");
+  const add = api.post("/api/tasks", { invalidate: tasks });
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.deepEqual(await add.run({ title: "x" }), { id: 3 });
+  await waitFor(() => assert.equal(requests.filter((r) => r.method === "GET").length, 2)); // reloaded
+  tasks.dispose();
+});
+
+test("cancellation: a disposed resource sends nothing more and reports nothing", async () => {
+  let answer;
+  respond(() => new Promise((resolve) => (answer = resolve)));
+  const tasks = api("/api/tasks");
+  await waitFor(() => assert.ok(answer));
+  tasks.dispose();
+  answer(json([{ id: 1 }]));
+  await waitFor(() => assert.equal(tasks.loading(), false));
+  assert.equal(tasks.error(), null);
+  assert.equal(tasks.data(), undefined);
+});
+
+test("an auth provider failure: type auth, and nothing is sent", async () => {
+  respond(() => json([]));
+  const backend = createApi({ baseURL: "https://api.example.com", auth: () => { throw new Error("no session"); } });
+  const me = backend("/me");
+  await waitFor(() => assert.equal(me.error()?.type, "auth"));
+  assert.equal(requests.length, 0);
+  me.dispose();
+});
+```
+
+- A stubbed `fetch` receives exactly what Zoijs would send: check `init.method`,
+  `init.headers` (including `Authorization` for a client) and `init.body` in your handler.
+- `retryDelay: 0` makes retries immediate, so tests don't wait. Use controlled promises, not
+  timers, to hold a response back.
+- Create resources inside the rendered component, or `dispose()` the ones you create in a test.
+
+**Browser tests** (Playwright). Route the page's requests to canned answers:
+
+```js
+await page.route("**/api/tasks", (route) => route.fulfill({ json: [{ id: 1, title: "Write tests" }] }));
+await page.route("**/api/orders", (route) => route.fulfill({ status: 503, body: "" }));
+await page.route("**/api/flaky", (route) => route.abort()); // a network error
+```
+
+For a `createApi()` client the browser enforces CORS, so a routed answer for another origin needs
+`Access-Control-Allow-Origin` (and an authenticated one, a preflight that allows
+`Authorization`). A small local server is often simpler — the [example app](#example-app)'s
+demo API is one.
+
+## Example app
+
+[`examples/users`](examples/users/) is a complete, accessible user-management app built on the
+public API only: an authenticated `createApi()` client, a reactive list with loading, empty and
+error states, create/update/delete mutations with invalidation, 422 validation messages from
+problem details, an idempotent retried POST, network and auth timeouts, simulated outages and the
+bounded 401 recovery — against a deterministic demo API on a second origin, with no real
+credentials. Run it from this repository:
+
+```bash
+npm --prefix api run dev
+```
+
+then open `http://127.0.0.1:3900/api/examples/users/`. Its browser tests
+(`api/browser-tests/users-example.spec.js`) run in Chromium, Firefox and WebKit.
+
+## Same-origin only
+
+`api()` only requests URLs on the page's own origin. Relative URLs are the normal case:
+
+```js
+api("/api/users");                          // ✔ same origin
+api("api/users");                           // ✔ resolved against the document's base URL, like fetch()
+api("https://app.example.com/api/users");   // ✔ when the page is on https://app.example.com
+api("https://unknown.example/users");       // ✘ ApiError type "security" — no request is sent
+```
+
+The check runs on the **final** URL — after `params` and `query` are applied — so neither can
+turn a same-origin URL into another one. The URL is resolved with the platform `URL` API and compared by origin (scheme + host + port),
+so look-alikes are refused too: `//evil.example`, `/\evil.example`, `http://` on an `https://`
+page, another port, `https://app.example.com.evil.example`, and non-HTTP schemes (`javascript:`,
+`data:`, `blob:`). URLs with credentials (`https://user:pass@…`) are refused. With no http(s)
+page origin to compare against (no `location`, a `file://` page, a sandboxed iframe), every
+request is refused.
+
+The request itself is sent with `mode: "same-origin"` and `credentials: "same-origin"`, so the
+**browser** also enforces it: a same-origin URL that redirects to another origin fails.
+`api()` doesn't touch CORS, CSP or any other browser protection — it adds a check on top.
+
+This is a client-side guard against requesting the wrong place, not access control. Your
+server must still authenticate and authorize every request. For cookies, credentials and CSP,
+see the [production security checklist](https://zoijs.dev/production-security).
+
+## External APIs: `createApi()`
+
+`api()` stays same-origin-only. To call an API on another origin, create a **client** for it —
+an explicit, visible trust decision in your code:
+
+```js
+import { createApi } from "@zoijs/api";
+
+const github = createApi({ baseURL: "https://api.github.com" });
+
+const repos = github("/users/:user/repos", { params: { user: "example" } });
+const issue = github.post("/repos/:owner/:repo/issues", { idempotencyKey: true, retry: 2 });
+```
+
+A client has exactly the same surface and behavior as `api` — `client(url, options)` for reads,
+`client.post/put/patch/delete(url, options)` for writes, with the same options (`params`,
+`query`, `debounce`, `timeout`, `initial`, `problemDetails`, `retry`, `invalidate`, `exclusive`,
+`idempotencyKey`, …) and the same engine. Only the URLs it accepts and the way it sends them
+differ. Nothing global changes: `api()` and every other client are unaffected, and no module can
+make `api()` cross-origin-capable.
+
+**`baseURL`** — required; with the optional [`auth`](#authenticated-api-clients), the only two
+options (anything else, such as `headers` or `credentials`, is a `TypeError`):
+
+- an absolute `https:` URL — plain `http:` only for a loopback host (`localhost`, `*.localhost`,
+  `127.x.x.x`, `[::1]`), for local development;
+- no credentials (`https://user:pass@…`), query string, fragment, backslashes, whitespace or
+  `.`/`..` segments; relative (`/api`), protocol-relative (`//host`) and non-HTTP URLs
+  (`javascript:`, `data:`, `blob:`, `file:`) are refused;
+- the host written in **canonical form** — what the URL parser would keep. Anything it would
+  silently rewrite is refused: percent-encoding (`api%2eexample.com`), full-width or other
+  non-ASCII characters (write an internationalized name in its `xn--` form), and alternative IP
+  spellings (`127.1`, `0x7f.0.0.1`, `2130706433`, `[::ffff:127.0.0.1]`). Letter case and the
+  scheme's default port (`:443`) are the only differences allowed. For loopback, write
+  `localhost`, `127.0.0.1` or `[::1]`;
+- an optional base path. It is always a directory: `https://api.example.com/v1` and
+  `https://api.example.com/v1/` are the same client (`client.baseURL` shows the normalized,
+  read-only value).
+
+**Paths resolve under the base path.** A client's URLs are paths starting with `/`, and the
+leading `/` means "the client's base", not the origin's root:
+
+```js
+const billing = createApi({ baseURL: "https://billing.example.com/v1/" });
+
+billing("/customers");                                // → https://billing.example.com/v1/customers
+billing("/customers/:id", { params: { id: "a/b" } }); // → …/v1/customers/a%2Fb
+billing("/search", { query: { q: "late fees" } });    // → …/v1/search?q=late+fees
+billing("/");                                         // → https://billing.example.com/v1/
+```
+
+**One client = one origin, and requests stay under its base path.** A full URL (even to the same
+origin), `//host`, a relative path (`users`), a backslash, whitespace or a `.`/`..` segment —
+also percent-encoded, like `%2e%2e` — is refused with a `TypeError` when the resource or mutation
+is created, before any request. Param values can't get around it: each fills exactly one encoded
+segment. The final URL — after params and query — is checked again before every request: it must
+have exactly the client's scheme, host and port (so `https://api.example.com.evil.example`,
+another port or `http://` are refused) and stay under the base path — checked by whole path
+segments, so a sibling such as `/v1-evil/` is never inside `/v1/`.
+
+Encoded separators are left alone: `%2F`, `%5C` and `%252e` stay encoded in the URL that is
+sent, exactly as with `api()`, so they can't move the request on the client side. How the
+external server decodes and routes such a path is up to that server — the client can't enforce
+it.
+
+**How requests are sent:**
+
+- **`mode: "cors"`** — a client doesn't bypass CORS. The API must allow your page's origin
+  (`Access-Control-Allow-Origin`), and for JSON bodies or `Idempotency-Key` it must answer the
+  preflight (`Access-Control-Allow-Headers: Content-Type, Idempotency-Key`). If it doesn't, the
+  browser refuses the request and you get an `ApiError` of type `"network"` — the browser hides
+  the reason, and nothing is retried in a weaker mode (no `no-cors`, no proxy). To honor
+  `Retry-After` across origins, the API must also send `Access-Control-Expose-Headers: Retry-After`.
+- **`credentials: "omit"`** — no cookies or HTTP authentication are sent to the external origin,
+  even when the browser has some for it. (`api()` keeps sending same-origin cookies.)
+- **`redirect: "manual"`** — redirects are never followed, not even within the same origin. A 3xx
+  answer is an `ApiError` of type `"security"` and isn't retried, so a redirect can't steer a
+  request — or its body — to another origin. Point `baseURL` at the final location.
+- **`referrerPolicy: "strict-origin-when-cross-origin"`** — the external API learns at most your
+  page's origin (which the `Origin` header already tells it), never the page's path or query
+  string, even if the page's own referrer policy is looser.
+- **No credentials unless you add a Bearer token.** Without `auth` the request is anonymous;
+  with it, see [Authenticated API clients](#authenticated-api-clients). There are no arbitrary
+  headers, API-key or cookie options.
+
+Everything else is unchanged for clients: secret-looking query keys are still refused, error
+messages stay log-safe, `problemDetails` has the same media-type, 64 KB and field rules (an
+external server's text is no more trusted than your own), and every retry replays the same
+method, URL, query, body and idempotency key — the base URL is never re-read. `error.url` is the
+external origin + path (never the query string or fragment); with `params`, the path includes
+their values, so decide yourself whether to log it.
+
+**Invalidation works across clients.** `invalidate` takes any resource created by `api()` or a
+client — a reference you hold, never a URL match:
+
+```js
+const summary = api("/api/summary");                                  // same-origin
+const save = billing.post("/payments", { invalidate: summary });     // external write → local refresh
+```
+
+**A same-origin client works too** (`createApi({ baseURL: "https://app.example.com/api/" })`),
+but it uses CORS mode and sends no cookies — for your own backend, prefer `api("/api/…")`.
+
+**Browser only.** Like `api()`, a client sends requests only from an http(s) page. On the server
+(no `location`) its configuration is still validated, but every request fails with an `ApiError`
+of type `"security"` — `createApi()` doesn't add server-side networking. Use `initial` for server
+rendering.
+
+**Your server, and the external API's, still decide.** A client is a guard against requesting
+the wrong place. Authorization remains the external API's responsibility; validate what it
+returns before you trust it.
+
+## Authenticated API clients
+
+Give a client an `auth` provider and its requests carry a Bearer access token:
+
+```js
+import { createApi } from "@zoijs/api";
+
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: () => session.accessToken,          // or: async () => await getAccessToken()
+});
+
+const profile = backend("/profile");          // Authorization: Bearer <token>
+const save = backend.post("/orders", { idempotencyKey: true, retry: 2 });
+```
+
+**The provider returns the token itself** — Zoijs builds `Authorization: Bearer <token>`; never
+write the header yourself. It may be synchronous or `async`. Return `null` or `undefined` to send
+that request **anonymously** (for endpoints that work either way) — that's not an error.
+
+**It runs once per logical request:** each load of a resource (the first one, a `refresh()`, a
+reactive params/query change) and each mutation `run()`. Never when the client, resource or
+mutation is created, and never per retry: **every retry of a request reuses the token it started
+with** (and, for a mutation, the same idempotency key, URL, method and body). The next request
+asks again, so it gets whatever your session currently holds — Zoijs never stores, caches or
+refreshes tokens, and keeps none on the client, in resource or mutation state, or in errors.
+An exclusive mutation's joined `run()` calls don't ask again.
+
+**Tokens are validated before anything is sent.** A token is 1–8192 characters from the RFC 6750
+Bearer set: `A–Z a–z 0–9 - . _ ~ + /`, optionally ending in `=` padding. So an empty string, a
+`"Bearer …"` prefix, spaces, CR/LF, control or non-ASCII characters — anything that could alter
+the header — are refused, never trimmed or "fixed". That, a provider that throws or rejects, or
+one that returns anything other than a string, `null` or `undefined`, fails the request with an
+`ApiError` of type **`"auth"`** — no request is sent, it isn't retried, and the error never
+contains the token, the returned value or the thrown error (no `cause`).
+
+| What happened | Result |
+|---|---|
+| `auth` isn't a function (e.g. the token string itself) | `TypeError` from `createApi()` |
+| provider returns `null` / `undefined` | anonymous request |
+| provider throws/rejects, returns an invalid token, or exceeds `authTimeout` | `ApiError` type `"auth"`, nothing sent |
+| server answers 401 or 403 | `ApiError` type `"http"` — **not retried, no new token requested** |
+| network failure, CORS refusal | `"network"` (retried only within `retry`) |
+| `timeout` elapsed | `"timeout"` |
+| origin escape, redirect, no page | `"security"` |
+
+**While the provider is pending**, the resource is `loading()` and the mutation `pending()`.
+
+**Cancellation and `authTimeout`.** The provider receives `{ signal }`, an `AbortSignal` for that
+one request. It aborts when the request no longer needs a token — superseded (a reactive change
+or `refresh()`), disposed, unmounted or `reset()` — and the request stops waiting **at once**,
+whether or not your provider honors the signal; it's never sent, and nothing is reported. Pass the
+signal on to cancel your own work, e.g. a token-endpoint fetch:
+
+```js
+const backend = createApi({
+  baseURL: "https://api.example.com",
+  auth: async ({ signal }) => (await (await fetch("/session/token", { signal })).json()).accessToken,
+  authTimeout: 10_000, // optional: give up on the provider after 10 s
+});
+```
+
+`authTimeout` (milliseconds; no limit by default) bounds the provider per request: when it
+elapses, the signal aborts (`signal.reason` is a `"TimeoutError"`) and the request fails with
+type `"auth"` — nothing is sent, nothing retried. It's off by default because interactive
+token flows (a login pop-up) can legitimately take minutes. It's separate from `timeout`, which
+times each network attempt. (A newer non-exclusive `run()` doesn't cancel an older one's first
+request — exactly as without `auth`.) Providers written for 0.3.0, with no parameter, still work.
+
+**The token only goes where the client goes.** It's sent only to the client's exact origin and
+under its base path, checked on the final URL of every attempt; requests are still
+`credentials: "omit"` (no cookies, no browser HTTP authentication) and never follow redirects,
+so no redirect can carry it elsewhere. A request that can't be sent — a refused URL or secret
+query key, or no browser page (SSR) — fails **before** the provider is asked. Clients never
+share providers, and `api()` never sends an `Authorization` header.
+
+**A token echoed back is redacted.** If the API puts the request's own token into its
+problem-details fields or its HTTP status text (a careless error handler), every exact occurrence
+is replaced with `[redacted]` before it reaches `error.problem`, `error.statusText`,
+`error.message` or `configure({ onError })`. Only **exact** occurrences are recognized (repeated or
+embedded in other text, and after JSON escapes are decoded): a server that echoes a *transformed*
+token — percent- or base64-encoded, truncated, re-cased or split across fields — isn't caught, and
+no heuristic could catch every form. Treat this as a safety net, not a guarantee: problem details
+are opt-in (`problemDetails`), they're untrusted server text, so don't forward them to logs or
+monitoring wholesale — and fix a server that echoes credentials.
+
+**CORS:** a request with `Authorization` needs a preflight, so the external API must allow it —
+for example `Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key`. If it
+doesn't, the browser refuses the request and you get a `"network"` error; with `retry`, that's
+retried within the bound like any network error (the browser doesn't say why it refused).
+
+### Recovering from a 401
+
+Zoijs never retries a 401 or asks for a new token by itself — that's how authentication loops
+start. Recover explicitly, once, from your own code:
+
+<!-- doctest: recover-401 -->
+```js
+import { effect } from "@zoijs/core";
+
+const profile = backend("/profile");
+let recovered = false; // at most ONE recovery until a load succeeds
+
+effect(() => {
+  if (profile.loading()) return; // wait for the load to settle
+  const e = profile.error();
+  if (!e) recovered = false; // success: a later 401 may recover again
+  else if (e.type === "http" && e.status === 401 && !recovered) {
+    recovered = true; // a 401 right after refreshing is shown, not retried
+    refreshThenReload();
+  }
+});
+
+async function refreshThenReload() {
+  if (await session.refreshAccessToken()) profile.refresh(); // a new request: the provider is asked again
+}
+
+const save = backend.post("/orders", { idempotencyKey: true });
+await save.run(order);
+if (save.error()?.status === 401 && (await session.refreshAccessToken())) {
+  await save.run(order);                    // a new run: new token, new idempotency key
+}
+```
+
+The flag is what bounds it: each reload's 401 is a *new* error, so "once per error" would refresh
+forever against a server that keeps refusing; "once until a load succeeds" can't. Make the
+provider return the *current* token (`auth: () => session.accessToken`), so the next request picks
+up the refreshed one. Retrying a mutation after a 401 is safe only because the
+server rejected it before acting; if your API can fail with 401 *after* side effects, don't retry.
+For a 403, don't refresh: the token is valid but not allowed — show the error.
+
+**Cookies across origins** are deliberately not supported: see the security review in
+[RFC 0009](../framework/docs/rfcs/0009-api-cookie-auth-review.md) (CSRF, CORS, SameSite and
+redirect risks, and the bar any future proposal must meet).
+
+**Security guidance**
+
+- Never hardcode production tokens in source code, and never put a token in a URL (the
+  secret-key check refuses `?access_token=…` for exactly that reason).
+- Never log access tokens, and don't put server-only secrets (client secrets, private API keys)
+  in a browser application at all.
+- Use short-lived, narrowly scoped access tokens, and avoid persisting them — keep them in
+  memory where you can; `localStorage` is readable by any script on your origin.
+- JavaScript can't protect a token from a malicious script running on the same origin: XSS
+  defenses (CSP, escaping, [`@zoijs/sanitize`](../sanitize/README.md)) are what protect it.
+- The external API must authorize every request. CORS controls which pages a browser lets read
+  responses; it's not authentication or authorization.
+
+## Security at a glance
+
+`@zoijs/api` makes the short code the safe code in the browser. It is **not** access control:
+
+- **Your server must authenticate, authorize and validate every request.** Nothing here replaces
+  that, and cookies are sent same-origin as with any `fetch` — protect writes against
+  [CSRF](https://zoijs.dev/production-security#5-protect-state-changing-requests-against-csrf).
+- **`api()` blocks cross-origin requests.** An external API needs an explicit
+  [`createApi()`](#external-apis-createapi) client, locked to one origin — no global
+  trusted-origin list. Clients use CORS, send no cookies and follow no redirects.
+- **Secret-looking query keys are refused**; credentials belong in headers or bodies, not URLs.
+- **Retries are opt-in and bounded** (≤ 5 extra attempts, ≤ 30 s waits); mutation retries
+  require an idempotency key.
+- **An `Idempotency-Key` only helps if your server stores and enforces it.**
+- **A client timeout doesn't prove the server didn't act** — the operation may have completed.
+- **Problem details are untrusted server text** — render them as text, never as HTML or a link.
+- **FormData isn't validated** — check file type, size and content on the server.
+
+## In this version
+
+- **JSON and `FormData` bodies only** — no `Blob`, `ArrayBuffer`, `URLSearchParams` or streams.
+- **Explicit invalidation only** — no cache, no deduplication, no URL-based invalidation.
+- **No implicit retries**: retries are opt-in (`retry`) and bounded (≤ 5, ≤ 30 s waits); mutation
+  retries also need an idempotency key. **No custom headers, fixed-string idempotency keys,
+  or optimistic updates.**
+- **Browser requests only.** Requests need a page origin; on the server, use `initial`.
+- **`createApi()` takes only `baseURL`, `auth` and `authTimeout`** — Bearer tokens only: no OAuth
+  flows, token refresh or storage, per-request auth, custom headers or cookie-based cross-origin
+  auth, and one origin per client.
+
+## License
+
+MIT

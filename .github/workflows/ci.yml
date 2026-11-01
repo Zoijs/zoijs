@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Also run as the test gate of the release workflow (publish.yml), at the tagged commit.
+  workflow_call:
+  # Weekly, so a newly published npm advisory against an existing lockfile surfaces even when
+  # nothing is being merged (the "Dependencies" job below).
+  schedule:
+    - cron: "23 6 * * 1"
+
+# Least privilege: CI only reads the repository. No job here can write to the repo,
+# packages, or releases, and none can mint an OIDC token (id-token) — only the
+# publish job in publish.yml can, and only behind the protected npm-release environment.
+permissions:
+  contents: read
+
+# Runners are pinned to an exact image (ubuntu-24.04), never the floating ubuntu-latest label:
+# that label moves to a new Ubuntu release on GitHub's schedule (26.04 from 2026-10-19), which
+# would change the OS under CI and releases without a commit. Move to a new image deliberately, in
+# a PR whose CI proves it (scripts/tests/ci-consistency.test.mjs enforces the pin).
+jobs:
+  # Fast feedback: every package's unit/DOM tests + TypeScript checks, on a
+  # small Node matrix. Uses the root scripts (npm --prefix under the hood).
+  unit:
+    name: Unit + Types (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The TEST toolchain sets the floor: jsdom 30 (and its undici 8) requires Node
+        # ^22.22.2 || ^24.15.0 || >=26, and Node 20 has been EOL since 2026-04-30 — so we test the
+        # two supported LTS lines, 22 and 24. (Published packages have no dependencies; their
+        # `engines` field is about where they run, not about this matrix.)
+        node: [22, 24]
+    steps:
+      # Third-party actions are pinned to full commit SHAs (immutable); Dependabot
+      # (.github/dependabot.yml) proposes updates. The comment is the human version.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+      # Lockfile-exact installs; dependency install scripts never run (none are
+      # needed: the only ones in the tree are fsevents, macOS-only, and sharp in the
+      # private, never-installed assets package).
+      - run: npm run ci:all
+      - run: npm test
+      - run: npm run test:types
+      # Tarball contents + identity of every publishable package (no registry access).
+      - run: npm run release:check -- --all --offline
+
+  # Real browsers are slower, so they run once in a separate job. We run inside
+  # the official Playwright image, which already ships every browser and all
+  # system dependencies — so we never run `playwright install --with-deps`
+  # (whose apt step is flaky on the hosted runner's Microsoft repos). Node is
+  # included in the image. The tag must match the @playwright/test version we use;
+  # the digest pins it immutably (update both together when bumping Playwright).
+  browser:
+    name: Browser (Chromium / Firefox / WebKit)
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
+    # GitHub sets HOME=/github/home (owned by pwuser) for container jobs, but the
+    # job runs as root — Firefox refuses to launch unless $HOME is owned by the
+    # current user. Point HOME at root's own home.
+    env:
+      HOME: /root
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: npm run ci:all
+      # Ensure the browser binaries match the installed @playwright/test (no apt; the image
+      # already provides the system libraries). `@playwright/test` is `^1.61.1`, so a package's
+      # lockfile can resolve a NEWER 1.6.x than the pinned image (e.g. sanitize → 1.62.1) whose
+      # browser builds aren't baked in — causing "Executable doesn't exist at
+      # /ms-playwright/webkit-XXXX". Install for EVERY browser-testing package's own resolved
+      # Playwright, so whatever each one pins is present. Same-version installs are no-ops.
+      # (An explicit command — not an install script — so it is unaffected by --ignore-scripts.)
+      - name: Ensure browser binaries (per browser-testing package)
+        run: |
+          for pkg in framework router resource head action storage forms sanitize api \
+                     examples/task-board examples/admin examples/contacts; do
+            npm --prefix "$pkg" exec -- playwright install chromium firefox webkit
+          done
+      - run: npm run test:browser
+
+  # Known vulnerabilities in every committed lockfile (direct and transitive), via npm audit against
+  # the registry: any advisory that isn't a reviewed, unexpired exception in
+  # scripts/dependency-policy.json fails, and the report lands in the job summary. Licenses are
+  # checked offline in the unit job (npm test → test:deps). Nothing is installed or upgraded here.
+  deps:
+    name: Dependencies (npm audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm run audit:deps
+
+  # ONE stable check for branch protection: "CI passed" succeeds only if every unit/type matrix
+  # leg, the real-browser job AND the dependency audit succeeded (a skipped or cancelled job fails
+  # it too). Require this check in the main-branch ruleset (docs/releasing.md → "Merge gate") so a
+  # pull request can't merge with a red Browser job. The individual job names above stay unchanged.
+  gate:
+    name: CI passed
+    if: ${{ always() }}
+    needs: [unit, browser, deps]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Unit, browser and dependency jobs all succeeded
+        run: |
+          echo "unit: ${{ needs.unit.result }}  browser: ${{ needs.browser.result }}  deps: ${{ needs.deps.result }}"
+          test "${{ needs.unit.result }}" = "success" && test "${{ needs.browser.result }}" = "success" && test "${{ needs.deps.result }}" = "success"

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Zoijs — sanitize from a no-build import map (with-server)</title>
+    <!-- The complete map sanitize needs: @zoijs/core, @zoijs/core/server (it imports the core's shared URL/attribute checks from there), and @zoijs/sanitize. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@zoijs/core": "/framework/src/index.js",
+          "@zoijs/core/server": "/framework/src/server.js",
+          "@zoijs/sanitize": "/sanitize/src/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./no-build.js"></script>
+  </body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "$comment": "Reviewed dependency policy, enforced by scripts/check-licenses.mjs (every lockfile, offline, in `npm test`) and scripts/audit-deps.mjs (npm audit, in CI). Every published @zoijs package has ZERO runtime dependencies (scripts/check-deps.mjs), so everything below is development tooling: test runners, jsdom, TypeScript, Playwright, and the private brand-asset scripts. Add to an allow list or an exception only with a reason; every exception must still match something, and every accepted vulnerability expires.",
+  "licenses": {
+    "allowed": [
+      "MIT",
+      "MIT-0",
+      "ISC",
+      "0BSD",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "Apache-2.0",
+      "BlueOak-1.0.0",
+      "CC0-1.0",
+      "Python-2.0"
+    ],
+    "$allowedComment": "Permissive (OSI-approved or public-domain dedications) — no copyleft or field-of-use terms. Python-2.0 is argparse's permissive license (via eslint).",
+    "exceptions": [
+      {
+        "lockfile": "assets",
+        "package": "@img/sharp-libvips-*",
+        "license": "LGPL-3.0-or-later",
+        "reason": "Prebuilt libvips binaries that sharp loads dynamically. Only the private, never-published brand-asset scripts in assets/ use them, to rasterize the logo; nothing from them is shipped or linked into any package, and CI never installs assets/."
+      },
+      {
+        "lockfile": "assets",
+        "package": "@img/sharp-win32-*",
+        "license": "Apache-2.0 AND LGPL-3.0-or-later",
+        "reason": "Same as @img/sharp-libvips-*: the Windows builds bundle libvips. Private tooling, never shipped."
+      },
+      {
+        "lockfile": "assets",
+        "package": "@img/sharp-wasm32",
+        "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+        "reason": "Same as @img/sharp-libvips-*: the WebAssembly build bundles libvips. Private tooling, never shipped."
+      },
+      {
+        "lockfile": "assets",
+        "package": "@expo-google-fonts/poppins",
+        "license": "MIT AND OFL-1.1",
+        "reason": "The Poppins font (SIL Open Font License) used to draw the logo. OFL permits embedding in artwork; the font file itself is never redistributed."
+      }
+    ]
+  },
+  "audit": {
+    "$comment": "npm advisories accepted for a limited time. Each entry: { lockfile, package, advisory (the GHSA URL from npm audit), reason, expires: YYYY-MM-DD }. An expired or unmatched entry fails the audit. Empty means nothing is accepted.",
+    "exceptions": []
+  }
+}

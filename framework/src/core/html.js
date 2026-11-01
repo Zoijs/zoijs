@@ -1,0 +1,400 @@
+// html() — the template function.
+//
+//   html`<button onclick=${handler}>${() => count.get()}</button>`
+//
+// Parses the STATIC structure once (cached), tracking real HTML lexical context
+// with a small state machine — so it knows whether each ${} falls in text, an
+// attribute value, an event, etc. Dynamic values are kept in a separate channel
+// from the static HTML; a value can never change the template's structure.
+//
+// Output of the parse (cached per `strings`) is DOM-free — a static HTML string
+// plus part descriptors. The <template> element is built lazily on first client
+// render; on a server, @zoijs/ssr reads the static HTML + parts directly.
+//   html     : the static HTML string, with unique markers (no DOM)
+//   parts    : ordered list of binding descriptors
+//      { type: "child" }                          ← a comment-marker anchor
+//      { type: "element", attrs: [AttrPart] }     ← element carrying data-zoijs-bind
+//   AttrPart : { name, strings, holes, event, whole }
+//
+// Matching is by DOCUMENT ORDER (renderer walks the clone), so markers can never
+// collide across nested templates or list items.
+
+import { createTemplate } from "../utils/dom.js";
+import { TEMPLATE } from "./brand.js";
+import { URL_ATTRS } from "../utils/security.js";
+
+const cache = new WeakMap();
+
+/**
+ * @param {TemplateStringsArray} strings  static HTML chunks (author-controlled)
+ * @param {...any} values                 dynamic values, one per slot
+ * @returns {{ template: HTMLTemplateElement, parts: object[], values: any[] }}
+ */
+export function html(strings, ...values) {
+  let compiled = cache.get(strings);
+  if (!compiled) {
+    // Markup may only come from a tagged-template literal. Checked once per call
+    // site (cache miss), before any parsing: arrays from data or runtime code are
+    // rejected, so html([runtimeString]) can't act as innerHTML.
+    if (!isTemplateStrings(strings)) {
+      throw new TypeError("ZJS010: use html as a tagged template (html`…`), not html([...]). Never pass runtime HTML to it; for untrusted HTML use @zoijs/sanitize.");
+    }
+    compiled = compile(strings); // pure: a static HTML string + parts, NO DOM
+    cache.set(strings, compiled);
+  }
+  // The <template> element is created lazily, on first client render — so html()
+  // itself touches no DOM and works on a server (where @zoijs/ssr reads the static
+  // HTML + parts instead). The Symbol brand (see brand.js) lets consumers detect a
+  // result without tripping the getter, and cannot be forged by JSON data.
+  return {
+    [TEMPLATE]: true,
+    parts: compiled.parts,
+    hasElements: compiled.hasElements,
+    __staticHTML: compiled.html,
+    get template() {
+      if (!compiled.template) compiled.template = createTemplate(compiled.html);
+      return compiled.template;
+    },
+    values,
+  };
+}
+
+// What the engine passes a tag: a frozen array whose own `raw` is a frozen array,
+// non-enumerable. JSON, split(), spread and plain assignment can't produce this.
+// Structural, not provenance: deliberate code can rebuild it (see docs/security.md).
+// If a standard, widely supported Array.isTemplateObject() ships, evaluate it here.
+function isTemplateStrings(s) {
+  const raw = Array.isArray(s) && Object.isFrozen(s) && Object.getOwnPropertyDescriptor(s, "raw");
+  return !!raw && !raw.enumerable && Array.isArray(raw.value) && Object.isFrozen(raw.value);
+}
+
+// ---- scanner ----------------------------------------------------------------
+
+const TEXT = 0;
+const TAGNAME = 1;
+const BEFORE_ATTR = 2;
+const ATTR_NAME = 3;
+const AFTER_NAME = 4;
+const BEFORE_VAL = 5;
+const VAL_DQ = 6;
+const VAL_SQ = 7;
+const VAL_UQ = 8;
+const CLOSE_TAG = 9;
+const COMMENT = 10;
+const RAWTEXT = 11;
+
+const RAWTEXT_TAGS = new Set(["script", "style", "textarea", "title"]);
+// Raw-text elements whose sole-child ${} binds their CONTENT via a property (a comment marker
+// can't live in raw text). script/style are excluded on purpose — an injection surface.
+const RAWTEXT_BINDABLE = new Map([["textarea", "value"], ["title", "textContent"]]);
+const isWS = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+const isLetter = (c) => c >= "a" && c <= "z" || c >= "A" && c <= "Z";
+
+function unsupported(message) {
+  throw new Error(`Zoijs template: ${message}`);
+}
+
+// Bound names reach setAttribute, so Lit-style prefixes etc. are refused at compile time —
+// as is data steering resolution/navigation (SEC-9): <base>, meta http-equiv, SVG attributeName.
+function checkBoundName(name, tag) {
+  const r = name.slice(1);
+  const n = name.toLowerCase();
+  const hint = { ".": `${r}=\${…} or a ref`, "?": `${r}=\${…} (false/null removes it)`, "@": `on${r}=\${…}` }[name[0]];
+  if (hint || !/^[A-Za-z_:\u00C0-\uFFFF]/.test(name)) unsupported(`unsupported bound attribute "${name}"` + (hint ? ` — use ${hint}` : ""));
+  if (tag === "base" || (tag === "meta" && n === "http-equiv") || ((tag === "animate" || tag === "set") && n === "attributename")) {
+    unsupported(`binding "${name}" on <${tag}> is not supported — write it statically`);
+  }
+}
+
+const OPENER_TAGS = new Set(["a", "area", "form"]);
+const ANIM_VALUES = new Set(["from", "to", "by", "values"]);
+
+// Static text around a hole is set via setAttribute, so decode its character references
+// here as the HTML parser would. Unknown named ones are refused rather than guessed.
+// Latin-1 (U+00A0–U+00FF) + amp/lt/gt/quot are the only names decoded without ";".
+const LATIN1 = "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml".split(" ");
+const LEGACY = Object.assign(Object.create(null), { amp: "&", AMP: "&", lt: "<", LT: "<", gt: ">", GT: ">", quot: '"', QUOT: '"', COPY: "\u00A9", REG: "\u00AE" });
+LATIN1.forEach((n, i) => (LEGACY[n] = String.fromCharCode(160 + i)));
+
+function decodeAttr(s, name) {
+  return s.replace(/&(?:#(?:[xX]([\da-fA-F]+)|(\d+));?|([A-Za-z][A-Za-z\d]*)(;?))/g, (m, hex, dec, ref, semi, at) => {
+    const cp = parseInt(hex || dec, hex ? 16 : 10);
+    // Without ";" only legacy names decode, and never before "=" (query strings stay literal).
+    const v = ref ? (semi ? (ref === "apos" ? "'" : LEGACY[ref]) : s[at + m.length] === "=" ? m : LEGACY[ref] || m)
+      : cp && cp < 0x110000 && (cp < 0xd800 || cp > 0xdfff) && (cp < 0x80 || cp > 0x9f) && String.fromCodePoint(cp); // not 0/surrogate/C1
+    if (!v) unsupported(`unsupported character reference "${m}" in "${name}" — write the character itself`);
+    return v;
+  });
+}
+
+function compile(strings) {
+  let out = "";
+  const parts = [];
+  let state = TEXT;
+
+  // current tag / attribute being built
+  let tagName = "";
+  let dynAttrs = [];
+  let statics = []; // the tag's valued static attributes { name, value, start, end }
+  let names = []; // all its attribute names, lower-cased
+  let selfClose = false;
+  let rawtextTag = "";
+  let attrStart = 0; // index in `out` where the current attribute's name starts
+  let attrName = "";
+  let dynamic = false; // current attribute value contains a hole
+  let strs = null; // static fragments of the current dynamic attribute value
+  let holes = null; // hole indices of the current dynamic attribute value
+  let frag = ""; // running static fragment of the current attribute value
+
+  // Raw-text content binding (<textarea>/<title>) — positions recorded by finalizeTag.
+  let rawtextMarkerPos = 0; // in `out`, just before ">" (where data-zoijs-bind would go)
+  let rawtextElementPart = -1; // parts[] index of this element, or -1 if it has none yet
+  let rawtextContentStart = 0; // in `out`, just after ">" (content region start)
+  let rawtextBound = false; // a content ${} already bound → only whitespace may follow
+
+  const finalizeAttr = () => {
+    if (dynamic) {
+      strs.push(frag);
+      const whole = strs.length === 2 && strs[0] === "" && strs[1] === "";
+      let event = false;
+      if (/^on/i.test(attrName)) {
+        if (!whole) unsupported(`event handler "${attrName}" must be a single \${} value`);
+        event = true;
+      }
+      checkBoundName(attrName, tagName.toLowerCase());
+      dynAttrs.push({ name: attrName, strings: whole ? strs : strs.map((f) => decodeAttr(f, attrName)), holes, event, whole });
+    }
+    dynamic = false;
+    strs = null;
+    holes = null;
+    frag = "";
+    attrName = "";
+  };
+
+  const noteStatic = () => statics.push({ name: attrName.toLowerCase(), value: frag, start: attrStart, end: out.length });
+
+  const finalizeTag = () => {
+    const tag = tagName.toLowerCase();
+    const st = (n) => statics.find((a) => a.name === n);
+    const val = (n) => (st(n) ? st(n).value.trim().toLowerCase() : "");
+    // SEC-9: element-level URL contexts, decided once the whole tag is known (order-free).
+    for (const a of dynAttrs) {
+      const n = a.name.toLowerCase();
+      if (tag === "meta" && n === "content" && val("http-equiv") === "refresh") a.check = "refresh";
+      if ((tag === "animate" || tag === "set") && ANIM_VALUES.has(n) && URL_ATTRS.has(val("attributename"))) a.check = "anim";
+    }
+    // Bound or static-_blank target: target + rel become ONE part, so noopener/noreferrer are
+    // merged into the app's rel by one computation, whatever the order or later updates.
+    if (OPENER_TAGS.has(tag) && (dynAttrs.some((a) => a.name.toLowerCase() === "target") || val("target") === "_blank")) {
+      const cut = [];
+      const take = (n) => {
+        const k = dynAttrs.findIndex((a) => a.name.toLowerCase() === n);
+        if (k >= 0) return dynAttrs.splice(k, 1)[0];
+        const a = st(n);
+        if (!a) return null;
+        cut.push(a); // moves from the markup into the part
+        return { name: n, strings: [decodeAttr(a.value, n)], holes: [], whole: false, event: false };
+      };
+      const target = take("target");
+      const rel = take("rel");
+      for (const a of cut.sort((x, y) => y.start - x.start)) out = out.slice(0, a.start - (isWS(out[a.start - 1]) ? 1 : 0)) + out.slice(a.end);
+      for (const n of ["target", "rel"]) {
+        if (names.filter((x) => x === n).length > (n === "rel" && !rel ? 0 : 1)) unsupported(`<${tag}> needs a single valued "${n}" attribute alongside target`);
+      }
+      dynAttrs.push({ name: "target", opener: true, target, rel, holes: target.holes.concat(rel ? rel.holes : []), strings: [], whole: false, event: false });
+    }
+    if (dynAttrs.length) {
+      out += " data-zoijs-bind";
+      parts.push({ type: "element", attrs: dynAttrs });
+    }
+    // Record, for a possible raw-text content binding, this element's ">" position and part.
+    rawtextElementPart = dynAttrs.length ? parts.length - 1 : -1;
+    rawtextMarkerPos = out.length;
+    out += selfClose ? "/>" : ">";
+    const lower = tagName.toLowerCase();
+    if (RAWTEXT_TAGS.has(lower)) {
+      state = RAWTEXT;
+      rawtextTag = lower;
+      rawtextContentStart = out.length;
+      rawtextBound = false;
+    } else {
+      state = TEXT;
+    }
+    tagName = "";
+    dynAttrs = [];
+    statics = [];
+    names = [];
+    selfClose = false;
+  };
+
+  for (let i = 0; i < strings.length; i++) {
+    const s = strings[i];
+
+    for (let k = 0; k < s.length; k++) {
+      const c = s[k];
+
+      switch (state) {
+        case TEXT:
+          if (c === "<") {
+            const nx = s[k + 1];
+            if (nx === "/") { out += "<"; state = CLOSE_TAG; }
+            else if (nx === "!") { out += "<"; state = s.substr(k + 1, 3) === "!--" ? COMMENT : CLOSE_TAG; }
+            else if (nx && isLetter(nx)) { out += "<"; state = TAGNAME; tagName = ""; dynAttrs = []; }
+            else if (nx === undefined && i < strings.length - 1) { out += "<"; state = TAGNAME; tagName = ""; dynAttrs = []; } // "<${tag}>" → clear error at the hole
+            else out += "<"; // a literal "<" in text (e.g. "a < b")
+          } else out += c;
+          break;
+
+        case TAGNAME:
+          if (isWS(c)) { out += c; state = BEFORE_ATTR; }
+          else if (c === ">") finalizeTag();
+          else if (c === "/") selfClose = true;
+          else { tagName += c; out += c; }
+          break;
+
+        case BEFORE_ATTR:
+          if (isWS(c)) out += c;
+          else if (c === ">") finalizeTag();
+          else if (c === "/") selfClose = true;
+          else { state = ATTR_NAME; attrName = c; attrStart = out.length; out += c; dynamic = false; }
+          break;
+
+        case ATTR_NAME:
+          if (c === "=" || isWS(c) || c === ">" || c === "/") names.push(attrName.toLowerCase());
+          if (c === "=") { out += c; state = BEFORE_VAL; }
+          else if (isWS(c)) { out += c; state = AFTER_NAME; }
+          else if (c === ">") finalizeTag();
+          else if (c === "/") { selfClose = true; state = AFTER_NAME; }
+          else { attrName += c; out += c; }
+          break;
+
+        case AFTER_NAME:
+          if (isWS(c)) out += c;
+          else if (c === "=") { out += c; state = BEFORE_VAL; }
+          else if (c === ">") finalizeTag();
+          else if (c === "/") selfClose = true;
+          else { state = ATTR_NAME; attrName = c; attrStart = out.length; out += c; dynamic = false; }
+          break;
+
+        case BEFORE_VAL:
+          if (isWS(c)) out += c;
+          else if (c === '"' || c === "'") { out += c; frag = ""; dynamic = false; state = c === '"' ? VAL_DQ : VAL_SQ; }
+          else { frag = c; out += c; dynamic = false; state = VAL_UQ; }
+          break;
+
+        case VAL_DQ:
+        case VAL_SQ: {
+          const q = state === VAL_DQ ? '"' : "'";
+          if (c === q) { if (dynamic) finalizeAttr(); else { out += c; noteStatic(); } state = BEFORE_ATTR; }
+          else if (dynamic) frag += c;
+          else { frag += c; out += c; }
+          break;
+        }
+
+        case VAL_UQ:
+          if (isWS(c)) { if (dynamic) finalizeAttr(); else noteStatic(); out += c; state = BEFORE_ATTR; }
+          else if (c === ">") { if (dynamic) finalizeAttr(); else noteStatic(); finalizeTag(); }
+          // `src=${url}/>`: that "/" self-closes the tag — it isn't part of the value.
+          else if (dynamic && c === "/" && s[k + 1] === ">") { finalizeAttr(); selfClose = true; state = BEFORE_ATTR; }
+          else if (dynamic) frag += c;
+          else { frag += c; out += c; }
+          break;
+
+        case CLOSE_TAG:
+          out += c;
+          if (c === ">") state = TEXT;
+          break;
+
+        case COMMENT:
+          out += c;
+          if (c === ">" && out.endsWith("-->")) state = TEXT;
+          break;
+
+        case RAWTEXT:
+          out += c;
+          if (c === ">" && out.toLowerCase().endsWith("</" + rawtextTag + ">")) {
+            if (rawtextBound) {
+              // Value is the element's sole content: only whitespace may sit between the ${} and
+              // the close tag. Reject anything else, then drop that whitespace.
+              const closeStart = out.length - ("</" + rawtextTag + ">").length;
+              if (/\S/.test(out.slice(rawtextContentStart, closeStart))) {
+                unsupported(`interpolation inside <${rawtextTag}> must be its only content (no text before or after \${})`);
+              }
+              out = out.slice(0, rawtextContentStart) + "</" + rawtextTag + ">";
+              rawtextBound = false;
+            }
+            state = TEXT;
+          }
+          break;
+      }
+    }
+
+    // end of chunk → a hole (unless this was the last chunk)
+    if (i < strings.length - 1) {
+      const hole = i;
+      switch (state) {
+        case TEXT:
+          out += "<!--zoijs-->";
+          parts.push({ type: "child", hole });
+          break;
+
+        case BEFORE_VAL: // attr=${x}  → unquoted whole-value hole
+          out = out.slice(0, attrStart);
+          dynamic = true; strs = [""]; holes = [hole]; frag = "";
+          state = VAL_UQ;
+          break;
+
+        case VAL_DQ:
+        case VAL_SQ:
+        case VAL_UQ:
+          if (!dynamic) { out = out.slice(0, attrStart); dynamic = true; strs = [frag]; holes = [hole]; frag = ""; }
+          else { strs.push(frag); holes.push(hole); frag = ""; }
+          break;
+
+        case TAGNAME:
+          unsupported("dynamic tag names are not supported (e.g. `<${tag}>`)");
+        case BEFORE_ATTR:
+        case ATTR_NAME:
+        case AFTER_NAME:
+          unsupported("dynamic attribute names / spreads are not supported (e.g. `<el ${x}>`)");
+        case COMMENT:
+          unsupported("interpolation inside an HTML comment is not supported");
+        case RAWTEXT: {
+          // <textarea>/<title>: a sole-child ${} becomes a content binding. script/style have no
+          // prop → throw (injection surface). A second ${} or surrounding text → throw.
+          const prop = RAWTEXT_BINDABLE.get(rawtextTag);
+          if (!prop) {
+            unsupported(`interpolation inside <${rawtextTag}> is not supported — set its content via a property instead`);
+          }
+          if (rawtextBound || /\S/.test(out.slice(rawtextContentStart))) {
+            unsupported(`interpolation inside <${rawtextTag}> must be its only content (no text before or after \${})`);
+          }
+          out = out.slice(0, rawtextContentStart); // drop leading whitespace
+          // `content` reuses the whole-value attr plumbing but marks a property/text write, not an
+          // attribute (see renderer bindAttribute + ssr renderAttributes).
+          const contentAttr = { name: prop, content: prop, strings: ["", ""], holes: [hole], whole: true, event: false };
+          if (rawtextElementPart >= 0) {
+            parts[rawtextElementPart].attrs.push(contentAttr);
+          } else {
+            // No dynamic attributes yet → add the bind marker + an element part now.
+            out = out.slice(0, rawtextMarkerPos) + " data-zoijs-bind" + out.slice(rawtextMarkerPos);
+            parts.push({ type: "element", attrs: [contentAttr] });
+            rawtextContentStart = out.length; // shifted by the inserted marker
+          }
+          rawtextBound = true;
+          break;
+        }
+        case CLOSE_TAG:
+          unsupported("interpolation inside a closing tag is not supported");
+        default:
+          unsupported("interpolation in an unsupported position");
+      }
+    }
+  }
+
+  const hasElements = parts.some((p) => p.type === "element");
+  // Pure output: the static HTML string and the part descriptors. The DOM
+  // <template> is built later, lazily (see html()), so compile() needs no DOM and
+  // its result can be serialized on a server.
+  return { html: out, parts, hasElements, template: null };
+}

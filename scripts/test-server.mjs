@@ -1,0 +1,180 @@
+// test-server.mjs — the static server the Playwright browser suites (and each package's
+// `npm run dev` example viewer) run against. Repository tooling — not a production server, and
+// not the scaffolded apps' dev server (create-zoijs ships its own).
+//
+//   node scripts/test-server.mjs <root> <port> [<cross-origin port>]
+//
+// Replaces `npx serve`, which resolved (and could download) a mutable package version at test
+// time, outside the lockfiles. Node built-ins only: no install, no network, deterministic.
+// Serves files under <root> on 127.0.0.1 with correct MIME types and `Cache-Control: no-store`;
+// a directory serves its index.html; anything else (missing, outside <root>, or a dotfile /
+// dot-directory such as .git/ or .env) is a 404.
+// GET /__ready answers 200 — Playwright's webServer.url waits on it (most roots have no index).
+// POST /__echo (and /__echo/…) answers with the exact request it received — method, path,
+// Content-Type and the raw body as base64 (at most 1 MB) — so browser tests can check what a
+// browser really sent over the network instead of relying on Playwright's request interception
+// (WebKit's interception doesn't expose File/Blob bytes in multipart bodies). The first POST to
+// /__echo/flaky/<id> answers 503 instead (each <id> fails once), so retries can be tested end to end.
+//
+// With a second port, the same server also listens there — a DIFFERENT origin
+// (http://127.0.0.1:<cross-origin port>) for createApi() tests. Its /__cors/… endpoints (on either
+// port) answer CORS for exactly one origin, the main one (http://127.0.0.1:<port>):
+//   /__cors/…                 echo: method, path, query, Origin, Referer, Cookie, Content-Type, Idempotency-Key, body
+//   /__cors/deny/…            the same echo, but without CORS headers (the browser must refuse it)
+//   /__cors/flaky/<id>        503 (Retry-After: 0) the first time per <id>, then the echo
+//   /__cors/hang-once/<id>    waits 3 s the first time per <id>, then the echo
+//   /__cors/problem           422 application/problem+json
+//   /__cors/redirect/<code>?to=<url>   a <code> redirect to <url>
+//   /__cors/basic/…           401 + WWW-Authenticate: Basic unless the request carries Authorization
+//   /__cors/echo-problem      401 application/problem+json that echoes the received Authorization
+//                             header back in its fields and status text (a careless server)
+//   /__cors/auth/…            any of the above, with Authorization also allowed by the preflight
+//                             (elsewhere a request carrying Authorization fails its preflight); the
+//                             echo reports the Authorization header it received
+// /__demo/<workspace>/…  the in-memory users API behind api/examples/users (see demo-users-api.mjs):
+//                         Bearer sessions, CRUD, 422 validation problems, simulated outages
+// GET /__hits/<path> answers { count, authorized }: how many non-preflight requests /<path>
+// received (on any port), and how many carried an Authorization header — so a test can prove a
+// request, or a credential, never reached a server.
+//
+// Every suite has its own port so suites can run concurrently (enforced by
+// scripts/tests/ci-consistency.test.mjs):
+//   framework 7310 · router 3100 · resource 3200 · head 3300 · action 3400 · storage 3600 ·
+//   forms 3700 · sanitize 3800 · api 3900 (+3901 cross-origin) · examples/task-board 3500 · examples/admin 3520 · examples/contacts 3530
+
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { resolve, relative, isAbsolute, extname, join } from "node:path";
+import { demoUsers } from "./demo-users-api.mjs";
+
+const [rootArg, portArg, crossArg] = process.argv.slice(2);
+const ROOT = resolve(rootArg || ".");
+const PORT = Number(portArg);
+const CROSS_PORT = crossArg === undefined ? null : Number(crossArg);
+if (!Number.isInteger(PORT) || PORT <= 0 || (CROSS_PORT !== null && (!Number.isInteger(CROSS_PORT) || CROSS_PORT <= 0 || CROSS_PORT === PORT))) {
+  console.error("usage: node scripts/test-server.mjs <root> <port> [<cross-origin port>]");
+  process.exit(1);
+}
+
+const TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+};
+const inside = (p) => {
+  const rel = relative(ROOT, p);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+};
+const send = (res, status, body, type = "text/plain; charset=utf-8") => {
+  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+  res.end(body);
+};
+
+const ECHO_LIMIT = 1024 * 1024;
+const flaky = new Set();
+async function echo(req, res, pathname) {
+  if (pathname.startsWith("/__echo/flaky/") && !flaky.has(pathname)) {
+    flaky.add(pathname);
+    for await (const _ of req); // drain the body
+    return send(res, 503, "Service Unavailable");
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > ECHO_LIMIT) return send(res, 413, "Too large");
+    chunks.push(chunk);
+  }
+  const body = JSON.stringify({ method: req.method, path: pathname, contentType: req.headers["content-type"] ?? null, body: Buffer.concat(chunks).toString("base64") });
+  send(res, 200, body, "application/json; charset=utf-8");
+}
+
+// ---- cross-origin endpoints (createApi() tests) ----
+const ALLOWED_ORIGIN = `http://127.0.0.1:${PORT}`;
+const hits = new Map(); // raw pathname → non-preflight request count
+const authorized = new Map(); // raw pathname → requests that carried Authorization
+const once = new Set();
+function cors(req, res, url) {
+  const path = url.pathname;
+  // /__cors/auth/<route> behaves as /__cors/<route>, but its preflight allows Authorization.
+  const allowAuth = path.startsWith("/__cors/auth/");
+  const route = allowAuth ? "/__cors/" + path.slice("/__cors/auth/".length) : path;
+  const headers = { "Cache-Control": "no-store", Vary: "Origin" };
+  if (req.headers.origin === ALLOWED_ORIGIN && !path.startsWith("/__cors/deny/")) {
+    Object.assign(headers, { "Access-Control-Allow-Origin": ALLOWED_ORIGIN, "Access-Control-Allow-Credentials": "true", "Access-Control-Expose-Headers": "Retry-After" });
+  }
+  if (req.method === "OPTIONS") {
+    if (headers["Access-Control-Allow-Origin"]) Object.assign(headers, { "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE", "Access-Control-Allow-Headers": allowAuth ? "Authorization, Content-Type, Idempotency-Key" : "Content-Type, Idempotency-Key" });
+    res.writeHead(204, headers);
+    return res.end();
+  }
+  if (hits.size < 10000) hits.set(path, (hits.get(path) || 0) + 1);
+  if (req.headers.authorization && authorized.size < 10000) authorized.set(path, (authorized.get(path) || 0) + 1);
+  const reply = (status, body, type = "application/json; charset=utf-8", extra = {}) => {
+    if (res.destroyed) return;
+    res.writeHead(status, { ...headers, "Content-Type": type, ...extra });
+    res.end(body);
+  };
+  const first = (prefix) => route.startsWith(prefix) && !once.has(path) && once.add(path);
+  if (route.startsWith("/__cors/basic/") && !req.headers.authorization) return reply(401, "", "text/plain", { "WWW-Authenticate": 'Basic realm="zoijs-test"' });
+  if (route === "/__cors/echo-problem") {
+    const got = String(req.headers.authorization || "none").replace(/[^\x21-\x7e ]/g, "");
+    if (res.destroyed) return;
+    res.writeHead(401, `Unauthorized ${got}`, { ...headers, "Content-Type": "application/problem+json" });
+    return res.end(JSON.stringify({ type: "https://errors.example/auth", title: `Rejected ${got}`, detail: `The credential ${got} has expired`, status: 401 }));
+  }
+  if (route === "/__cors/problem") return reply(422, JSON.stringify({ type: "https://errors.example/invalid", title: "Invalid order", status: 422, detail: "quantity must be positive", secretInternal: "dropped" }), "application/problem+json");
+  const redirect = /^\/__cors\/redirect\/(30[12378])$/.exec(route);
+  if (redirect) return reply(Number(redirect[1]), "", "text/plain", { Location: url.searchParams.get("to") || "/" });
+  const chunks = [];
+  let size = 0;
+  req.on("data", (c) => {
+    size += c.length;
+    if (size <= ECHO_LIMIT) chunks.push(c);
+  });
+  req.on("end", () => {
+    if (size > ECHO_LIMIT) return reply(413, "{}");
+    if (first("/__cors/flaky/")) return reply(503, "", "text/plain", { "Retry-After": "0" });
+    const echoed = () =>
+      reply(200, JSON.stringify({
+        method: req.method, path, search: url.search, origin: req.headers.origin ?? null, referer: req.headers.referer ?? null, cookie: req.headers.cookie ?? null,
+        contentType: req.headers["content-type"] ?? null, idempotencyKey: req.headers["idempotency-key"] ?? null, authorization: req.headers.authorization ?? null, body: Buffer.concat(chunks).toString("base64"),
+      }));
+    if (first("/__cors/hang-once/")) setTimeout(echoed, 3000);
+    else echoed();
+  });
+}
+
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, "http://127.0.0.1");
+    if (url.pathname.startsWith("/__cors/")) return cors(req, res, url);
+    if (url.pathname.startsWith("/__demo/")) return demoUsers(req, res, url, ALLOWED_ORIGIN);
+    if (req.method === "GET" && url.pathname.startsWith("/__hits/")) {
+      const p = url.pathname.slice("/__hits".length);
+      return send(res, 200, JSON.stringify({ count: hits.get(p) || 0, authorized: authorized.get(p) || 0 }), "application/json; charset=utf-8");
+    }
+    if (url.pathname !== "/__ready" && hits.size < 10000) hits.set(url.pathname, (hits.get(url.pathname) || 0) + 1);
+    const pathname = decodeURIComponent(url.pathname);
+    if (pathname === "/__ready") return send(res, 200, "ok");
+    if (req.method === "POST" && (pathname === "/__echo" || pathname.startsWith("/__echo/"))) return await echo(req, res, pathname);
+    let file = resolve(ROOT, "." + pathname);
+    const dotSegment = pathname.split(/[\\/]+/).some((s) => s.startsWith("."));
+    if (pathname.includes("\0") || dotSegment || !inside(file)) return send(res, 404, "Not found");
+    if ((await stat(file)).isDirectory()) file = join(file, "index.html");
+    send(res, 200, await readFile(file), TYPES[extname(file)] || "application/octet-stream");
+  } catch {
+    send(res, 404, "Not found");
+  }
+});
+server.listen(PORT, "127.0.0.1", () => console.log(`test-server: ${ROOT} on http://127.0.0.1:${PORT}`));
+// The cross-origin listener: same handler, different origin.
+const cross = CROSS_PORT === null ? null : createServer(server.listeners("request")[0]);
+if (cross) cross.listen(CROSS_PORT, "127.0.0.1", () => console.log(`test-server: cross-origin on http://127.0.0.1:${CROSS_PORT}`));
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { if (cross) cross.close(); server.close(() => process.exit(0)); });

@@ -1,0 +1,747 @@
+// renderer.js — fine-grained rendering engine.
+//
+// Turns an html() result into live DOM and wires each dynamic slot to a live
+// binding. No Virtual DOM, no component re-execution.
+//
+//   - A FUNCTION value is reactive (runs in an effect): text updates a Text node
+//     in place; attributes update in place.
+//   - An each() marker becomes a keyed LIST binding (reuse / move / remove).
+//   - A non-function value is static (set once, no effect).
+//   - An EVENT slot's value is the handler (addEventListener; never a string).
+//
+// Cleanup is owned: render() creates an owner scope; every effect, listener, and
+// nested render registers into it, so disposing the owner tears everything down.
+
+import { createEffect, untrack } from "../reactivity/effect.js";
+import { labelNext } from "../reactivity/devtools.js";
+import { createState } from "../reactivity/state.js";
+import { createOwner, runWithOwner, disposeOwner, onCleanup } from "../reactivity/owner.js";
+import { isDev } from "../reactivity/env.js";
+import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
+import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
+import { foreignTemplate } from "../utils/dom.js";
+import { matchTemplate, regionNodes, slotItems, mismatch } from "./hydrate.js";
+
+const XLINK_NS = "http://www.w3.org/1999/xlink";
+const NS = { svg: "http://www.w3.org/2000/svg", math: "http://www.w3.org/1998/Math/MathML" };
+
+// Content inserted under SVG/MathML parses as SVG/MathML ("svg"/"math"; "" = HTML) — except in
+// the HTML integration points (<foreignObject>, <mi>, <mo>, …). A fragment root inherits it.
+export const nsOf = (parent, inherited) =>
+  parent.nodeType === 1 ? (/^(foreignObject|m[ions]|mtext)$/.test(parent.localName) ? "" : Object.keys(NS).find((k) => NS[k] === parent.namespaceURI) || "") : inherited;
+const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
+const noop = () => {};
+
+// A bound `style` STRING carrying one of these is a smell: CSS can exfiltrate data
+// (background:url(…)) or enable clickjacking, and expression()/comments are classic
+// obfuscation. Not blocked (legit uses exist) — a one-time dev warning nudges you to
+// the safe object form. Deduped per element so a reactive style can't spam.
+const SUSPICIOUS_STYLE = /url\s*\(|expression\s*\(|\/\*|<\/style|javascript:/i;
+const styleWarned = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+
+// Arrays / plain objects on ordinary attributes stringify to "a,b" / "[object Object]":
+// warn once per element in dev. Rendering is unchanged; URL, Date, … have real toStrings.
+const objWarned = styleWarned && new WeakSet();
+const classTokens = new WeakMap(); // element → class tokens its binding last set
+function warnStringified(el, name, v) {
+  if (isDev() && v && typeof v === "object" && (Array.isArray(v) || v.toString === Object.prototype.toString) && objWarned && !objWarned.has(el)) {
+    objWarned.add(el);
+    console.warn(`Zoijs: attribute "${name}" got an object/array, stringified as "${v}"`);
+  }
+}
+
+/**
+ * @param {{ template: HTMLTemplateElement, parts: object[], values: any[] }} result
+ * @param {{ parent: Node, before: Node | null, end: Node | null }} [hyd]  when given, ADOPT the
+ *   server-rendered nodes between `before` and `end` in place (no clone). If they don't match
+ *   the template, they are replaced by a fresh client render of this template (see hydrate.js).
+ * @param {string} [ns]  parse in "svg" or "math" context
+ * @returns {{ node: Node | null, dispose: Function }}  node is null when hydrating (already in place)
+ */
+export function render(result, hyd, ns) {
+  // Only a genuine (Symbol-branded) html`…` result is instantiated — its markup is
+  // author source. Anything else reaching here (data returned by a component or an
+  // each() render function) is refused rather than having its fields trusted.
+  if (!isTemplateResult(result)) {
+    throw new TypeError("Zoijs: expected an html`…` template result (a component or each() render function returned something else)");
+  }
+  const tpl = (ns ? foreignTemplate(result.__staticHTML, ns) : result.template).content;
+  const { parts, values } = result;
+  // Hydration validates the whole boundary BEFORE binding anything, so a mismatch leaves no
+  // listener or effect on the server nodes it then discards.
+  const m = hyd && matchTemplate(tpl, hyd.parent, hyd.before, hyd.end);
+  if (hyd && !m) {
+    mismatch(hyd.parent, !hyd.before && !hyd.end);
+    for (const n of regionNodes(hyd.parent, hyd.before, hyd.end)) n.remove();
+    const r = render(result, undefined, ns);
+    hyd.parent.insertBefore(r.node, hyd.end);
+    return { node: null, dispose: r.dispose };
+  }
+  const owner = createOwner(); // nested under the active owner
+  const fragment = m ? null : tpl.cloneNode(true);
+  // Collect every part's target node first (document order), so a binding that
+  // inserts children can't shadow a later part.
+  const nodes = m ? m.nodes : collectNodes(fragment, parts, result.hasElements);
+
+  runWithOwner(owner, () => {
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const node = nodes[i];
+      if (!node) continue;
+
+      if (part.type === "child") {
+        if (m) adoptChild(m.starts[i], node, values[part.hole], nsOf(node.parentNode, ns));
+        else bindChild(node, values[part.hole], nsOf(node.parentNode, ns));
+      } else {
+        node.removeAttribute("data-zoijs-bind");
+        if (m) node.removeAttribute("data-zoijs-h");
+        for (const attr of part.attrs) bindAttribute(node, attr, values, !!m);
+      }
+    }
+  });
+
+  return { node: fragment, dispose: () => disposeOwner(owner) };
+}
+
+// ---- hydration: adopting server content in a slot -----------------------------
+//
+// `start`…`anchor` brackets the slot's server content. Matching content is adopted (same
+// nodes, so typed values, focus and selection survive); anything that doesn't match is
+// replaced by a client render of just that value. Markers are removed / normalized so the
+// DOM ends up exactly as a fresh mount would build it.
+function adoptChild(start, anchor, value, ns) {
+  anchor.data = "zoijs";
+  try {
+    if (isEachResult(value)) setupKeyedList(anchor, value, ns, start);
+    else if (typeof value === "function") bindReactiveContent(anchor, value, ns, start);
+    else ownItems(adoptItems(start, anchor, value, ns));
+  } finally {
+    start.remove();
+  }
+}
+
+const isTextValue = (v) => v == null || (typeof v !== "object" && typeof v !== "function");
+const textOf = (v) => (v == null || typeof v === "boolean" ? "" : toText(v));
+
+// Adopt one value between `before` and `end`; returns its item ({ nodes, dispose }).
+function adoptOne(before, end, value, ns) {
+  const parent = end.parentNode;
+  if (isTemplateResult(value)) {
+    const r = render(value, { parent, before, end }, ns);
+    return { nodes: regionNodes(parent, before, end), dispose: r.dispose };
+  }
+  const region = regionNodes(parent, before, end);
+  if (isTextValue(value)) {
+    const text = textOf(value);
+    let t = region.length === 1 && region[0].nodeType === 3 ? region[0] : null;
+    if (t ? t.data !== text : region.length || text) mismatch(parent, false, "different text");
+    if (!t) {
+      for (const n of region) n.remove();
+      t = parent.insertBefore(document.createTextNode(""), end);
+    }
+    t.data = text; // the client's value wins (in place: same node)
+    return { nodes: [t], dispose: noop };
+  }
+  // A raw DOM node or unsafeHTML can't be compared: always the client's own nodes.
+  for (const n of region) n.remove();
+  const item = renderChild(value, ns);
+  for (const n of item.nodes) parent.insertBefore(n, end);
+  return item;
+}
+
+// A slot's value: one region, or one bracketed region per array entry.
+function adoptItems(start, anchor, value, ns) {
+  if (!Array.isArray(value)) return [adoptOne(start, anchor, value, ns)];
+  const regions = slotItems(start, anchor, value.length);
+  const items = [];
+  if (!regions) insertItems(anchor, value, items, ns);
+  else for (let i = 0; i < value.length; i++) items.push(unbracket(regions[i], (s, e) => adoptOne(s, e, value[i], ns)));
+  return items;
+}
+
+// Run `fn` over an item's bracketed region, then drop the bracket.
+const unbracket = ([s, e], fn) => {
+  const r = fn(s, e);
+  s.remove();
+  e.remove();
+  return r;
+};
+
+function ownItems(items) {
+  onCleanup(() => {
+    for (const it of items) {
+      it.dispose();
+      for (const n of it.nodes) n.remove();
+    }
+  });
+}
+
+// Match parts to nodes by document order: a child part ↔ the next marker comment,
+// an element part ↔ the next element carrying data-zoijs-bind. Unique markers make
+// this collision-proof across nested templates and list items.
+function collectNodes(fragment, parts, hasElements) {
+  const nodes = new Array(parts.length);
+  if (!parts.length) return nodes;
+  // Child-only templates (common for list items) can walk comments only.
+  const filter = hasElements ? NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT : NodeFilter.SHOW_COMMENT;
+  const walker = document.createTreeWalker(fragment, filter);
+  let p = 0;
+  let node;
+  while (p < parts.length && (node = walker.nextNode())) {
+    const isChildMarker = node.nodeType === 8 && node.data === "zoijs";
+    const isElementMarker = node.nodeType === 1 && node.hasAttribute("data-zoijs-bind");
+    if (isChildMarker || isElementMarker) {
+      nodes[p] = node;
+      p++;
+    }
+  }
+  return nodes;
+}
+
+function bindChild(anchor, value, ns) {
+  if (isEachResult(value)) setupKeyedList(anchor, value, ns);
+  else if (typeof value === "function") bindReactiveContent(anchor, value, ns);
+  else insertStaticContent(anchor, value, ns);
+}
+
+// unsafeHTML() is content-only: refused in any attribute, before URL/name checks.
+const rawInAttr = (name) => {
+  throw new TypeError(`Zoijs: unsafeHTML() can't be bound to attribute "${name}"`);
+};
+
+function bindAttribute(el, attr, values, hydrating) {
+  for (const h of attr.holes) if (isUnsafeHTML(values[h])) rawInAttr(attr.name);
+  // Hydrating a form control the user already changed: its first write is skipped, so what
+  // they typed or ticked before the app loaded is kept (later updates write as usual).
+  let keep = hydrating && edited(el, attr.content || attr.name.toLowerCase());
+  if (attr.name === "ref") {
+    // A callback ref. Only a single ${fn} is meaningful; anything else (a string,
+    // a number, a multi-part value) is rejected by bindRef without touching the DOM.
+    bindRef(el, attr.whole ? values[attr.holes[0]] : undefined);
+    return;
+  }
+
+  if (attr.content) {
+    // Raw-text content bind (<textarea>.value / <title>.textContent): a sole-child ${} the
+    // compiler routed here (no comment marker can live in raw text). Set the PROPERTY.
+    const prop = attr.content;
+    const raw = values[attr.holes[0]];
+    const set = () => {
+      const v = toText(typeof raw === "function" ? raw() : raw);
+      if (keep) keep = false;
+      else el[prop] = v;
+    };
+    if (typeof raw === "function") labelNext({ kind: "attr", el, name: prop }, () => effect(set));
+    else set();
+    return;
+  }
+
+  if (attr.event) {
+    const handler = values[attr.holes[0]];
+    // Only real functions are accepted as handlers — a string/object is ignored,
+    // so an inline-handler string can never be wired up or executed.
+    if (typeof handler !== "function") {
+      if (isDev()) console.warn(`Zoijs: ignoring non-function event handler for "${attr.name}"`);
+      return;
+    }
+    const eventName = attr.name.slice(2).toLowerCase();
+    el.addEventListener(eventName, handler);
+    onCleanup(() => el.removeEventListener(eventName, handler));
+    return;
+  }
+
+  // One write per part: a target/rel pair (SEC-9, computed together) or a single attribute.
+  const write = attr.opener
+    ? () => {
+        const t = partValue(el, attr.target, values);
+        applyAttribute(el, "target", t);
+        applyAttribute(el, "rel", openerRel(t, attr.rel && partValue(el, attr.rel, values)));
+      }
+    : () => {
+        const v = partValue(el, attr, values); // read even when skipped: stays reactive
+        if (keep) keep = false;
+        else applyAttribute(el, attr.name, v, attr.check);
+      };
+  if (attr.holes.some((h) => typeof values[h] === "function")) labelNext({ kind: "attr", el, name: attr.name }, () => effect(write));
+  else write();
+}
+
+// Has the user changed this server-rendered control's value / checked state?
+const edited = (el, name) =>
+  name === "value" ? "defaultValue" in el && el.value !== el.defaultValue : name === "checked" && el.checked !== el.defaultChecked;
+
+// A part's current value: a whole ${} passes the raw value (booleans, numbers, property types
+// for value/checked); static text + holes is always a joined string.
+function partValue(el, attr, values) {
+  const read = (h) => (typeof values[h] === "function" ? values[h]() : values[h]);
+  if (attr.whole) return read(attr.holes[0]);
+  let result = attr.strings[0];
+  for (let i = 0; i < attr.holes.length; i++) {
+    const v = read(attr.holes[i]);
+    warnStringified(el, attr.name, v);
+    result += v + attr.strings[i + 1];
+  }
+  return result;
+}
+
+// A callback ref: hand the real element to user code AFTER the current render is
+// inserted, so focus/scroll/measure see a CONNECTED node. We defer one microtask
+// (render binds while the DOM is still a detached fragment; insertion happens
+// right after render returns, synchronously, so a microtask runs once it's live).
+// Not reactive — the function is read once. An optional returned function is an
+// owner-scoped cleanup, disposed on unmount or list-item removal, exactly like a
+// listener. A non-function value is ignored (with a dev warning) and never sets a
+// "ref" attribute — so an inert string can't be wired up.
+function bindRef(el, fn) {
+  if (typeof fn !== "function") {
+    if (isDev()) console.warn(`Zoijs: "ref" expects a function (el) => …; ignoring ${typeof fn} value`);
+    return;
+  }
+  let active = true;
+  let cleanup = null;
+  onCleanup(() => {
+    active = false;
+    if (cleanup) { cleanup(); cleanup = null; }
+  });
+  queueMicrotask(() => {
+    if (!active) return; // removed before the microtask fired
+    const c = fn(el);
+    if (typeof c === "function") {
+      if (active) cleanup = c;
+      else c(); // disposed during fn(): tear down immediately
+    }
+  });
+}
+
+// ---- text / content bindings -------------------------------------------------
+
+function bindReactiveContent(anchor, getValue, ns, start) {
+  let mode = null; // "text" | "nodes"
+  let textNode = null;
+  let items = []; // [{ nodes, dispose }]
+
+  const clearNodes = () => {
+    for (const it of items) {
+      it.dispose();
+      for (const n of it.nodes) n.remove();
+    }
+    items = [];
+  };
+  const clearText = () => {
+    if (textNode) {
+      textNode.remove();
+      textNode = null;
+    }
+  };
+
+  labelNext({ kind: "text", el: anchor }, () => effect(() => {
+    let value = getValue(); // tracked: the selector decides whether / which child
+    // A function returned by the selector is a component to construct
+    // (`${() => show.get() ? Child : null}`). Call it once, untracked, so reads in
+    // its setup belong to the child and don't subscribe this binding. Ownership is
+    // unchanged: it still runs under this binding's owner (cleanup, nesting).
+    if (typeof value === "function") value = untrack(value);
+    const t = typeof value;
+    // null/undefined/booleans render NOTHING (matches the `cond && html\`...\``
+    // idiom); numbers/strings render as text; everything else is node content.
+    const asText = value == null || t === "boolean" || t === "number" || t === "string" || t === "bigint";
+    // First run of a hydrated slot: adopt the server content instead of creating it.
+    const from = start;
+    start = null;
+    if (from) {
+      items = adoptItems(from, anchor, value, ns);
+      if (asText) {
+        textNode = items[0].nodes[0];
+        items = [];
+      }
+      mode = asText ? "text" : "nodes";
+    } else if (asText) {
+      if (mode !== "text") {
+        clearNodes();
+        textNode = document.createTextNode("");
+        anchor.parentNode.insertBefore(textNode, anchor);
+        mode = "text";
+      }
+      textNode.data = value == null || t === "boolean" ? "" : toText(value); // in-place update
+    } else {
+      if (mode === "text") clearText();
+      else clearNodes();
+      mode = "nodes";
+      insertItems(anchor, value, items, ns);
+    }
+  }));
+
+  onCleanup(() => {
+    clearNodes();
+    clearText();
+  });
+}
+
+function insertStaticContent(anchor, value, ns) {
+  if (value == null) return;
+  const items = [];
+  insertItems(anchor, value, items, ns);
+  onCleanup(() => {
+    for (const it of items) {
+      it.dispose();
+      for (const n of it.nodes) n.remove();
+    }
+  });
+}
+
+function insertItems(anchor, value, items, ns) {
+  const parent = anchor.parentNode;
+  const list = Array.isArray(value) ? value : [value];
+  for (const v of list) {
+    const item = renderChild(v, ns);
+    for (const n of item.nodes) parent.insertBefore(n, anchor);
+    items.push(item);
+  }
+}
+
+function renderChild(value, ns) {
+  if (value == null || value === false || value === true) return { nodes: [], dispose: noop };
+  if (value instanceof Node) return { nodes: [value], dispose: noop };
+  if (isTemplateResult(value)) {
+    const r = render(value, undefined, ns);
+    return { nodes: [...r.node.childNodes], dispose: r.dispose };
+  }
+  if (isUnsafeHTML(value)) return { nodes: rawNodes(value.html, ns), dispose: noop };
+  return { nodes: [document.createTextNode(toText(value))], dispose: noop };
+}
+
+// unsafeHTML(): the one raw-markup path. The value reaches the sink as given (never via
+// the zoijs policy), so enforced Trusted Types refuse a string and take the app's TrustedHTML.
+// In SVG/MathML it is parsed inside an element of that namespace (the value is never concatenated).
+function rawNodes(markup, ns) {
+  const t = ns ? document.createElementNS(NS[ns], ns) : document.createElement("template");
+  try {
+    t.innerHTML = markup;
+  } catch (cause) {
+    throw new TypeError("Zoijs: Trusted Types are enforced — pass unsafeHTML() a TrustedHTML", { cause });
+  }
+  return [...(ns ? t : t.content).childNodes];
+}
+
+// ---- keyed list binding ------------------------------------------------------
+
+// Longest strictly-increasing subsequence of the non-(-1) values; returns the SET
+// of indices that belong to it. Those items are already in increasing relative
+// order, so they need not move; -1 (new) items are excluded (always inserted).
+// Patience-sorting with predecessor links — O(n log n).
+function longestIncreasingSubsequence(arr) {
+  const piles = []; // piles[k] = index of the smallest tail of an LIS of length k+1
+  const prev = new Array(arr.length).fill(-1);
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === -1) continue;
+    let lo = 0;
+    let hi = piles.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[piles[mid]] < arr[i]) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = piles[lo - 1];
+    piles[lo] = i;
+  }
+  const keep = new Set();
+  let k = piles.length ? piles[piles.length - 1] : -1;
+  while (k >= 0) {
+    keep.add(k);
+    k = prev[k];
+  }
+  return keep;
+}
+
+function setupKeyedList(anchor, marker, ns, start) {
+  const { items, keyFn, renderFn } = marker;
+  const listOwner = createOwner(); // item subtrees nest here
+  let records = new Map();
+  let currentList = [];
+
+  const readItems = () => {
+    const raw = typeof items === "function" ? items() : items;
+    return raw == null ? [] : raw;
+  };
+
+  // Build one item. The item is a reactive proxy over a state cell, so reusing a
+  // node later (itemCell.set) refreshes only its own bindings. render() opens a
+  // child owner (nested in listOwner) so the whole item subtree disposes together.
+  const createRecord = (key, item, region) => {
+    const isObj = item !== null && typeof item === "object";
+    const itemCell = isObj ? createState(item) : null;
+    const arg = isObj ? makeItemProxy(itemCell, Array.isArray(item)) : item;
+    // Run renderFn inside this item's own owner scope, so any onCleanup() it
+    // registers fires when the item is removed (not only on full unmount).
+    const itemOwner = createOwner();
+    let f;
+    untrack(() =>
+      runWithOwner(itemOwner, () => {
+        const result = renderFn(arg);
+        // Hydrating: adopt the item's bracketed server region; its nodes become the span.
+        f = region
+          ? unbracket(region, (s, e) => {
+              render(result, { parent: e.parentNode, before: s, end: e }, ns);
+              return { firstChild: s.nextSibling === e ? null : s.nextSibling, lastChild: e.previousSibling === s ? null : e.previousSibling };
+            })
+          : render(result, undefined, ns).node;
+        // A leading root binding's content goes before its anchor: an empty head node keeps it in the span.
+        if (result.__staticHTML.startsWith("<!--zoijs-->")) {
+          if (region) f.firstChild.before((f.firstChild = document.createTextNode("")));
+          else f.prepend("");
+        }
+      })
+    );
+    return { key, item, itemCell, head: f.firstChild, tail: f.lastChild, dispose: () => disposeOwner(itemOwner) };
+  };
+
+  const reconcile = (newItems) => {
+    const parent = anchor.parentNode;
+    const oldRecords = records;
+    const newRecords = new Map();
+    const ordered = [];
+    const sources = []; // each item's previous DOM position, or -1 if newly created
+    const seen = new Set();
+
+    // Previous DOM order, by key — lets us find which reused items are already in
+    // increasing relative order and can stay put.
+    const oldPos = new Map();
+    for (let i = 0; i < currentList.length; i++) oldPos.set(currentList[i].key, i);
+
+    for (let i = 0; i < newItems.length; i++) {
+      const item = newItems[i];
+      const key = keyFn(item);
+      if (seen.has(key)) {
+        // Duplicate key — `each` requires unique keys. Render only the FIRST occurrence: adding a
+        // second record for the same key overwrites it in newRecords, orphaning the first (its DOM
+        // node and owner scope leak, unreachable by any later reconcile). Skip in every mode.
+        if (isDev()) {
+          console.warn(`Zoijs each(): duplicate key ${stringifyKey(key)} — skipping the duplicate; keys must be unique.`);
+        }
+        continue;
+      }
+      seen.add(key);
+      let rec = oldRecords.get(key);
+      if (rec) {
+        oldRecords.delete(key);
+        if (rec.itemCell) rec.itemCell.set(item); // refresh this item's bindings only
+        rec.item = item;
+        sources.push(oldPos.has(key) ? oldPos.get(key) : -1);
+      } else {
+        rec = createRecord(key, item);
+        sources.push(-1); // new item — always (re)inserted
+      }
+      newRecords.set(key, rec);
+      ordered.push(rec);
+    }
+
+    // Removed keys: dispose their owner scope (effects/listeners) + remove nodes.
+    for (const rec of oldRecords.values()) {
+      rec.dispose();
+      for (const n of span(rec)) n.remove();
+    }
+
+    // Moving the subtree that holds the focused element blurs it in some browsers,
+    // so capture focus (and caret) before the moves and restore it after — a
+    // reorder must never steal focus or selection, whichever nodes happen to move.
+    const doc = anchor.ownerDocument;
+    const active = doc && doc.activeElement;
+    const refocus = active && active !== doc.body && parent.contains(active);
+    let selStart = null;
+    let selEnd = null;
+    if (refocus) {
+      try {
+        selStart = active.selectionStart;
+        selEnd = active.selectionEnd;
+      } catch {
+        selStart = null; // not a text field — focus only, no caret to restore
+      }
+    }
+
+    // Items in the longest increasing subsequence of old positions are already in
+    // the right relative order — leave them put (minimal DOM moves). Everything
+    // else (moved or new) is inserted before the running cursor, walking from the
+    // end so each insertion's reference node is already correctly placed.
+    const keep = longestIncreasingSubsequence(sources);
+    let cursor = anchor;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      const rec = ordered[i];
+      if (sources[i] === -1 || !keep.has(i)) {
+        let ref = cursor;
+        const nodes = span(rec);
+        for (let j = nodes.length - 1; j >= 0; j--) {
+          const node = nodes[j];
+          if (node.nextSibling !== ref) parent.insertBefore(node, ref);
+          ref = node;
+        }
+      }
+      cursor = rec.head || cursor;
+    }
+
+    if (refocus && doc.activeElement !== active) {
+      active.focus();
+      if (selStart !== null && active.setSelectionRange) {
+        try {
+          active.setSelectionRange(selStart, selEnd);
+        } catch {
+          /* element no longer supports selection — focus alone is enough */
+        }
+      }
+    }
+
+    records = newRecords;
+    currentList = ordered;
+  };
+
+  // First run of a hydrated list: adopt one bracketed server region per item, in order. A
+  // different item count (or duplicate keys) re-renders the whole list on the client.
+  const adopt = (newItems, start) => {
+    const regions = slotItems(start, anchor, new Set(newItems.map(keyFn)).size === newItems.length ? newItems.length : -1);
+    if (!regions) return reconcile(newItems);
+    currentList = newItems.map((item, i) => createRecord(keyFn(item), item, regions[i]));
+    for (const rec of currentList) records.set(rec.key, rec);
+  };
+
+  labelNext({ kind: "list", el: anchor }, () => effect(() => {
+    const newItems = readItems(); // tracked: subscribe to the list state
+    const from = start;
+    start = null;
+    runWithOwner(listOwner, () => (from ? adopt(newItems, from) : reconcile(newItems)));
+  }));
+
+  onCleanup(() => {
+    for (const rec of currentList) {
+      rec.dispose();
+      for (const n of span(rec)) n.remove();
+    }
+  });
+}
+
+// An item's DOM is the LIVE span head…tail, not a snapshot: content a root-level binding adds
+// later (a conditional row, a nested list) lies inside it, so it moves and leaves with the item.
+function span(rec) {
+  const out = [];
+  for (let n = rec.head; n; n = n === rec.tail ? null : n.nextSibling) out.push(n);
+  return out;
+}
+
+function makeItemProxy(itemCell, isArray) {
+  const live = () => Object(itemCell.get());
+  // Array target → Array.isArray works; spread/Object.keys/JSON.stringify/instanceof see the live item.
+  return new Proxy(
+    isArray ? [] : {},
+    {
+      get(_, prop) {
+        const item = itemCell.get();
+        if (item == null) return undefined;
+        const v = item[prop];
+        // Bind inherited methods (Date#getTime); own functions keep identity (`this` = this proxy).
+        return typeof v === "function" && !Object.prototype.hasOwnProperty.call(item, prop) ? v.bind(item) : v;
+      },
+      set(_, prop, v) {
+        const item = itemCell.peek();
+        return item == null || Reflect.set(item, prop, v);
+      },
+      has(_, prop) {
+        const item = itemCell.get();
+        return item != null && prop in Object(item);
+      },
+      ownKeys() {
+        const keys = Reflect.ownKeys(live());
+        return isArray && !keys.includes("length") ? [...keys, "length"] : keys;
+      },
+      getOwnPropertyDescriptor(_, prop) {
+        const item = live();
+        // Proxy invariants: an array target's own `length` stays writable + non-configurable;
+        // anything else is reported configurable (it isn't on the target).
+        if (isArray && prop === "length") return { value: item.length, writable: true, enumerable: false, configurable: false };
+        const d = Reflect.getOwnPropertyDescriptor(item, prop);
+        return d && { ...d, configurable: true };
+      },
+      getPrototypeOf: () => Object.getPrototypeOf(live()),
+    }
+  );
+}
+
+function stringifyKey(key) {
+  try {
+    return JSON.stringify(key);
+  } catch {
+    return String(key);
+  }
+}
+
+// ---- attribute binding -------------------------------------------------------
+
+function applyAttribute(el, name, value, check) {
+  if (isUnsafeHTML(value)) rawInAttr(name);
+  if (!isSafeAttributeName(name)) {
+    if (isDev()) console.warn(`Zoijs: refusing to bind unsafe attribute "${name}"`);
+    return;
+  }
+  // HTML attribute names are case-insensitive, so every security/dispatch decision below must
+  // compare a normalized name. Otherwise `<a HREF=${x}>`, `<input VALUE=${x}>`, or `<img SRC=${x}>`
+  // would skip the URL scheme check / property routing entirely (the browser still honors HREF as
+  // href). The original `name` is kept for setAttribute so case-SENSITIVE SVG attributes
+  // (viewBox, preserveAspectRatio, …) are preserved verbatim.
+  const lname = name.toLowerCase();
+  // URLs, srcset, meta refresh, SVG animation (shared with SSR); refused in every mode.
+  if (!isSafeAttributeValue(lname, value, check)) {
+    if (isDev()) console.warn(`Zoijs: refusing unsafe URL in "${name}"`);
+    return;
+  }
+  if (lname === "style") {
+    if (value !== null && typeof value === "object") {
+      // Object form: values come from an object, not string concatenation, so they
+      // can't break out of the attribute or inject extra declarations.
+      value = styleObjectToCss(value);
+    } else if (isDev() && typeof value === "string" && styleWarned && !styleWarned.has(el) && SUSPICIOUS_STYLE.test(value)) {
+      styleWarned.add(el);
+      console.warn(
+        `Zoijs: bound "style" contains a risky token (url()/expression()/comment). ` +
+          `Only bind style from data you control, or use the object form ` +
+          `style=\${() => ({ ... })}. See docs/security.md.`
+      );
+    }
+    // CSSOM write: a strict style-src CSP blocks setAttribute("style"), not el.style.
+    if (typeof value === "string" && el.style) {
+      el.style.cssText = value;
+      return;
+    }
+  }
+  if (lname === "value" || lname === "checked") {
+    el[lname] = value; // form-control state lives on the property
+    return;
+  }
+  if (lname === "class") {
+    // After the first write, change only the tokens this binding set: classes added by other
+    // code (a plugin, classList.add) survive updates.
+    const next = typeof value === "boolean" || value == null ? [] : toText(value).split(/\s+/).filter(Boolean);
+    const prev = classTokens.get(el);
+    classTokens.set(el, next);
+    if (prev) {
+      for (const c of prev) if (!next.includes(c)) el.classList.remove(c);
+      el.classList.add(...next);
+      if (!el.classList.length) el.removeAttribute(name);
+      return;
+    }
+  }
+  if (lname.startsWith("xlink:")) {
+    // SVG namespaced attribute (e.g. xlink:href).
+    if (value === false || value == null) el.removeAttributeNS(XLINK_NS, lname.slice(6));
+    else {
+      warnStringified(el, name, value);
+      el.setAttributeNS(XLINK_NS, lname, toText(value));
+    }
+    return;
+  }
+  if (value === false || value == null) {
+    // hasAttribute syncs Chromium's lazy CSSOM style attribute (else it survives removal).
+    if (el.hasAttribute(name)) el.removeAttribute(name);
+  } else if (value === true) {
+    el.setAttribute(name, "");
+  } else {
+    warnStringified(el, name, value);
+    el.setAttribute(name, toText(value));
+  }
+}

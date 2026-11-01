@@ -1,0 +1,41 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 42rem;
+  margin: 3rem auto;
+  padding: 0 1rem;
+  color: #1d1d1f;
+}
+
+nav {
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e2e6;
+}
+
+nav a {
+  color: #2f6fe6;
+  text-decoration: none;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+/* The router sets aria-current="page" on the active link — style it for free. */
+nav a[aria-current="page"] {
+  font-weight: 600;
+  color: #0b1b34;
+  text-decoration: underline;
+}
+
+main {
+  line-height: 1.6;
+}
+
+code {
+  background: #f0f0f3;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}

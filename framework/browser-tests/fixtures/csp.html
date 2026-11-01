@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      The exact strict CSP recommended in docs/security.md, ENFORCED:
+        - no 'unsafe-inline' / 'unsafe-eval' for scripts
+        - require-trusted-types-for 'script' (every HTML sink must use a policy)
+        - trusted-types zoijs (only Zoijs's pass-through policy is allowed)
+      The bootstrap is an EXTERNAL module (script-src 'self'), so no inline script
+      is needed. If Zoijs needed eval, an inline script, or an un-policied innerHTML,
+      this page would record a violation and rendering would fail.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs;"
+    />
+    <title>Zoijs — strict CSP fixture</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./csp-app.js"></script>
+  </body>
+</html>

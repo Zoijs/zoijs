@@ -1,0 +1,186 @@
+# The Zoijs ecosystem
+
+Zoijs core is deliberately tiny — nine functions, no router, no data layer, no
+head manager. Everything else lives in **small, optional packages** you add only
+when you need them. Use none of them and you still have a complete framework;
+add them one at a time as your app grows.
+
+This page explains what each package does, how they fit together, and walks
+through one app — the **Task Board** demo — that uses five of them together.
+(For an app that exercises eight packages, see the
+[admin dashboard](../../examples/admin/).)
+
+## The packages
+
+| Package | Adds | Public API |
+|---|---|---|
+| [`@zoijs/core`](../README.md) | The framework | `html`, `mount`, `createState`, `computed`, `each`, `effect`, `boundary`, `configure`, `onCleanup` |
+| [`@zoijs/router`](../../router/README.md) | Client-side routing | `createRouter` → `view`, `link`, `go`, `path`, `query` |
+| [`@zoijs/resource`](../../resource/README.md) | Reading async data | `resource(fetcher)` → `data`, `loading`, `error`, `refresh` |
+| [`@zoijs/action`](../../action/README.md) | Writing async data | `action(fn)` → `run`, `pending`, `error`, `done`, `result`, `reset` |
+| [`@zoijs/api`](../../api/README.md) | Same-origin HTTP | `api(url, options?)` → a resource; `api.post` / `put` / `patch` / `delete(url, options?)` → an action; `createApi({ baseURL, auth? })` → the same surface for one explicitly trusted external origin, optionally with a Bearer token; `ApiError` |
+| [`@zoijs/head`](../../head/README.md) | Page title & meta | `title`, `description`, `meta` |
+| [`@zoijs/storage`](../../storage/README.md) | Persisting state | `storage(key, initial)` → `get`, `set`, `peek` (localStorage-backed) |
+| [`@zoijs/forms`](../../forms/README.md) | Form state + validation | `form(initial, options?)` → `values`, `value`, `set`, `errors`, `touch`, `validate`, … |
+| [`@zoijs/i18n`](../../i18n/README.md) | Internationalization | `createI18n(options)` → `t`, `locale`, `setLocale`, `n`, `d`, `list`, `add` |
+| [`@zoijs/ssr`](../../ssr/README.md) | Server rendering | `renderToString(component, { hydratable })`, `hydrate`, `serialize` (SSR + static prerender + data hand-off) |
+| [`@zoijs/sanitize`](../../sanitize/README.md) | Untrusted-HTML sanitizer | `sanitize(dirtyHtml)` → safe DOM nodes for a text binding (markdown/CMS output; reuses the core's URL/attribute guards) |
+| [`@zoijs/testing`](../../testing/README.md) | DOM testing helpers (dev) | `render`, `screen`, `fireEvent`, `waitFor`, `cleanup`, `mockRouter` |
+| [`@zoijs/devtools`](../../devtools/README.md) | Reactive-graph inspector (dev) | `inspect()`, `createInspector()` |
+| [`@zoijs/eslint-plugin`](../../eslint-plugin/README.md) | Lint rules (dev) | `require-reactive-binding` (auto-fixable) + a11y rules (`alt-text`, `no-positive-tabindex`, `no-static-element-interactions`) |
+
+> New to Zoijs? Scaffold a ready-to-run app with `npm create zoijs@latest my-app`
+> (no build step). The optional packages below add capabilities to an app you
+> already have.
+
+Install only what you use:
+
+```bash
+npm install @zoijs/core
+npm install @zoijs/router      # routing
+npm install @zoijs/resource    # reading data
+npm install @zoijs/action      # writing data
+npm install @zoijs/api         # same-origin HTTP (needs @zoijs/resource + @zoijs/action)
+npm install @zoijs/head        # title & meta
+npm install @zoijs/storage     # persistence (localStorage)
+npm install @zoijs/forms       # form state + validation
+npm install @zoijs/i18n        # internationalization
+npm install @zoijs/ssr         # server-side rendering
+npm install @zoijs/sanitize    # sanitize untrusted HTML → safe nodes
+npm install -D @zoijs/testing       # DOM testing helpers (dev dependency)
+npm install -D @zoijs/devtools      # reactive-graph inspector (dev dependency)
+npm install -D @zoijs/eslint-plugin # lint rule for the reactive-binding rule (dev dependency)
+```
+
+Or load them with no install: an import map maps each name to an **exact-version** jsDelivr
+file URL with integrity hashes ([how](installation.md#from-a-cdn)), and you import by name:
+
+```js
+import { html, mount } from "@zoijs/core";
+import { createRouter } from "@zoijs/router";
+```
+
+Every package is:
+
+- **Optional** — install only what you use; the core never depends on them.
+- **Tiny** — each is one small file with a handful of functions.
+- **Built on the core's public API** — they use `createState`, `onCleanup`,
+  `html`, and `mount` just like your own code. There is no private core access
+  and **no core changes** were needed to add any of them.
+
+One package is **layered** on purpose: `@zoijs/api` is the high-level data layer, so it is
+built on `@zoijs/resource` (reads) and `@zoijs/action` (writes) rather than re-implementing
+them, and it is larger than the rest. That is the only sideways dependency, declared and
+CI-checked ([scope §4](scope.md#4-coupling-analysis)) — no other package may import a sibling:
+
+```text
+@zoijs/api ──► @zoijs/resource ──► @zoijs/core
+     └───────► @zoijs/action ───► @zoijs/core
+```
+
+```js
+import { api } from "@zoijs/api";
+
+const users = api("/api/users");                               // GET as a resource
+const create = api.post("/api/users", { invalidate: users });  // POST as an action
+```
+
+## How they work together
+
+They share one idea: **reactive readers you call inside bindings.**
+`count.get()`, `user.loading()`, `save.pending()`, `router.path()` — they're all
+the same shape, so once you've learned one you've learned them all. Wrap any of
+them in an arrow (`${() => ...}`) and the DOM updates when it changes.
+
+And they share the core's **ownership model**: when a component (or a routed
+page) unmounts, its `onCleanup` runs. That single mechanism is why:
+
+- the **router** can swap pages and the old page's effects are disposed,
+- **head** restores the previous title automatically,
+- **resource**/**action** ignore a response that arrives after unmount.
+
+No provider wraps your app. No context is threaded through. No lifecycle methods.
+A page is a function; it sets up what it needs; the core cleans it up.
+
+This holds even if more than one compatible copy of `@zoijs/core`
+ends up on the page: copies using runtime protocol 1 (introduced in core 1.9.0) share
+**one** reactive runtime in a JavaScript realm (one graph, one owner tree, one `onError`
+hook, one Trusted Types policy). Core 1.8.0 and older don't participate — mixing one of
+those with another copy still splits the graph silently, so load a single version. Packages and component libraries should still declare
+`@zoijs/core` as a **peer dependency** and not bundle it; an incompatible major
+version is reported in dev mode (`ZJS201`, see [Troubleshooting](troubleshooting.md)).
+
+## The Task Board app
+
+A small task manager that uses **five** packages — core, router, resource, action,
+and head. Find it at [`examples/task-board/`](../../examples/task-board/).
+
+**Pages:** Home, Tasks (list + filter + counts), New task (form), Task details,
+About, and a Not-Found route.
+
+### How each package is used
+
+- **`@zoijs/router`** — the route map is a plain object (`"/tasks/:id":
+  TaskDetails`). `router.link(...)` renders the nav, `router.view()` renders the
+  current page, and `router.go("/tasks")` redirects after a successful create.
+- **`@zoijs/head`** — every page calls `title(...)` and `description(...)` in its
+  first lines, so the browser tab updates as you navigate.
+- **`@zoijs/resource`** — the Tasks page does `resource(() => api.listTasks())`;
+  the details page does `resource(() => api.getTask(params.id))`. Loading and
+  error states come for free.
+- **`@zoijs/action`** — creating, toggling, and deleting are `action(...)`s. The
+  Create button shows `pending()`, the form shows `error()`, and on success the
+  page calls the resource's `refresh()` (or navigates away).
+- **`@zoijs/core`** — `each()` renders the task list, `computed()` derives the
+  "X total · Y done" counts, and `createState()` holds the All/Active/Done
+  filter.
+
+### A telling detail: no cache needed
+
+When you create a task and land back on the Tasks page, the router **re-mounts**
+that page, so its `resource` loads fresh data — the new task is just there. No
+query cache, no invalidation, no store subscription. The framework's own
+mount/unmount is the "cache invalidation." That's the whole philosophy: lean on
+the platform and the core, don't build a system.
+
+### Run it
+
+From the repository root:
+
+```bash
+node scripts/test-server.mjs . 3500
+# open http://localhost:3500/examples/task-board/
+```
+
+(That's the repository's own development server — Node built-ins only, bound to
+`127.0.0.1`; `npm run dev` in `examples/task-board` runs the same thing.) No install, no build — `index.html` uses an **import map** to point the
+`@zoijs/*` names at local source.
+
+> The demo is served at a sub-path here, so it passes
+> `{ base: "/examples/task-board" }` to the router — that's why the first load
+> lands on Home and every link works under the sub-path. Deployed at your site's
+> root, drop the `base`.
+
+## How this avoids React/Vue/Angular-style complexity
+
+| You don't write… | Instead |
+|---|---|
+| JSX + a compiler | Real HTML in `html\`...\`` template literals |
+| A bundler/build config | A `<script type="module">` and an import map |
+| `useState`/`useEffect` + rules-of-hooks | `createState`/`computed`; call them anywhere, once |
+| Context providers / a global store | Plain values and per-page setup; nothing to wrap |
+| A Virtual DOM + reconciler | Fine-grained bindings update the exact node |
+| A data-fetching library with a client | `resource` (read) and `action` (write), ~50 lines each |
+| Router config objects, loaders, guards | A `{ pattern: component }` object |
+
+Each package is something you could have written yourself in an afternoon — and
+could read in ten minutes. That's the point: Zoijs grows by adding small,
+understandable pieces, not by getting more clever.
+
+## Next steps
+
+- Skim each package's README (linked in the table above).
+- Open [`examples/task-board/app.js`](../../examples/task-board/app.js) and read
+  it top to bottom.
+- Build your own page: a function that sets a `title`, loads a `resource`, and
+  renders it. That's a Zoijs app.

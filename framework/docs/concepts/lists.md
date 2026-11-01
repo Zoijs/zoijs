@@ -1,0 +1,104 @@
+# Lists with `each()`
+
+To render an array, use `each` — Zoijs's keyed list renderer.
+
+```js
+import { html, each, createState } from "./src/index.js";
+
+const todos = createState([
+  { id: 1, text: "Learn Zoijs", done: false },
+  { id: 2, text: "Build an app", done: false },
+]);
+
+html`
+  <ul>
+    ${each(
+      () => todos.get(),                 // 1. the array (a function, so it's reactive)
+      (todo) => todo.id,                 // 2. a stable, unique key per item
+      (todo) => html`<li>${() => todo.text}</li>` // 3. the template for one item
+    )}
+  </ul>
+`;
+```
+
+`each(items, keyFn, renderFn)` takes three arguments:
+
+1. **`items`** — a function returning the array (so it updates), or a plain array.
+2. **`keyFn`** — returns a **stable, unique key** for each item (use an `id`, not the array index).
+3. **`renderFn`** — returns the template for a single item.
+
+## Why keys matter
+
+When the array changes, Zoijs matches items by key and:
+
+- **reuses** the DOM node for items whose key is unchanged,
+- **moves** nodes when items reorder (instead of recreating them),
+- **inserts** nodes for new keys,
+- **removes and cleans up** nodes for keys that are gone.
+
+Because nodes are *moved, not rebuilt*, things like **focus, typed input values, and scroll position are preserved** across reorders. Try the [input-preservation example](../examples/input-preservation/).
+
+## Updating one item is cheap
+
+If you change one item (keeping the other items' object references the same), only that item re-renders:
+
+```js
+// toggle one todo — the others keep their reference, so they don't re-render
+todos.set(todos.get().map((t) =>
+  t.id === id ? { ...t, done: !t.done } : t
+));
+```
+
+This is why the [immutable-update style](state.md#updating-objects-and-arrays--replace-dont-mutate) matters.
+
+## Per-item reactive bindings
+
+Inside `renderFn`, the item supports reactive bindings:
+
+```js
+(todo) => html`
+  <li class=${() => (todo.done ? "done" : "")}>
+    <input type="checkbox" checked=${() => todo.done} onchange=${() => toggle(todo.id)} />
+    <span>${() => todo.text}</span>
+    <button onclick=${() => remove(todo.id)}>✕</button>
+  </li>`
+```
+
+When that item's data changes, only its own bindings update — the rest of the list is untouched.
+
+The item is a live view of the current object for that key: reading `todo.text` always gives
+the latest value. Function fields come back as they are — `todo.onSelect === original`, with any
+properties you attached to it — and when called as `todo.method()`, `this` reads (and writes)
+the live item. Methods inherited from a class or built-in (`date.getTime()`) keep their real
+object. *(Next release; earlier versions returned every function field re-bound, as a new
+function without its properties.)* Call methods as `item.method()` rather than destructuring
+them off the item.
+
+The item also behaves like the object when you copy or inspect it: `{ ...todo, done: true }`,
+`Object.keys(todo)` and `JSON.stringify(todo)` see the current item's fields, an array item
+passes `Array.isArray`, and `instanceof` checks its class *(core 1.10.0+; earlier versions
+returned `{}` / `[]` for these — so a spread copy silently lost every field)*. It is still a
+proxy, so `structuredClone(todo)` throws; clone a copy instead: `structuredClone({ ...todo })`.
+
+### Items with several root nodes
+
+An item's template may have several top-level nodes and top-level bindings — a row plus a
+conditional detail row, or a nested list:
+
+```js
+(row) => html`<tr>…</tr>${() => (row.open ? html`<tr class="detail">…</tr>` : null)}`
+```
+
+The item's nodes are tracked as one range, so whatever a top-level binding currently shows
+moves and disappears together with its item *(core 1.10.0+; earlier versions could leave a
+detail row behind on reorder — wrapping each item in one element avoided it)*.
+
+## Common mistakes
+
+- **Using the array index as the key** → breaks reuse on reorder. Use a stable id.
+- **Forgetting `() =>` on the items** → `each(todos.get(), …)` renders once and never updates; use `each(() => todos.get(), …)`.
+- **Mutating the array in place** → nothing updates; `set` a new array.
+
+---
+
+Next: [Cleanup](cleanup.md).

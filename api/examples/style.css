@@ -1,0 +1,115 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 40rem;
+  margin: 3rem auto;
+  padding: 0 1rem;
+  color: #1d1d1f;
+  line-height: 1.6;
+}
+
+nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.err {
+  color: #b91c1c;
+}
+
+.card {
+  border: 1px solid #e2e2e6;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #c7c7cc;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+ul {
+  padding-left: 0;
+  list-style: none;
+}
+
+li {
+  border-bottom: 1px solid #eee;
+  padding: 0.6rem 0;
+}
+
+li strong {
+  display: block;
+}
+
+li span {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.time {
+  font-size: 1.1rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #e2e2e6;
+}
+
+label input[type="radio"] {
+  margin-right: 0.35rem;
+}
+
+input:not([type="radio"]) {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #8e8e93;
+  border-radius: 6px;
+  width: min(100%, 24rem);
+}
+
+input[aria-invalid="true"] {
+  border-color: #b91c1c;
+}
+
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  background: #fff;
+  padding: 0.5rem;
+}
+
+fieldset.card {
+  margin-top: 1.5rem;
+}

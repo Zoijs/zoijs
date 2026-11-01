@@ -1,0 +1,113 @@
+name: Publish
+
+# Publishes ONE package to npm, only when a release tag `<package>-v<version>` is pushed
+# (the repo's tag convention: core-v1.9.0, router-v0.6.0, create-v0.1.5, …).
+#
+# Nothing else can publish: branch pushes, pull requests and manual dispatch don't
+# trigger this workflow. Auth is npm Trusted Publishing (OIDC) — there is no long-lived
+# npm token — and npm attaches provenance to every package it publishes this way.
+# See framework/docs/releasing.md for the one-time npm/GitHub setup.
+
+on:
+  push:
+    tags:
+      - "*-v[0-9]*"
+
+# Least privilege by default; only the publish job is elevated (id-token).
+permissions:
+  contents: read
+
+# Never run two publishes of the same tag concurrently; never cancel one midway.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The full CI suite (unit + types on Node 22/24, browsers, tarball checks) at the
+  # tagged commit — the same workflow pull requests run, not a separate copy.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  verify:
+    name: Verify release
+    runs-on: ubuntu-24.04
+    outputs:
+      dir: ${{ steps.check.outputs.dir }}
+      name: ${{ steps.check.outputs.name }}
+      version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.published.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # to prove the tag is on main
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # Only reviewed code ships: the tagged commit must already be on main.
+      - name: Tagged commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      # Tag ↔ package.json name/version, no lifecycle scripts, clean tarball, and a peer
+      # range whose floor really provides every @zoijs/core subpath the package imports.
+      - name: Release checks
+        id: check
+        run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
+      # npm versions are immutable. If this version is already on npm, the tag must point at the
+      # SAME release: the tarball packed from the tagged commit must have the shasum npm recorded
+      # (npm pack is reproducible). That's a re-pushed or moved tag — nothing to publish, and the
+      # run succeeds. Different contents under a published version fail the release. A registry
+      # error other than "not found" fails too, rather than guessing.
+      - name: Already published?
+        id: published
+        env:
+          NAME: ${{ steps.check.outputs.name }}
+          VERSION: ${{ steps.check.outputs.version }}
+          DIR: ${{ steps.check.outputs.dir }}
+        run: |
+          set -euo pipefail
+          if ! published=$(npm view "$NAME@$VERSION" dist.shasum 2>npm-view.err); then
+            if grep -q E404 npm-view.err; then published=""; else cat npm-view.err; echo "::error::couldn't check the registry for $NAME@$VERSION"; exit 1; fi
+          fi
+          if [ -z "$published" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          packed=$(cd "$DIR" && npm pack --dry-run --json --ignore-scripts | node -e 'console.log(JSON.parse(require("fs").readFileSync(0))[0].shasum)')
+          if [ "$packed" != "$published" ]; then
+            echo "::error::$NAME@$VERSION is already on npm with different contents (npm $published, this tag $packed) — bump the version"
+            exit 1
+          fi
+          echo "::notice::$NAME@$VERSION is already on npm with identical contents ($published) — the tag was re-pushed or moved; nothing to publish"
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish ${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}
+    needs: [ci, verify]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    # Protected environment: configure required reviewers + "tags matching *-v*" as the
+    # only allowed deployment refs in GitHub settings. It holds NO npm secret.
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write # OIDC identity for npm Trusted Publishing (+ provenance)
+    defaults:
+      run:
+        working-directory: ${{ needs.verify.outputs.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm >= 11.5.1 (Node 24 bundles npm 11).
+      - name: npm supports Trusted Publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)"
+      # No install step: published packages have no runtime dependencies, and
+      # --ignore-scripts guarantees publishing executes no package scripts.
+      - name: Publish (Trusted Publishing, with provenance)
+        run: npm publish --access public --provenance --ignore-scripts
