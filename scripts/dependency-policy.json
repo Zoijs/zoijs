@@ -43,6 +43,14 @@
   },
   "audit": {
     "$comment": "npm advisories accepted for a limited time. Each entry: { lockfile, package, advisory (the GHSA URL from npm audit), reason, expires: YYYY-MM-DD }. An expired or unmatched entry fails the audit. Empty means nothing is accepted.",
-    "exceptions": []
+    "exceptions": [
+      {
+        "lockfile": "eslint-plugin",
+        "package": "minimatch",
+        "advisory": "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+        "reason": "ReDoS via crafted glob patterns, fixed only in minimatch 11. Reached only through eslint 9 (minimatch 3), the dev/test dependency of @zoijs/eslint-plugin; the patterns come from our own lint config, never from untrusted input, and nothing ships it. Remove when eslint-plugin moves to ESLint 10.",
+        "expires": "2027-01-31"
+      }
+    ]
   }
 }
