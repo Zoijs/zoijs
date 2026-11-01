@@ -27,9 +27,9 @@
 // and Trusted Types policy.
 
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promote, recover } from "./promote.js";
 
 export const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -67,7 +67,10 @@ const packageOf = (spec) => (spec.startsWith("@") ? spec.split("/").slice(0, 2).
  * @returns {Promise<import("./index.d.ts").BuildResult>}
  */
 export async function build(options = {}) {
-  const root = resolve(options.root ?? process.cwd());
+  // Real paths throughout: esbuild resolves symlinks (macOS's /var → /private/var, a symlinked
+  // checkout), and its metafile paths must line up with ours.
+  const givenRoot = resolve(options.root ?? process.cwd());
+  const root = realish(givenRoot);
   const problems = [];
 
   // ---- options --------------------------------------------------------------------------------
@@ -76,13 +79,13 @@ export async function build(options = {}) {
     problems.push('entryPoints: give at least one entry module, relative to root (e.g. ["src/main.js"])');
   }
   if (typeof options.outDir !== "string" || !options.outDir) problems.push('outDir: required (e.g. "dist")');
-  const outDir = resolve(root, options.outDir ?? "");
+  const outDir = realish(resolve(root, options.outDir ?? ""));
   const assetsDir = options.assetsDir ?? "assets";
   const assets = resolve(outDir, assetsDir);
   if (!assetsDir || !inside(outDir, assets) || assets === outDir) problems.push(`assetsDir: "${assetsDir}" must be a subdirectory of outDir`);
   const publicPath = options.publicPath ?? `/${toUrlPath(assetsDir)}/`;
   if (!publicPath.endsWith("/")) problems.push(`publicPath: "${publicPath}" must end with "/"`);
-  const mapsDir = options.sourceMapsDir == null ? null : resolve(root, options.sourceMapsDir);
+  const mapsDir = options.sourceMapsDir == null ? null : realish(resolve(root, options.sourceMapsDir));
   if (mapsDir && (inside(outDir, mapsDir) || inside(mapsDir, outDir))) {
     problems.push(`sourceMapsDir: "${options.sourceMapsDir}" must be outside outDir — anything in outDir is public`);
   }
@@ -194,7 +197,7 @@ export async function build(options = {}) {
         }
       }
       if (/sourceMappingURL=/.test(code)) problems.push(`${urlOf(abs(out))} has a sourceMappingURL comment — public output must not point at source maps.`);
-      if (code.includes(root) || code.includes(toUrlPath(root))) problems.push(`${urlOf(abs(out))} contains this machine's path (${root}) — the output would differ per machine and leak it.`);
+      if ([root, givenRoot].some((r) => code.includes(r) || code.includes(toUrlPath(r)))) problems.push(`${urlOf(abs(out))} contains this machine's path (${root}) — the output would differ per machine and leak it.`);
       for (const [re, what] of SECRETS) {
         const m = re.exec(code);
         if (m) problems.push(`${urlOf(abs(out))} contains what looks like ${what}. Never ship credentials to the browser: remove it from the source and rotate it.`);
@@ -295,25 +298,72 @@ export function htmlTags(result, { entry } = {}) {
   ];
 }
 
-const SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-const stripComments = (html) => html.replace(/<!--[\s\S]*?-->/g, (c) => " ".repeat(c.length)); // keep offsets
+/**
+ * Every <script> element outside comments, by a single linear scan (no backtracking regex over the
+ * page). Ends follow the HTML parser: a comment ends at the first "-->"; a script's content ends
+ * at the first "</script" followed by whitespace, "/" or ">" (or at the end of the page).
+ */
+function findScripts(html) {
+  const lower = html.toLowerCase();
+  const out = [];
+  let i = 0;
+  let comment = lower.indexOf("<!--"); // next comment start; searched again only once passed
+  while (i < html.length) {
+    if (comment !== -1 && comment < i) comment = lower.indexOf("<!--", i);
+    const tag = lower.indexOf("<script", i);
+    if (tag === -1) break;
+    if (comment !== -1 && comment < tag) {
+      const close = lower.indexOf("-->", comment + 4);
+      if (close === -1) break; // the rest of the page is a comment
+      i = close + 3;
+      continue;
+    }
+    if (!/[\s/>]/.test(html[tag + 7] ?? "")) {
+      i = tag + 7; // <scripts>, <script-x>: not a script tag
+      continue;
+    }
+    // The start tag ends at the first ">" outside a quoted attribute value.
+    let j = tag + 7;
+    let quote = null;
+    for (; j < html.length; j++) {
+      const c = html[j];
+      if (quote) quote = c === quote ? null : quote;
+      else if (c === '"' || c === "'") quote = c;
+      else if (c === ">") break;
+    }
+    if (j >= html.length) break;
+    const contentStart = j + 1;
+    let contentEnd = html.length;
+    let end = html.length;
+    for (let k = lower.indexOf("</script", contentStart); k !== -1; k = lower.indexOf("</script", k + 8)) {
+      if (k + 8 >= html.length || /[\s/>]/.test(html[k + 8])) {
+        contentEnd = k;
+        const gt = html.indexOf(">", k + 8);
+        end = gt === -1 ? html.length : gt + 1;
+        break;
+      }
+    }
+    out.push({ start: tag, end, attrs: html.slice(tag + 7, j), content: html.slice(contentStart, contentEnd) });
+    i = end;
+  }
+  return out;
+}
 
 /** Remove a page's import map. Returns the page without it and the parsed map (or null). */
 export function stripImportMap(html) {
-  const found = [...stripComments(html).matchAll(SCRIPT_RE)].filter((m) => /\btype\s*=\s*["']?importmap["']?/i.test(m[1]));
+  const found = findScripts(html).filter((m) => /\btype\s*=\s*["']?importmap["']?/i.test(m.attrs));
   if (found.length > 1) throw new BuildError([`stripImportMap: ${found.length} import maps in one page — a page may have only one`]);
   if (!found.length) return { html, importMap: null };
   const m = found[0];
   let importMap;
   try {
-    importMap = JSON.parse(html.slice(m.index, m.index + m[0].length).replace(SCRIPT_RE, "$2"));
+    importMap = JSON.parse(m.content);
   } catch (err) {
     throw new BuildError([`stripImportMap: the import map isn't valid JSON (${err.message})`]);
   }
-  const start = html.lastIndexOf("\n", m.index - 1) + 1; // take the whole line when the tag is alone on it
-  const lineStart = /^\s*$/.test(html.slice(start, m.index)) ? start : m.index;
-  const end = m.index + m[0].length;
-  const lineEnd = html[end] === "\n" && lineStart === start ? end + 1 : end;
+  const start = html.lastIndexOf("\n", m.start - 1) + 1; // take the whole line when the tag is alone on it
+  const lineStart = /^[ \t]*$/.test(html.slice(start, m.start)) ? start : m.start;
+  const lineEnd = html[m.end] === "\n" && lineStart === start ? m.end + 1 : m.end;
   return { html: html.slice(0, lineStart) + html.slice(lineEnd), importMap };
 }
 
@@ -323,12 +373,11 @@ export function stripImportMap(html) {
  */
 export function inlineScripts(html) {
   const out = [];
-  for (const m of stripComments(html).matchAll(SCRIPT_RE)) {
-    if (/\bsrc\s*=/i.test(m[1])) continue;
-    const type = (m[1].match(/\btype\s*=\s*["']?([^"'\s>]+)/i)?.[1] ?? "").toLowerCase();
+  for (const m of findScripts(html)) {
+    if (/\bsrc\s*=/i.test(m.attrs)) continue;
+    const type = (m.attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)/i)?.[1] ?? "").toLowerCase();
     const kind = !type || /^(text|application)\/(java|ecma)script$/.test(type) ? "classic" : type === "module" ? "module" : type === "importmap" ? "importmap" : "data";
-    const content = html.slice(m.index, m.index + m[0].length).replace(SCRIPT_RE, "$2");
-    out.push({ kind, executable: kind !== "data", hash: `'sha256-${sha("sha256", content)}'`, bytes: Buffer.byteLength(content) });
+    out.push({ kind, executable: kind !== "data", hash: `'sha256-${sha("sha256", m.content)}'`, bytes: Buffer.byteLength(m.content) });
   }
   return out;
 }
@@ -339,6 +388,19 @@ export function scriptHashes(html) {
 }
 
 // ---- internals ------------------------------------------------------------------------------------
+
+/** The real path of `p`, even if it doesn't exist yet (its nearest existing ancestor, resolved). */
+function realish(p) {
+  let base = p;
+  const rest = [];
+  while (!existsSync(base)) {
+    const up = dirname(base);
+    if (up === base) return p;
+    rest.unshift(basename(base));
+    base = up;
+  }
+  return join(realpathSync.native(base), ...rest);
+}
 
 function at(msg) {
   const l = msg.location;
@@ -399,11 +461,15 @@ async function verifyAgainstImportMap(root, map, inputs) {
   return problems;
 }
 
-/** esbuild's metafile names outputs by their staging path; give them their final one. */
+/**
+ * esbuild's metafile names outputs by their staging path; give them their final one. Source maps
+ * are left out: they never go live (they're in sourceMapsDir, or gone).
+ */
 function relocate(metafile, from, to) {
   const fix = (p) => (p === from || p.startsWith(from + "/") ? to + p.slice(from.length) : p);
   const outputs = {};
   for (const [out, o] of Object.entries(metafile.outputs)) {
+    if (out.endsWith(".map")) continue;
     outputs[fix(out)] = { ...o, imports: o.imports.map((i) => (i.external ? i : { ...i, path: fix(i.path) })) };
   }
   return { ...metafile, outputs };

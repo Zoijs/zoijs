@@ -111,3 +111,26 @@ test("import map read from a page with stripImportMap feeds build() directly", a
   assert.doesNotMatch(out, /importmap|\/src\/main\.js/);
   assert.match(out, /<script type="module" src="\/assets\/main-[A-Z0-9]{8}\.js"><\/script>/);
 });
+
+test("script end tags as browsers end them: whitespace or / after </script, any case; </scriptx> isn't one", () => {
+  const hash = (s) => csp(s);
+  assert.deepEqual(scriptHashes("<script>a()</script\t\n bar>"), [hash("a()")]);
+  assert.deepEqual(scriptHashes("<SCRIPT>b()</SCRIPT >"), [hash("b()")]);
+  assert.deepEqual(scriptHashes("<script>c('</scriptx>')</script/>"), [hash("c('</scriptx>')")]);
+  assert.deepEqual(scriptHashes("<script>unterminated()"), [hash("unterminated()")], "a script without an end tag runs to the end of the page");
+  assert.deepEqual(scriptHashes('<script data-x="a>b">d()</script>'), [hash("d()")], "> inside a quoted attribute doesn't end the tag");
+  assert.deepEqual(scriptHashes("<scripts>no</scripts><script-x>no</script-x>"), []);
+  assert.deepEqual(scriptHashes("<!-- <script>x()</script> <!-- --><script>e()</script>"), [hash("e()")]);
+  assert.deepEqual(scriptHashes("<!-- unterminated <script>x()</script>"), [], "an unterminated comment hides the rest");
+  assert.deepEqual(scriptHashes('<script>"<!--"; f()</script>'), [hash('"<!--"; f()')], "<!-- inside a script isn't a comment");
+});
+
+test("the HTML helpers run in linear time on adversarial input (no regex backtracking)", () => {
+  for (const unit of ["<!--", "<script", "<script>", "<script>x</script ", "<!-- -->", "'\""]) {
+    const big = unit.repeat(100_000);
+    const t0 = performance.now();
+    inlineScripts(big);
+    stripImportMap(big.replace(/importmap/g, ""));
+    assert.ok(performance.now() - t0 < 1000, `${JSON.stringify(unit)} × 100,000 took ${Math.round(performance.now() - t0)} ms`);
+  }
+});

@@ -3,8 +3,9 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { join, sep } from "node:path";
-import { mkdirSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
+import { join, sep, dirname, relative, resolve } from "node:path";
+import { mkdirSync, writeFileSync, readdirSync, readFileSync, mkdtempSync, symlinkSync, rmSync, realpathSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { build, BuildError, IMMUTABLE } from "../src/index.js";
 import { project, read, exists, list, sri, snapshot, APP_FILES } from "./helpers.js";
@@ -254,3 +255,17 @@ test("paths: nested assetsDir and entry paths given with the platform separator 
   assert.equal(r.publicPath, "/static/js/");
 });
 
+
+test("a project reached through a symlink (as macOS's /var → /private/var) builds and reports real paths", async (t) => {
+  const real = project(t);
+  const link = join(mkdtempSync(join(tmpdir(), "zoijs-build-link-")), "app");
+  symlinkSync(real, link, "dir");
+  t.after(() => rmSync(dirname(link), { recursive: true, force: true }));
+  const r = await build({ root: link, entryPoints: ["src/main.js"], outDir: "dist", sourceMapsDir: "maps" });
+  for (const [out, o] of Object.entries(r.metafile.outputs)) {
+    assert.ok(exists(real, relative(realpathSync(real), resolve(realpathSync(real), out))), `metafile output ${out} exists`);
+    for (const i of o.imports) assert.ok(existsSync(resolve(realpathSync(real), i.path)), i.path);
+  }
+  assert.ok(Object.keys(r.metafile.outputs).every((o) => !o.includes(".staging-")), "no staging paths left in the metafile");
+  assert.equal(list(join(real, "maps/assets")).length, 3);
+});
