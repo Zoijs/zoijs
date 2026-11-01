@@ -45,13 +45,13 @@ That's a complete, working app. No bundler, no JSX, no config.
 
 ## Why Zoijs?
 
-- 🚫 **No build step** — a `<script type="module">` is the whole toolchain.
-- ✍️ **No JSX** — write real HTML in template literals.
-- ⚡ **No Virtual DOM** — fine-grained, direct DOM updates; cost scales with what changed, not app size.
-- 🤏 **Tiny API** — nine functions in the main entry, learnable in ~30 minutes.
-- 🔒 **Secure by default** — inert text, URL-scheme guards, no `eval`; supports a strict script CSP and Trusted Types (allowances [documented](framework/docs/production-security.md)).
-- 🧩 **Plain web skills** — native events, native CSS, native DOM. Nothing bespoke to memorize.
-- 🧪 **Battle-tested** — 100+ unit tests, real-browser tests on Chromium/Firefox/WebKit, and TypeScript definitions.
+-  **No build step** — a `<script type="module">` is the whole toolchain.
+-  **No JSX** — write real HTML in template literals.
+-  **No Virtual DOM** — fine-grained, direct DOM updates; cost scales with what changed, not app size.
+-  **Tiny API** — nine functions in the main entry, learnable in ~30 minutes.
+-  **Secure by default** — inert text, URL-scheme guards, no `eval`; supports a strict script CSP and Trusted Types (allowances [documented](framework/docs/production-security.md)).
+-  **Plain web skills** — native events, native CSS, native DOM. Nothing bespoke to memorize.
+-  **Battle-tested** — 100+ unit tests, real-browser tests on Chromium/Firefox/WebKit, and TypeScript definitions.
 
 ## Install
 
