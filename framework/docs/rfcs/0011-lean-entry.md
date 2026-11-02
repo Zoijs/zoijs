@@ -1,6 +1,7 @@
 # RFC 0011 — A lean core entry without hydration
 
-- Status: **Proposed** (PERF-2D). Additive; no new export, no change to the default.
+- Status: **Accepted** — `@zoijs/core` 1.11.0 (2026-11-02); `@zoijs/build` 0.2.0's `hydration: false`
+  selects it. Additive; no new export, no change to the default.
 - Target: `@zoijs/core` — a `"zoijs-no-hydration"` export condition resolving to new lean entries
   (`src/lean.js`, `src/lean-prod.js`), and an internal refactor that moves every hydration-only
   line into `core/hydrate.js`.
@@ -87,6 +88,6 @@ Bundlers: add the condition (esbuild `conditions: ["zoijs-no-hydration", "produc
 
 ## 7. Decision
 
-**Proposed.** Lands with budgets for both builds (PERF-2E), unit, SSR and real-browser tests
+**Accepted** (PERF-2D; shipped in core 1.11.0). Landed with budgets for both builds (PERF-2E), unit, SSR and real-browser tests
 (the lean entry, unbundled, never requests `hydrate.js`; renders under a strict CSP with
 Trusted Types; refuses to hydrate without touching the page).

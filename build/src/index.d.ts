@@ -42,7 +42,7 @@ export interface BuildOptions {
   /**
    * false: bundle @zoijs/core's lean entry, without hydration (the "zoijs-no-hydration" condition,
    * core's RFC 0011) — ~1 KB gzipped less; `mount(…, { hydrate: true })` then throws. Only for apps
-   * that never hydrate server-rendered HTML. Default true. Ignored by cores without the lean entry.
+   * that never hydrate server-rendered HTML. Default true. Needs @zoijs/core 1.11.0+ (older cores ignore it).
    */
   hydration?: boolean;
   /** esbuild target. Default "es2022". */

@@ -27,7 +27,7 @@ deep imports (`@zoijs/core/src/…`) are unsupported even where a CDN can serve 
 
 | Import | Status | What it is |
 |---|---|---|
-| `@zoijs/core` | **Public, stable (semver).** | The nine functions above. Bundlers' `"production"` condition resolves it to the production entry. The `"zoijs-no-hydration"` condition resolves it to the lean entry: the same API, but `mount(…, { hydrate: true })` throws ([RFC 0011](docs/rfcs/0011-lean-entry.md); next release). |
+| `@zoijs/core` | **Public, stable (semver).** | The nine functions above. Bundlers' `"production"` condition resolves it to the production entry. The `"zoijs-no-hydration"` condition resolves it to the lean entry: the same API, but `mount(…, { hydrate: true })` throws. Since 1.11.0 ([RFC 0011](docs/rfcs/0011-lean-entry.md)). |
 | `@zoijs/core/prod` | **Public, stable (semver).** Since 1.9.0. | The same API in production mode (no dev warnings, no devtools hook). Deployment-specific: use it instead of `@zoijs/core` in production. |
 | `@zoijs/core/unsafe` | **Public, stable (semver), intentionally opt-in.** Since 1.9.0. | `unsafeHTML()` — raw trusted markup, bypasses escaping. Never re-exported from the main entry. |
 | `@zoijs/core/server` | **Public, stable (semver), environment-specific.** | The renderer's rules for server rendering (`isTemplateResult`, `isEachMarker`, `styleObjectToCss`, `isSafeAttributeValue`, `openerRel`, …). Used by `@zoijs/ssr`; no DOM required. Exports appear in the version that introduced them (`scripts/zoijs-compat.json`). |

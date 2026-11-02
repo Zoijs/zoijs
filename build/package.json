@@ -1,6 +1,6 @@
 {
   "name": "@zoijs/build",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optional production build for Zoijs apps (experimental): esbuild bundling with content-hashed assets, a manifest, and fail-closed security checks. Your app still runs unbuilt.",
   "type": "module",
   "main": "src/index.js",

@@ -1,7 +1,7 @@
 # RFC 0010 — An optional production build (`@zoijs/build`)
 
-- Status: **Proposed — experimental 0.1.0, unpublished.** Built and verified against two real
-  apps (PERF-2C); adopting it in either app, and publishing, are separate decisions.
+- Status: **Accepted** — `@zoijs/build` 0.1.0 published 2026-11-01 (experimental); Zoijs Insight and
+  zoijs.dev build their bundles with it. 0.2.0 adds `hydration: false` (RFC 0011).
 - Target: a new **tooling package** (`@zoijs/build`, like `create-zoijs` and
   `@zoijs/eslint-plugin`): Node-side, zero dependencies, one declared peer (`esbuild`).
 - Affects: **nothing at run time.** No core or package change; apps keep running unbuilt. One
@@ -134,7 +134,7 @@ dependency injection only: the default should just work once esbuild is installe
 
 ## 9. Decision
 
-**Proposed.** Ship `@zoijs/build` 0.1.0 as experimental tooling once: (1) both apps produce
+**Accepted** (2026-11-01): both conditions below were met before 0.1.0 was published. Ship `@zoijs/build` 0.1.0 as experimental tooling once: (1) both apps produce
 byte-identical bundles with it in isolated branches, passing their full browser and security
 suites — verified in PERF-2C; (2) a maintainer accepts the `check-deps` tooling-peer exception and
 the scope.md amendment. Adopting it in Insight or zoijs.dev, and publishing to npm, are separate

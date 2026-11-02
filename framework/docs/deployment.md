@@ -61,7 +61,7 @@ or 2.6 KB less (unbundled): the same API without hydration. Bundlers: add the
 `"zoijs-no-hydration"` export condition (with esbuild, `conditions: ["zoijs-no-hydration",
 "production"]`); it applies to every `@zoijs/core` import in the app, so there's still one core.
 Import maps: map `"@zoijs/core"` to `…/src/lean-prod.js`. Hydrating with the lean entry throws.
-*(next release — [RFC 0011](rfcs/0011-lean-entry.md))*
+*(core 1.11.0+ — [RFC 0011](rfcs/0011-lean-entry.md))*
 
 ## Security headers
 
