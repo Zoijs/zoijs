@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { check, verdict, compat as repoCompat, PACKAGES } from "../release-check.mjs";
+import { docPins, currentDocs } from "../check-doc-pins.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NEXT = "1.9.0";
@@ -52,8 +53,13 @@ function stage({ nextCore = null, materialize = false, coreVersion = NEXT, ssrFl
   return { root, compat, done: () => rmSync(root, { recursive: true, force: true }) };
 }
 
+// Online checks compare doc pins with npm's `latest`. Read live, that verdict would change with
+// every real release (a doc pin that was npm's latest goes stale the moment a newer version is
+// published), so by default the scenarios see npm's `latest` as the version the staged docs pin
+// — the state between releases. A test can pass its own latestOf.
+const pinnedLatest = (s) => (name) => docPins(currentDocs(s.root)).find((p) => p.name === name)?.version ?? null;
 const run = (s, prefix, version, opts = {}) => {
-  const r = check(prefix, version, { root: s.root, compat: s.compat, ...opts });
+  const r = check(prefix, version, { root: s.root, compat: s.compat, latestOf: pinnedLatest(s), ...opts });
   return { r, v: verdict(r), text: [...r.problems, ...(r.blockers || [])].join(" | ") };
 };
 const ssrVersion = () => JSON.parse(readFileSync(join(repo, "ssr", "package.json"), "utf8")).version;
