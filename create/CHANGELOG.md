@@ -2,6 +2,15 @@
 
 All notable changes to `create-zoijs` are documented here.
 
+## 0.3.1 — 2026-11-02
+
+### Changed
+- **New apps use `@zoijs/core` 1.11.0.** Package templates depend on `^1.11.0` and the `minimal`
+  template loads core 1.11.0 from jsDelivr with an integrity hash for every module file
+  (`core-cdn.json`, regenerated from the published tarball). 1.11.0 makes hydration recover
+  instead of crashing and adds an opt-in lean entry for apps that never hydrate — see the core
+  CHANGELOG. Templates are otherwise unchanged; existing apps are unaffected.
+
 ## 0.3.0 — 2026-10-12
 
 ### Changed

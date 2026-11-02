@@ -67,7 +67,7 @@ console. Details: [Production mode](concepts/production-mode.md).
 Two different things, both needed:
 
 - **No-build / CDN apps — reproducible URLs.** Use exact versions and exact file URLs:
-  `https://cdn.jsdelivr.net/npm/@zoijs/core@1.10.0/src/index.js`, never `@1`, `@latest`, or a
+  `https://cdn.jsdelivr.net/npm/@zoijs/core@1.11.0/src/index.js`, never `@1`, `@latest`, or a
   package root that the CDN resolves for you. A floating URL changes what your users run
   without a deploy.
 - **npm apps — reproducible installs.** Commit `package-lock.json` and install with
