@@ -8,7 +8,7 @@ import { flush } from "../src/reactivity/scheduler.js";
 import { configure } from "../src/reactivity/env.js";
 import { boundary } from "../src/core/boundary.js";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 
 function captureError(fn) {
   const original = console.error;

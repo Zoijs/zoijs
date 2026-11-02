@@ -11,10 +11,12 @@ export const CORE_FILES = {
     name: "@zoijs/core",
     version: "1.10.0",
     type: "module",
-    exports: { ".": { production: "./src/prod.js", default: "./src/index.js" } },
+    exports: { ".": { "zoijs-no-hydration": { production: "./src/lean-prod.js", default: "./src/lean.js" }, production: "./src/prod.js", default: "./src/index.js" } },
   }),
   "node_modules/@zoijs/core/src/index.js": 'export const mode = "core-development-entry";\n',
   "node_modules/@zoijs/core/src/prod.js": 'export const mode = "core-production-entry";\n',
+  "node_modules/@zoijs/core/src/lean.js": 'export const mode = "core-lean-development-entry";\n',
+  "node_modules/@zoijs/core/src/lean-prod.js": 'export const mode = "core-lean-production-entry";\n',
 };
 
 export const APP_FILES = {

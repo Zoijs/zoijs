@@ -21,6 +21,11 @@
 //
 //   2026-11-01 (PERF-2E, initial): bundled whole API 11,242 B → 11.5 KB; bundled minimal app
 //   10,936 B → 11 KB; unbundled production entry 35,894 B (19 files) → 36 KB.
+//   2026-11-01 (PERF-2D, lean entry without hydration; RFC 0011): new rows — bundled whole API lean
+//   10,170 B → 10.5 KB; bundled minimal app lean 9,860 B → 10 KB; unbundled lean production entry
+//   33,247 B (18 files) → 33.5 KB. The standard rows hold unchanged budgets: hydration moved into
+//   hydrate.js costs the standard build +112 B bundled and +766 B unbundled (the moved code
+//   compresses less well on its own); the lean build saves ~1.07 KB bundled, ~2.6 KB unbundled.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
@@ -36,8 +41,13 @@ const KB = 1024;
 const BUNDLED = [
   { label: "bundled · whole API · production", budget: 11.5 * KB, conditions: ["production"], code: 'import * as z from "@zoijs/core"; globalThis.z = z;' },
   { label: "bundled · minimal app · production", budget: 11 * KB, conditions: ["production"], code: MINIMAL() },
+  { label: "bundled · whole API · lean", budget: 10.5 * KB, conditions: ["zoijs-no-hydration", "production"], code: 'import * as z from "@zoijs/core"; globalThis.z = z;' },
+  { label: "bundled · minimal app · lean", budget: 10 * KB, conditions: ["zoijs-no-hydration", "production"], code: MINIMAL() },
 ];
-const UNBUNDLED = [{ label: "unbundled · production entry (src/prod.js)", budget: 36 * KB, entry: "prod.js" }];
+const UNBUNDLED = [
+  { label: "unbundled · production entry (src/prod.js)", budget: 36 * KB, entry: "prod.js" },
+  { label: "unbundled · lean production (src/lean-prod.js)", budget: 33.5 * KB, entry: "lean-prod.js" },
+];
 
 function MINIMAL() {
   return 'import { html, mount, createState } from "@zoijs/core"; const n = createState(0); mount(() => html`<button onclick=${() => n.set(n.get() + 1)}>${() => n.get()}</button>`, document.body);';

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createState } from "../src/reactivity/state.js";
 import { flush } from "../src/reactivity/scheduler.js";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 import { each } from "../src/core/each.js";
 
 const skip = typeof document === "undefined" ? "needs a DOM (browser or jsdom)" : false;

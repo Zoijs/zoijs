@@ -9,7 +9,7 @@ import { flush } from "../src/reactivity/scheduler.js";
 import { createOwner, runWithOwner, onCleanup, disposeOwner } from "../src/reactivity/owner.js";
 import { configure } from "../src/reactivity/env.js";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 import { each } from "../src/core/each.js";
 
 function captureConsole(method, fn) {
