@@ -39,6 +39,12 @@ export interface BuildOptions {
    * generation), e.g. so pages still open in browsers can load their old files. Default false.
    */
   keepPrevious?: boolean;
+  /**
+   * false: bundle @zoijs/core's lean entry, without hydration (the "zoijs-no-hydration" condition,
+   * core's RFC 0011) — ~1 KB gzipped less; `mount(…, { hydrate: true })` then throws. Only for apps
+   * that never hydrate server-rendered HTML. Default true. Ignored by cores without the lean entry.
+   */
+  hydration?: boolean;
   /** esbuild target. Default "es2022". */
   target?: string | string[];
   /** Skip the computed-import() check — only for bundles that contain such code as TEXT (e.g. docs). */

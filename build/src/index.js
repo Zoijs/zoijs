@@ -98,6 +98,7 @@ export async function build(options = {}) {
   }
   const cssFiles = options.css ?? [];
   for (const c of cssFiles) if (!existsSync(resolve(root, c))) problems.push(`css: ${c} doesn't exist`);
+  if (options.hydration !== undefined && typeof options.hydration !== "boolean") problems.push("hydration: true or false");
   const cssName = options.cssName ?? "app";
   if (!/^[\w-]+$/.test(cssName)) problems.push(`cssName: "${cssName}" — letters, digits, "_" and "-" only`);
 
@@ -161,7 +162,8 @@ export async function build(options = {}) {
         format: "esm",
         platform: "browser",
         target: options.target ?? "es2022",
-        conditions: ["production"],
+        // With hydration: false, every "@zoijs/core" import resolves to the lean entry (RFC 0011).
+        conditions: options.hydration === false ? ["zoijs-no-hydration", "production"] : ["production"],
         minify: true,
         legalComments: "eof",
         entryNames: "[name]-[hash]",

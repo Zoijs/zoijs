@@ -5,6 +5,11 @@ follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+- `hydration: false` — bundle `@zoijs/core`'s lean entry without hydration (the
+  `"zoijs-no-hydration"` condition, core RFC 0011): ~1 KB gzipped less for apps that never hydrate
+  server HTML. Ignored by cores without the lean entry.
+
 ## 0.1.0 — unreleased (experimental)
 
 First version: an **optional** production build for Zoijs apps, extracted from the bundled builds

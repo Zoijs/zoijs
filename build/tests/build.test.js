@@ -269,3 +269,17 @@ test("a project reached through a symlink (as macOS's /var → /private/var) bui
   assert.ok(Object.keys(r.metafile.outputs).every((o) => !o.includes(".staging-")), "no staging paths left in the metafile");
   assert.equal(list(join(real, "maps/assets")).length, 3);
 });
+
+test("hydration: false bundles core's lean production entry (the zoijs-no-hydration condition)", async (t) => {
+  const root = project(t);
+  await build(opts(root, { hydration: false }));
+  assert.match(allJs(root), /core-lean-production-entry/);
+  assert.doesNotMatch(allJs(root), /core-production-entry"|core-development-entry/);
+  await build(opts(root)); // default: the standard production entry
+  assert.match(allJs(root), /"core-production-entry"/);
+  await rejects(build(opts(root, { hydration: "no" })), /hydration: true or false/);
+  // A core without the lean entry ignores the option: its standard production entry is used.
+  const old = project(t, { ...APP_FILES, "node_modules/@zoijs/core/package.json": JSON.stringify({ name: "@zoijs/core", version: "1.10.0", type: "module", exports: { ".": { production: "./src/prod.js", default: "./src/index.js" } } }) });
+  await build(opts(old, { hydration: false }));
+  assert.match(allJs(old), /"core-production-entry"/);
+});
