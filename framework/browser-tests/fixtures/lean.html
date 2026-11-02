@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- The lean production entry, unbundled (as an import map would load it), under the strict CSP. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; trusted-types zoijs;"
+    />
+    <title>Zoijs — lean entry fixture</title>
+  </head>
+  <body>
+    <div id="app"><p>server html</p></div>
+    <script type="module" src="./lean-app.js"></script>
+  </body>
+</html>

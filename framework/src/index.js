@@ -6,7 +6,10 @@
 //   import { html, mount, createState } from "@zoijs/core";
 
 export { html } from "./core/html.js";
-export { mount } from "./core/mount.js";
+// mount() with hydration (lean.js builds one without).
+import { createMount } from "./core/mount.js";
+import { hydrator } from "./core/hydrate.js";
+export const mount = createMount(hydrator);
 export { each } from "./core/each.js";
 export { boundary } from "./core/boundary.js";
 export { createState } from "./reactivity/state.js";

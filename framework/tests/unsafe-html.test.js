@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 import { createState } from "../src/reactivity/state.js";
 import { flush } from "../src/reactivity/scheduler.js";
 import { configure } from "../src/reactivity/env.js";

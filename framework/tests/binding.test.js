@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 import { createState } from "../src/reactivity/state.js";
 import { flush } from "../src/reactivity/scheduler.js";
 

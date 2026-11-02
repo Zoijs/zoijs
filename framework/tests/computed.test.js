@@ -7,7 +7,7 @@ import { computed } from "../src/reactivity/computed.js";
 import { effect } from "../src/reactivity/effect.js";
 import { flush } from "../src/reactivity/scheduler.js";
 import { html } from "../src/core/html.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 
 test("computed is lazy — fn does not run until first read", () => {
   let runs = 0;

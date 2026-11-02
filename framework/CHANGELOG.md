@@ -6,6 +6,19 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **A lean entry without hydration** ([RFC 0011](docs/rfcs/0011-lean-entry.md)). The
+  `"zoijs-no-hydration"` export condition (or an import map pointing `"@zoijs/core"` at
+  `src/lean-prod.js` / `src/lean.js`) gives the same API without hydration: ~1.07 KB gzipped less
+  bundled (10,936 → 9,860 B for a minimal app), ~2.6 KB less unbundled. `mount(…, { hydrate:
+  true })` then throws before touching the page. For client-rendered apps; nothing changes for
+  apps that don't opt in.
+
+### Changed
+- **Hydration code moved into `core/hydrate.js`**, reached from the renderer only when a hydrating
+  `mount()` begins, so a lean build drops it entirely. Behavior is unchanged. The standard build
+  pays for the indirection: +112 B bundled, +766 B unbundled (gzipped), within budget.
+
 ### Changed
 - **Size budgets now measure what apps ship** (`bench/size.mjs`, PERF-2E). Instead of one temporary
   budget on all commented source files concatenated, `npm test` checks three: the core bundled with

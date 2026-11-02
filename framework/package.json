@@ -8,6 +8,11 @@
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
+      "zoijs-no-hydration": {
+        "types": "./src/index.d.ts",
+        "production": "./src/lean-prod.js",
+        "default": "./src/lean.js"
+      },
       "production": "./src/prod.js",
       "default": "./src/index.js"
     },

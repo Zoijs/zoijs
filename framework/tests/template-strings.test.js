@@ -20,7 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { html } from "../src/core/html.js";
 import { each } from "../src/core/each.js";
-import { mount } from "../src/core/mount.js";
+import { mount } from "../src/index.js";
 import { createState } from "../src/reactivity/state.js";
 import { isTemplateResult } from "../src/server.js";
 

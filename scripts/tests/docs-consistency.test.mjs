@@ -97,7 +97,8 @@ test("unsafeHTML's server-rendered <script> behavior is documented where it's us
 });
 
 test("API counts match the main entry", () => {
-  const exports = [...read("framework/src/index.js").matchAll(/^export \{ (\w+) \}/gm)].map((m) => m[1]);
+  // `export { x } from …` re-exports, plus `export const mount = createMount(hydrator)` (RFC 0011).
+  const exports = [...read("framework/src/index.js").matchAll(/^export (?:\{ (\w+) \}|const (\w+)|function (\w+))/gm)].map((m) => m[1] ?? m[2] ?? m[3]);
   const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
   const word = WORDS[exports.length];
   assert.equal(word, "nine", `main entry now has ${exports.length} exports — update the docs that say "nine functions", then this test`);

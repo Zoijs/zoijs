@@ -10,6 +10,10 @@
 // bound to those nodes: the caller renders that one boundary on the client instead.
 
 import { isDev } from "../reactivity/env.js";
+import { onCleanup } from "../reactivity/owner.js";
+import { toText } from "../utils/security.js";
+import { isTemplateResult, isEachResult } from "./brand.js";
+import { render, renderChild, insertItems, bindReactiveContent, setupKeyedList, noop, setHydration } from "./renderer.js";
 
 const isStart = (n) => n.nodeType === 8 && (n.data === "zoijs:[" || n.data === "zoijs:(");
 const isEnd = (n) => n.nodeType === 8 && (n.data === "zoijs" || n.data === "zoijs:)");
@@ -116,3 +120,90 @@ export function mismatch(parent, root, why = reason) {
         (/marker/.test(why) ? " Render the server HTML with renderToString(…, { hydratable: true })." : "")
     );
 }
+
+// ---- hydration: adopting server content in a slot -----------------------------
+//
+// `start`…`anchor` brackets the slot's server content. Matching content is adopted (same
+// nodes, so typed values, focus and selection survive); anything that doesn't match is
+// replaced by a client render of just that value. Markers are removed / normalized so the
+// DOM ends up exactly as a fresh mount would build it.
+function adoptChild(start, anchor, value, ns) {
+  anchor.data = "zoijs";
+  try {
+    if (isEachResult(value)) setupKeyedList(anchor, value, ns, start);
+    else if (typeof value === "function") bindReactiveContent(anchor, value, ns, start);
+    else ownItems(adoptItems(start, anchor, value, ns));
+  } finally {
+    start.remove();
+  }
+}
+
+const isTextValue = (v) => v == null || (typeof v !== "object" && typeof v !== "function");
+const textOf = (v) => (v == null || typeof v === "boolean" ? "" : toText(v));
+
+// Adopt one value between `before` and `end`; returns its item ({ nodes, dispose }).
+function adoptOne(before, end, value, ns) {
+  const parent = end.parentNode;
+  if (isTemplateResult(value)) {
+    const r = render(value, { parent, before, end }, ns);
+    return { nodes: regionNodes(parent, before, end), dispose: r.dispose };
+  }
+  const region = regionNodes(parent, before, end);
+  if (isTextValue(value)) {
+    const text = textOf(value);
+    let t = region.length === 1 && region[0].nodeType === 3 ? region[0] : null;
+    if (t ? t.data !== text : region.length || text) mismatch(parent, false, "different text");
+    if (!t) {
+      for (const n of region) n.remove();
+      t = parent.insertBefore(document.createTextNode(""), end);
+    }
+    t.data = text; // the client's value wins (in place: same node)
+    return { nodes: [t], dispose: noop };
+  }
+  // A raw DOM node or unsafeHTML can't be compared: always the client's own nodes.
+  for (const n of region) n.remove();
+  const item = renderChild(value, ns);
+  for (const n of item.nodes) parent.insertBefore(n, end);
+  return item;
+}
+
+// A slot's value: one region, or one bracketed region per array entry.
+function adoptItems(start, anchor, value, ns) {
+  if (!Array.isArray(value)) return [adoptOne(start, anchor, value, ns)];
+  const regions = slotItems(start, anchor, value.length);
+  const items = [];
+  if (!regions) insertItems(anchor, value, items, ns);
+  else for (let i = 0; i < value.length; i++) items.push(unbracket(regions[i], (s, e) => adoptOne(s, e, value[i], ns)));
+  return items;
+}
+
+// Run `fn` over an item's bracketed region, then drop the bracket.
+const unbracket = ([s, e], fn) => {
+  const r = fn(s, e);
+  s.remove();
+  e.remove();
+  return r;
+};
+
+function ownItems(items) {
+  onCleanup(() => {
+    for (const it of items) {
+      it.dispose();
+      for (const n of it.nodes) n.remove();
+    }
+  });
+}
+
+// Has the user changed this server-rendered control's value / checked state?
+const edited = (el, name) =>
+  name === "value" ? "defaultValue" in el && el.value !== el.defaultValue : name === "checked" && el.checked !== el.defaultChecked;
+
+// A hydrating mount() calls begin() and end() around its render. begin() hands the renderer its
+// hydration functions, in setHydration()'s order. Only index.js's mount() references this.
+export const hydrator = {
+  begin() {
+    setHydration(matchTemplate, mismatch, regionNodes, slotItems, adoptChild, adoptItems, unbracket, edited);
+    beginHydration();
+  },
+  end: endHydration,
+};

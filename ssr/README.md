@@ -65,6 +65,10 @@ hydrate(App, "#app"); // reuses the server elements; attaches events + reactivit
 > In the Zoijs repo, `node scripts/cdn-importmap.mjs @zoijs/core@<v> @zoijs/ssr@<v>` generates the
 > exact, integrity-pinned map including it.
 
+> **Hydrating needs the standard `@zoijs/core` entry.** The lean entry (`"zoijs-no-hydration"`
+> condition, `src/lean-prod.js`) leaves hydration out and throws — don't opt into it in an app
+> that hydrates.
+
 `hydrate()` runs the component and **adopts** the existing elements inside the target:
 they're reused exactly (same nodes, never re-created), and their event handlers and
 reactive attributes are attached in place — including inside conditionals, nested

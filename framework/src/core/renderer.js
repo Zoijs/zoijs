@@ -20,7 +20,6 @@ import { isDev } from "../reactivity/env.js";
 import { toText, isSafeAttributeName, isSafeAttributeValue, openerRel, styleObjectToCss } from "../utils/security.js";
 import { isTemplateResult, isEachResult, isUnsafeHTML } from "./brand.js";
 import { foreignTemplate } from "../utils/dom.js";
-import { matchTemplate, regionNodes, slotItems, mismatch } from "./hydrate.js";
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const NS = { svg: "http://www.w3.org/2000/svg", math: "http://www.w3.org/1998/Math/MathML" };
@@ -30,7 +29,14 @@ const NS = { svg: "http://www.w3.org/2000/svg", math: "http://www.w3.org/1998/Ma
 export const nsOf = (parent, inherited) =>
   parent.nodeType === 1 ? (/^(foreignObject|m[ions]|mtext)$/.test(parent.localName) ? "" : Object.keys(NS).find((k) => NS[k] === parent.namespaceURI) || "") : inherited;
 const effect = (fn) => createEffect(fn, "binding"); // binding failures report kind "binding"
-const noop = () => {};
+export const noop = () => {};
+
+// Set by hydrate.js when a hydrating mount() begins; unset in the lean entries, which never hydrate.
+// Plain variables, not an object, so a minifier can shorten them.
+let matchTemplate, mismatch, regionNodes, slotItems, adoptChild, adoptItems, unbracket, edited;
+export const setHydration = (...hooks) => {
+  [matchTemplate, mismatch, regionNodes, slotItems, adoptChild, adoptItems, unbracket, edited] = hooks;
+};
 
 // A bound `style` STRING carrying one of these is a smell: CSS can exfiltrate data
 // (background:url(…)) or enable clickjacking, and expression()/comments are classic
@@ -101,79 +107,6 @@ export function render(result, hyd, ns) {
   });
 
   return { node: fragment, dispose: () => disposeOwner(owner) };
-}
-
-// ---- hydration: adopting server content in a slot -----------------------------
-//
-// `start`…`anchor` brackets the slot's server content. Matching content is adopted (same
-// nodes, so typed values, focus and selection survive); anything that doesn't match is
-// replaced by a client render of just that value. Markers are removed / normalized so the
-// DOM ends up exactly as a fresh mount would build it.
-function adoptChild(start, anchor, value, ns) {
-  anchor.data = "zoijs";
-  try {
-    if (isEachResult(value)) setupKeyedList(anchor, value, ns, start);
-    else if (typeof value === "function") bindReactiveContent(anchor, value, ns, start);
-    else ownItems(adoptItems(start, anchor, value, ns));
-  } finally {
-    start.remove();
-  }
-}
-
-const isTextValue = (v) => v == null || (typeof v !== "object" && typeof v !== "function");
-const textOf = (v) => (v == null || typeof v === "boolean" ? "" : toText(v));
-
-// Adopt one value between `before` and `end`; returns its item ({ nodes, dispose }).
-function adoptOne(before, end, value, ns) {
-  const parent = end.parentNode;
-  if (isTemplateResult(value)) {
-    const r = render(value, { parent, before, end }, ns);
-    return { nodes: regionNodes(parent, before, end), dispose: r.dispose };
-  }
-  const region = regionNodes(parent, before, end);
-  if (isTextValue(value)) {
-    const text = textOf(value);
-    let t = region.length === 1 && region[0].nodeType === 3 ? region[0] : null;
-    if (t ? t.data !== text : region.length || text) mismatch(parent, false, "different text");
-    if (!t) {
-      for (const n of region) n.remove();
-      t = parent.insertBefore(document.createTextNode(""), end);
-    }
-    t.data = text; // the client's value wins (in place: same node)
-    return { nodes: [t], dispose: noop };
-  }
-  // A raw DOM node or unsafeHTML can't be compared: always the client's own nodes.
-  for (const n of region) n.remove();
-  const item = renderChild(value, ns);
-  for (const n of item.nodes) parent.insertBefore(n, end);
-  return item;
-}
-
-// A slot's value: one region, or one bracketed region per array entry.
-function adoptItems(start, anchor, value, ns) {
-  if (!Array.isArray(value)) return [adoptOne(start, anchor, value, ns)];
-  const regions = slotItems(start, anchor, value.length);
-  const items = [];
-  if (!regions) insertItems(anchor, value, items, ns);
-  else for (let i = 0; i < value.length; i++) items.push(unbracket(regions[i], (s, e) => adoptOne(s, e, value[i], ns)));
-  return items;
-}
-
-// Run `fn` over an item's bracketed region, then drop the bracket.
-const unbracket = ([s, e], fn) => {
-  const r = fn(s, e);
-  s.remove();
-  e.remove();
-  return r;
-};
-
-function ownItems(items) {
-  onCleanup(() => {
-    for (const it of items) {
-      it.dispose();
-      for (const n of it.nodes) n.remove();
-    }
-  });
 }
 
 // Match parts to nodes by document order: a child part ↔ the next marker comment,
@@ -266,10 +199,6 @@ function bindAttribute(el, attr, values, hydrating) {
   else write();
 }
 
-// Has the user changed this server-rendered control's value / checked state?
-const edited = (el, name) =>
-  name === "value" ? "defaultValue" in el && el.value !== el.defaultValue : name === "checked" && el.checked !== el.defaultChecked;
-
 // A part's current value: a whole ${} passes the raw value (booleans, numbers, property types
 // for value/checked); static text + holes is always a joined string.
 function partValue(el, attr, values) {
@@ -315,7 +244,7 @@ function bindRef(el, fn) {
 
 // ---- text / content bindings -------------------------------------------------
 
-function bindReactiveContent(anchor, getValue, ns, start) {
+export function bindReactiveContent(anchor, getValue, ns, start) {
   let mode = null; // "text" | "nodes"
   let textNode = null;
   let items = []; // [{ nodes, dispose }]
@@ -389,7 +318,7 @@ function insertStaticContent(anchor, value, ns) {
   });
 }
 
-function insertItems(anchor, value, items, ns) {
+export function insertItems(anchor, value, items, ns) {
   const parent = anchor.parentNode;
   const list = Array.isArray(value) ? value : [value];
   for (const v of list) {
@@ -399,7 +328,7 @@ function insertItems(anchor, value, items, ns) {
   }
 }
 
-function renderChild(value, ns) {
+export function renderChild(value, ns) {
   if (value == null || value === false || value === true) return { nodes: [], dispose: noop };
   if (value instanceof Node) return { nodes: [value], dispose: noop };
   if (isTemplateResult(value)) {
@@ -453,7 +382,7 @@ function longestIncreasingSubsequence(arr) {
   return keep;
 }
 
-function setupKeyedList(anchor, marker, ns, start) {
+export function setupKeyedList(anchor, marker, ns, start) {
   const { items, keyFn, renderFn } = marker;
   const listOwner = createOwner(); // item subtrees nest here
   let records = new Map();
