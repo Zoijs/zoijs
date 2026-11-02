@@ -1,7 +1,7 @@
 // cdn-importmap.mjs — build an exact-version, integrity-protected import map for
 // loading published @zoijs/* packages from jsDelivr (SEC-7).
 //
-//   node scripts/cdn-importmap.mjs @zoijs/core@1.8.0 [@zoijs/router@0.5.0 …] [--prod]
+//   node scripts/cdn-importmap.mjs @zoijs/core@1.8.0 [@zoijs/router@0.5.0 …] [--prod] [--lean]
 //   node scripts/cdn-importmap.mjs @zoijs/core@1.8.0 --write create/core-cdn.json
 //   node scripts/cdn-importmap.mjs --check create/core-cdn.json
 //
@@ -13,6 +13,9 @@
 // module in each entry's graph gets an entry: browsers apply import-map integrity to
 // any module fetch whose URL is listed, including relative imports.
 // `--prod` maps @zoijs/core to its production entry (src/prod.js) instead of index.js.
+// `--lean` maps it to the lean entry without hydration (src/lean.js, or src/lean-prod.js with
+// `--prod`; core 1.11.0+, RFC 0011) and lists only that entry's module graph — so hydrate.js is
+// neither mapped nor fetched. Only for apps that never hydrate server HTML.
 // `--unsafe` also maps "@zoijs/core/unsafe" (the opt-in raw-HTML escape hatch, src/unsafe.js)
 // with integrity — only for apps that use unsafeHTML(); default maps never include it.
 // Public core subpaths a package imports in the browser ("@zoijs/core/server" from
@@ -66,7 +69,7 @@ function graph(pkgDir, entry) {
   return [...seen].sort();
 }
 
-export function buildImportMap(specs, { prod = false, unsafe = false } = {}) {
+export function buildImportMap(specs, { prod = false, unsafe = false, lean = false } = {}) {
   const work = mkdtempSync(join(tmpdir(), "zoijs-cdn-"));
   try {
     const imports = {};
@@ -88,6 +91,12 @@ export function buildImportMap(specs, { prod = false, unsafe = false } = {}) {
         if (prod) entry = "src/prod.js";
       } else if (prod && name === "@zoijs/core") {
         throw new Error(`@zoijs/core@${version} has no production entry (src/prod.js)`);
+      }
+      if (lean && name === "@zoijs/core") {
+        const file = prod ? "src/lean-prod.js" : "src/lean.js";
+        if (!existsSync(join(dir, file))) throw new Error(`@zoijs/core@${version} has no lean entry (${file}) — it needs core 1.11.0 or later`);
+        entry = file;
+        entries.splice(0, entries.length, file); // only the lean graph: no hydrate.js
       }
       const base = `${CDN}${name}@${version}/`;
       imports[name] = base + entry;
@@ -127,7 +136,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (checkFile) {
     const saved = JSON.parse(readFileSync(checkFile, "utf8"));
     const specs = Object.entries(saved.packages).map(([n, p]) => `${n}@${p.version}`);
-    const fresh = buildImportMap(specs, { prod: saved.prod, unsafe: !!saved.unsafe });
+    const fresh = buildImportMap(specs, { prod: saved.prod, unsafe: !!saved.unsafe, lean: !!saved.lean });
     const ok = JSON.stringify(fresh.integrity) === JSON.stringify(saved.integrity) && JSON.stringify(fresh.imports) === JSON.stringify(saved.imports);
     console.log(ok ? `✔ ${checkFile} matches the published ${specs.join(", ")}` : `✖ ${checkFile} does not match the published ${specs.join(", ")} — regenerate it`);
     process.exit(ok ? 0 : 1);
@@ -135,12 +144,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const specs = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--write");
   let map;
   try {
-    map = buildImportMap(specs, { prod: flag("--prod"), unsafe: flag("--unsafe") });
+    map = buildImportMap(specs, { prod: flag("--prod"), unsafe: flag("--unsafe"), lean: flag("--lean") });
   } catch (err) {
     console.error(`✖ ${err.message}`);
     process.exit(1);
   }
-  const out = { prod: flag("--prod"), ...(flag("--unsafe") ? { unsafe: true } : {}), ...map };
+  const out = { prod: flag("--prod"), ...(flag("--unsafe") ? { unsafe: true } : {}), ...(flag("--lean") ? { lean: true } : {}), ...map };
   if (writeFile) {
     writeFileSync(writeFile, JSON.stringify(out, null, 2) + "\n");
     console.log(`✔ wrote ${writeFile} (${Object.keys(map.integrity).length} integrity entries)`);
