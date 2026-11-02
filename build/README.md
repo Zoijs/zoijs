@@ -77,7 +77,7 @@ config as you do today.
 | `sourceMapsDir` | none (no maps) | Write source maps, with sources, here — must be outside `outDir`. |
 | `manifest` | `"asset-manifest.json"` | Manifest path in `outDir` (outside `assetsDir`), or `false`. |
 | `keepPrevious` | `false` | Keep the replaced build at `<assetsDir>.prev` (one generation). |
-| `hydration` | `true` | `false`: bundle Zoijs's lean entry without hydration (~1 KB gzipped less) — only if the app never hydrates server HTML. |
+| `hydration` | `true` | `false`: bundle Zoijs's lean entry without hydration (~1 KB gzipped less; core 1.11.0+) — only if the app never hydrates server HTML. |
 | `target` | `"es2022"` | esbuild target. |
 | `allowComputedImports` | `false` | See [Dynamic imports](#dynamic-imports). |
 | `esbuild` | `import("esbuild")` | An esbuild module to use instead. |
@@ -128,7 +128,7 @@ Most Zoijs apps render on the client and never hydrate server HTML. For those, `
 bundles `@zoijs/core`'s lean entry (the `"zoijs-no-hydration"` export condition, applied to every
 `@zoijs/core` import so there's still one core): the same API, about 1 KB gzipped less.
 `mount(…, { hydrate: true })` — and `@zoijs/ssr`'s `hydrate()` — then throw, so don't set it in an
-app that hydrates. Cores older than the lean entry ignore it.
+app that hydrates. Needs `@zoijs/core` 1.11.0 or later; older cores ignore it.
 
 ## Dynamic imports
 

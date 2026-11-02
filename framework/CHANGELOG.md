@@ -6,6 +6,11 @@ All notable changes to Zoijs are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-02
+
+Hydration that recovers instead of crashing, and a lean entry for apps that never hydrate. No
+breaking changes: the nine functions and every subpath are unchanged.
+
 ### Added
 - **A lean entry without hydration** ([RFC 0011](docs/rfcs/0011-lean-entry.md)). The
   `"zoijs-no-hydration"` export condition (or an import map pointing `"@zoijs/core"` at
@@ -13,19 +18,10 @@ All notable changes to Zoijs are documented here. The format is based on
   bundled (10,936 → 9,860 B for a minimal app), ~2.6 KB less unbundled. `mount(…, { hydrate:
   true })` then throws before touching the page. For client-rendered apps; nothing changes for
   apps that don't opt in.
-
-### Changed
-- **Hydration code moved into `core/hydrate.js`**, reached from the renderer only when a hydrating
-  `mount()` begins, so a lean build drops it entirely. Behavior is unchanged. The standard build
-  pays for the indirection: +112 B bundled, +766 B unbundled (gzipped), within budget.
-
-### Changed
-- **Size budgets now measure what apps ship** (`bench/size.mjs`, PERF-2E). Instead of one temporary
-  budget on all commented source files concatenated, `npm test` checks three: the core bundled with
-  the `production` condition, minified and gzipped, for the whole API (11,242 B; budget 11.5 KB) and
-  for a minimal app (10,936 B; 11 KB), and the unbundled production entry — every module a no-build
-  app loads, each gzipped (35,894 B; 36 KB). The old figure (31,080 B) is still printed, unbudgeted.
-  No change to the package.
+- **`unmount.hydration`** after a hydrating mount: `{ status: "hydrated" | "recovered" |
+  "client-rendered", mismatches }`, so an app can tell a full adoption from a recovery. Each
+  recovery also logs one development warning naming the kind of difference and the parent element
+  (never values); production logs nothing.
 
 ### Fixed
 - **Hydration no longer crashes on a mismatch.** When the server HTML differed in structure from
@@ -45,11 +41,20 @@ All notable changes to Zoijs are documented here. The format is based on
   user already changed keeps the user's value — its bound `value` / `checked` isn't written on
   hydration.
 
-### Added
-- **`unmount.hydration`** after a hydrating mount: `{ status: "hydrated" | "recovered" |
-  "client-rendered", mismatches }`, so an app can tell a full adoption from a recovery. Each
-  recovery also logs one development warning naming the kind of difference and the parent element
-  (never values); production logs nothing.
+### Changed
+- **Hydration code moved into `core/hydrate.js`**, reached from the renderer only when a hydrating
+  `mount()` begins, so a lean build drops it entirely. Behavior is unchanged. The standard build
+  pays for the indirection: +112 B bundled, +766 B unbundled (gzipped), within budget.
+- **Size budgets now measure what apps ship** (`bench/size.mjs`, PERF-2E). Instead of one temporary
+  budget on all commented source files concatenated, `npm test` checks three: the core bundled with
+  the `production` condition, minified and gzipped, for the whole API (11,242 B; budget 11.5 KB) and
+  for a minimal app (10,936 B; 11 KB), and the unbundled production entry — every module a no-build
+  app loads, each gzipped (35,894 B; 36 KB). The old figure (31,080 B) is still printed, unbudgeted.
+  No change to the package.
+- **Size.** The hydration fixes above are ~1.85 KB of commented source (~1 KB minified + gzipped);
+  apps that don't hydrate can now leave all of it out with the lean entry. The temporary
+  commented-source budget they needed (31,232 B) was replaced by the budgets above; its history
+  is kept in `bench/size.mjs`.
 
 ### Known limitation
 - **An edited field and the app's state can disagree after hydration.** The field keeps what the
@@ -57,15 +62,25 @@ All notable changes to Zoijs are documented here. The format is based on
   if that state changes for another reason first, the binding writes it and replaces the user's
   edit. Reconciling user-edited controls back into state is planned SSR follow-up work.
 
-### Size
-- **Core source-size budget raised from 28.5 KB to 30.5 KB (31,232 B)**, approved as an exception
-  for these hydration fixes only: structural validation of server HTML before binding
-  (`core/hydrate.js`), nested DOM adoption and form-state preservation — about 1.85 KB of code
-  minified and gzipped, 3.0 KB of commented source (31,080 B now, ~150 B left). The gate measures
-  commented source, not the minified payload. Apps that don't hydrate run none of this code (DOM
-  benchmarks unchanged) but still download it; moving hydration behind an optional import and
-  adding a minified-size budget (PERF-2) are follow-ups. No further raise without measured
-  justification.
+### Migration notes
+- **Upgrade `@zoijs/ssr` with core.** Core 1.11.0 adopts nested templates, list items and array
+  entries in place only when the server HTML carries the nested markers that `@zoijs/ssr`'s next
+  release (0.6.0) emits. With `@zoijs/ssr` 0.5.0 output it adopts the outermost template and
+  renders the nested dynamic regions on the client, as 1.10.0 did — the page works, but
+  `unmount.hydration.status` is `"recovered"` and development builds log one warning per region
+  until `@zoijs/ssr` is upgraded.
+- **Mismatches no longer throw.** `mount(…, { hydrate: true })` on server HTML that doesn't match
+  now recovers (renders that template on the client) and reports it in `unmount.hydration`
+  instead of throwing midway. Code that caught that error to fall back to a fresh `mount()` can
+  check `unmount.hydration.status` instead.
+- **HTML without markers is rendered, with a warning.** A page rendered without
+  `{ hydratable: true }` used to hydrate as a silent no-op (static, no handlers); it is now
+  rendered on the client, with a development warning. Render the server HTML with
+  `{ hydratable: true }` to adopt it instead.
+- **Edited form controls keep the user's value** through hydration (see Known limitation).
+- **Opting into the lean entry** (`"zoijs-no-hydration"`, `src/lean-prod.js`, or `@zoijs/build`'s
+  `hydration: false`) is only for apps that never hydrate: there, `mount(…, { hydrate: true })`
+  and `@zoijs/ssr`'s `hydrate()` throw. The standard entry is unchanged and is the default.
 
 ## [1.10.0] — 2026-10-12
 

@@ -150,6 +150,15 @@ test("1.9.0's migration notes cover its material changes", () => {
   }
 });
 
+test("1.11.0's migration notes cover its behavior changes", () => {
+  const notes = coreSection("1.11.0");
+  assert.match(notes, /### Migration notes/);
+  // the ssr pairing, recovery instead of a throw, marker-less HTML, the opt-in lean entry
+  for (const topic of ["@zoijs/ssr", "unmount.hydration.status", "{ hydratable: true }", "zoijs-no-hydration", "hydration: false"]) {
+    assert.ok(notes.includes(topic), `1.11.0 migration notes mention ${topic}`);
+  }
+});
+
 test("1.10.0's migration notes cover its behavior changes", () => {
   const notes = coreSection("1.10.0");
   assert.match(notes, /### Migration notes/);
