@@ -4,6 +4,10 @@ All notable changes to `@zoijs/ssr` are documented here.
 
 ## Unreleased
 
+## 0.6.0 — 2026-11-02
+
+Hydration that adopts nested content in place — with `@zoijs/core` 1.11.0. No breaking changes.
+
 ### Changed
 - **Hydratable output marks nested templates, list items and array entries**, not only the
   outermost template, so the client can adopt them in place and keep form state and focus. They use
@@ -12,8 +16,16 @@ All notable changes to `@zoijs/ssr` are documented here.
   Hydratable HTML is larger before compression (about 6% after gzip on a 200-row list).
 
 ### Added
-- `hydrate()` returns an `unmount()` that carries `hydration: { status, mismatches }` (with the
-  core release that adds hydration recovery), and the README documents which mismatches recover.
+- `hydrate()` returns an `unmount()` that carries `hydration: { status, mismatches }` (with
+  `@zoijs/core` 1.11.0+, which adds hydration recovery), and the README documents which
+  mismatches recover.
+
+### Upgrading
+- **Upgrade `@zoijs/core` to 1.11.0 on the client to get the new adoption.** With an older core
+  this output still hydrates, re-rendering nested regions as before (verified against the
+  published 1.10.0). Under core 1.11.0, 0.5.0's output reports `"recovered"` with one development
+  warning per nested region — upgrading `@zoijs/ssr` removes those.
+- **Re-render cached hydratable HTML** after upgrading, so it carries the nested markers.
 
 ## 0.5.0 — 2026-10-05
 

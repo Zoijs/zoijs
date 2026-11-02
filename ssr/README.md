@@ -72,7 +72,7 @@ hydrate(App, "#app"); // reuses the server elements; attaches events + reactivit
 `hydrate()` runs the component and **adopts** the existing elements inside the target:
 they're reused exactly (same nodes, never re-created), and their event handlers and
 reactive attributes are attached in place — including inside conditionals, nested
-templates and `each()` lists *(next release)*, so a field the user already typed in, ticked
+templates and `each()` lists *(`@zoijs/ssr` 0.6.0 with `@zoijs/core` 1.11.0+)*, so a field the user already typed in, ticked
 or focused keeps its value, focus and selection. It returns an `unmount()`, like `mount`.
 
 > Not hydrating (pure static output / SSG)? Omit `{ hydratable: true }` for clean,
@@ -178,8 +178,8 @@ and conditional templates, each `each()` item and each array entry — is matche
 server HTML and, if it matches, its nodes are reused and its events and reactive bindings
 attach to them. Nothing is re-created, so there's no flash, and what the user did before the
 script arrived survives: typed text, ticked boxes, the selected option, focus and the text
-selection. *(next release; earlier cores adopt only the outermost template and re-render
-everything dynamic inside it.)*
+selection. *(`@zoijs/ssr` 0.6.0 with `@zoijs/core` 1.11.0+; earlier cores adopt only the outermost
+template and re-render everything dynamic inside it — the page still works.)*
 
 A form control the user already changed keeps the user's value: its bound `value` / `checked`
 is not written on hydration. **Caveat:** the app's state still holds the server value until the
@@ -187,7 +187,7 @@ next `input` event, and if that state changes for another reason first, the bind
 replaces the user's edit. If that can happen in your app, read the field's value into state after
 `hydrate()` returns. (Reconciling edited controls into state automatically is planned.)
 
-#### When the server HTML doesn't match *(next release)*
+#### When the server HTML doesn't match *(`@zoijs/core` 1.11.0+)*
 
 Hydration never crashes on a mismatch and never leaves the page silently static. Each template
 is checked **before** anything is bound to it, so the parts that don't match are rendered on the
